@@ -32,6 +32,14 @@ mod router;
 mod server;
 #[cfg(feature = "http")]
 mod server_config;
+#[cfg(feature = "http")]
+mod validation;
+
+/// Re-exports transport-independent input validation contracts.
+#[cfg(feature = "http")]
+pub use validation::{
+    Input, ValidationErrors, ValidationIssue, ValidationPathSegment, ValidationResult,
+};
 
 /// Strict cookie extraction, response composition, and established cookie types.
 #[cfg(feature = "cookies")]
@@ -173,6 +181,7 @@ pub use route::{
 #[doc(hidden)]
 #[cfg(feature = "http")]
 pub mod __private {
+    pub use crate::validation::support as input_validation;
     /// Environment variable used by the development supervisor for graceful shutdown.
     #[doc(hidden)]
     pub const DEV_SHUTDOWN_ENV: &str = "MADS_INTERNAL_DEV_SHUTDOWN_PATH";
