@@ -701,7 +701,7 @@ atau credentials.
 
 ---
 
-# v0.8.0 — Input Validation, REST Errors, and Configuration UX
+# v0.8.0 — Input Validation, REST Errors, Configuration UX, and Scaffolding
 
 ## Objective
 
@@ -852,8 +852,10 @@ let app = config.parse::<AppConfig>()?;
 
 Supported shape mencakup scalar Rust, source-relative `PathBuf`, option,
 `Secret<T>`, string array, nested `Configuration`, dan custom scalar
-`parse_with`. Independent missing/parse/validation error dikumpulkan dalam
-declaration order dengan full dotted key dan winning source tanpa value.
+`parse_with`. `ConfigurationIssue`/`ConfigurationErrors` mengumpulkan
+independent missing/parse/validation error dalam declaration order dengan
+stable reason code, full dotted key, dan optional winning source tanpa value;
+collection tersebut dapat dikonversi ke aggregated `MADS020` framework error.
 Application-defined typed config divalidasi secara explicit, biasanya melalui
 selected startup provider; derive yang tidak digunakan tidak menjadi global
 startup requirement.
