@@ -2,6 +2,12 @@
 
 use framework::prelude::*;
 
+#[derive(Configuration)]
+struct Settings {
+    #[config(default = "localhost", validate(nonempty))]
+    host: String,
+}
+
 #[module]
 struct AppModule;
 
@@ -50,6 +56,7 @@ fn inspect_auto_configuration() {
 }
 
 fn main() {
+    assert_eq!(Config::empty().parse::<Settings>().unwrap().host, "localhost");
     let _ = inspect_auto_configuration;
     let _ = diesel_backend;
     let _ = consume_repository;

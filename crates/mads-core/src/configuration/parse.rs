@@ -2,6 +2,31 @@
 
 use crate::{Config, ConfigurationErrors, ConfigurationIssue, ConfigurationResult};
 
+/// Parses a nested view after rejecting incompatible values at its table key.
+pub fn nested<T: crate::Configuration>(config: &Config, key: &str) -> ConfigurationResult<T> {
+    if config.get(key).is_some() || config.get_string_array(key).is_some() {
+        return Err(failure(config, key, "invalid_type"));
+    }
+    T::__from_config_prefix(config, key)
+}
+
+/// Retains a parsed field or appends its failures in declaration order.
+pub fn collect<T>(
+    result: ConfigurationResult<T>,
+    errors: &mut Option<ConfigurationErrors>,
+) -> Option<T> {
+    match result {
+        Ok(value) => Some(value),
+        Err(next) => {
+            match errors {
+                Some(errors) => errors.extend(next),
+                None => *errors = Some(next),
+            }
+            None
+        }
+    }
+}
+
 /// A supported scalar parser which never exposes native parse errors.
 pub trait Scalar: Sized {
     /// Parses a scalar, returning only success or failure.
@@ -31,6 +56,17 @@ impl Scalar for f32 {
 impl Scalar for f64 {
     fn parse_scalar(value: &str) -> Option<Self> {
         value.parse::<Self>().ok().filter(|value| value.is_finite())
+    }
+}
+
+/// Calls an application scalar parser without retaining its error or input.
+pub fn parse_with<T, E, F>(config: &Config, key: &str, parser: F) -> ConfigurationResult<T>
+where
+    F: FnOnce(&str) -> Result<T, E>,
+{
+    match config.get(key) {
+        Some(value) => parser(value).map_err(|_| failure(config, key, "invalid_type")),
+        None => Err(failure(config, key, absent_code(config, key))),
     }
 }
 

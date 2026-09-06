@@ -1,0 +1,5 @@
+error: numeric literal is outside the configuration field type
+ --> tests/ui-configuration/fail/float-overflow.rs:3:54
+  |
+3 | struct FloatOverflow { #[config(validate(range(max = 1e100)))] value: f32 }
+  |                                                      ^^^^^

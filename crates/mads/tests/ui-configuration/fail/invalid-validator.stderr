@@ -1,0 +1,41 @@
+error: configuration validator is incompatible with the field type
+ --> tests/ui-configuration/fail/invalid-validator.rs:4:34
+  |
+4 | struct Email { #[config(validate(email))] value: u32 }
+  |                                  ^^^^^
+
+error: configuration validator is incompatible with the field type
+ --> tests/ui-configuration/fail/invalid-validator.rs:6:37
+  |
+6 | struct Negative { #[config(validate(negative))] value: u32 }
+  |                                     ^^^^^^^^
+
+error: multiple_of must be nonzero
+ --> tests/ui-configuration/fail/invalid-validator.rs:8:47
+  |
+8 | struct Zero { #[config(validate(multiple_of = 0))] value: i64 }
+  |                                               ^
+
+error: minimum configuration bound exceeds maximum
+  --> tests/ui-configuration/fail/invalid-validator.rs:10:34
+   |
+10 | struct Range { #[config(validate(range(min = 9, max = 1)))] value: i64 }
+   |                                  ^^^^^^^^^^^^^^^^^^^^^^^
+
+error: expected min/max bounds or one exact length
+  --> tests/ui-configuration/fail/invalid-validator.rs:12:35
+   |
+12 | struct Length { #[config(validate(length(exact = 1, max = 2)))] value: String }
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: duplicate configuration validator
+  --> tests/ui-configuration/fail/invalid-validator.rs:14:45
+   |
+14 | struct Duplicate { #[config(validate(email, email))] value: String }
+   |                                             ^^^^^
+
+error: unknown configuration validator
+  --> tests/ui-configuration/fail/invalid-validator.rs:16:36
+   |
+16 | struct Unknown { #[config(validate(magic))] value: String }
+   |                                    ^^^^^

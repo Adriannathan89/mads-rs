@@ -1,0 +1,5 @@
+error: length bound contradicts nonempty
+ --> tests/ui-configuration/fail/contradictory-length.rs:3:52
+  |
+3 | struct Contradiction { #[config(validate(nonempty, length(max = 0)))] value: String }
+  |                                                    ^^^^^^

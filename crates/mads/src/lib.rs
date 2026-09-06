@@ -178,6 +178,11 @@ pub use mads_core::module;
 /// Re-exports the general-purpose provider declaration attribute.
 pub use mads_core::provider;
 
+/// Re-exports explicit typed configuration, structured failures, and secret values.
+pub use mads_core::{
+    Configuration, ConfigurationErrors, ConfigurationIssue, ConfigurationResult, Secret,
+};
+
 /// Re-exports auto-configuration inspection records.
 pub use mads_core::{
     AutoConfigurationConfigEvidence, AutoConfigurationReasonCode, AutoConfigurationReport,
@@ -372,10 +377,11 @@ pub mod prelude {
     pub use mads_core::{
         ApplicationContext, ApplicationGraph, AutoConfigurationConfigEvidence,
         AutoConfigurationReasonCode, AutoConfigurationReport, AutoConfigurationRequirement,
-        AutoConfigurationStatus, Catalog, Config, ConfigBuilder, ConstructionPlan,
+        AutoConfigurationStatus, Catalog, Config, ConfigBuilder, Configuration,
+        ConfigurationErrors, ConfigurationIssue, ConfigurationResult, ConstructionPlan,
         ConstructionStep, DependencyEdge, Diagnostic, Error, GraphAnalysis, LifecycleHook,
         LifecycleState, Mads, Module, ModuleGraph, ModuleImportDescriptor, ModuleImportEdge,
         ModuleNode, ProviderNode, ProviderOrigin, ProviderOwnership, ProviderState,
-        ProviderVisibility, SourceLocation,
+        ProviderVisibility, Secret, SourceLocation,
     };
 }
