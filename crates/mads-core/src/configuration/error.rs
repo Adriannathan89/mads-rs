@@ -93,6 +93,19 @@ impl ConfigurationErrors {
     pub fn issues(&self) -> &[ConfigurationIssue] {
         &self.issues
     }
+
+    pub(super) fn prefix(&mut self, prefix: &str) {
+        if prefix.is_empty() {
+            return;
+        }
+        for issue in &mut self.issues {
+            issue.key = if issue.key.is_empty() {
+                prefix.to_owned()
+            } else {
+                format!("{prefix}.{}", issue.key)
+            };
+        }
+    }
 }
 
 impl fmt::Display for ConfigurationErrors {

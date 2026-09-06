@@ -43,7 +43,9 @@ pub use config::{
     Config, ConfigBuilder, ConfigDocument, ConfigSource, ConfigValue, DotenvSource, EnvSource,
     MapSource, TomlSource,
 };
-pub use configuration::{ConfigurationErrors, ConfigurationIssue, ConfigurationResult, Secret};
+pub use configuration::{
+    Configuration, ConfigurationErrors, ConfigurationIssue, ConfigurationResult, Secret,
+};
 pub use context::{ApplicationContext, ConstructionContext};
 pub use descriptor::{
     DependencyDescriptor, Module, ModuleDescriptor, ModuleImportDescriptor, ProviderConstructor,
@@ -73,6 +75,8 @@ pub use mads_core_macros::{main, module, provider, repository, service};
 #[doc(hidden)]
 pub mod __private {
     use std::any::TypeId;
+
+    pub use crate::configuration::parse as configuration;
 
     pub use crate::auto_configuration::{
         AutoConfigurationApplyContext, AutoConfigurationContext, AutoConfigurationContribution,
