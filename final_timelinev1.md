@@ -33,7 +33,7 @@ Target utama v1:
 0.7.0  CLI + Dev Loop + Diagnostics
   └─ beta.1  Complete v0.7 feature set before stable promotion
   ↓
-0.8.0  Input Validation + REST Errors + Configuration UX
+0.8.0  Input Validation + REST Errors + Configuration UX + Scaffolding
   ↓
 0.9.0  Testing + Hardening
   ↓
@@ -706,15 +706,47 @@ atau credentials.
 ## Objective
 
 Membuat common REST application tidak perlu merakit input validation, standard
-error mapping, dan typed configuration plumbing sendiri. Scope ini tidak
-memblokir CLI v0.7.
+error mapping, typed configuration plumbing, atau minimal project structure
+sendiri. Scope ini tidak memblokir CLI v0.7.
+
+`0.8.0-beta.1` membawa seluruh feature set v0.8. Stable `0.8.0` hanya
+menambahkan bug fix, koreksi dokumentasi, dan release verification; stable
+tidak menambahkan feature yang belum ada di beta.1.
+
+### Minimal Project Scaffolding
+
+```bash
+mads new <name>
+```
+
+Command membuat child directory baru dengan tepat tujuh file:
+
+```text
+Cargo.toml
+mads.toml
+src/main.rs
+src/app/mod.rs
+src/app/routes.rs
+src/app/controller.rs
+src/app/service.rs
+```
+
+Starter memakai `AppModule`, `AppController`, dan `AppService`; `GET /`
+mengembalikan plain-text `Hello World!`. Dependency MADS memakai exact version
+yang sama dengan CLI, menonaktifkan default features, dan hanya mengaktifkan
+`http` serta `runtime-tokio`. Database, JWT, cookies, migration, Git init,
+download, dan build tidak dijalankan atau dibuat.
+
+Nama mengikuti lowercase Cargo-style. Existing destination selalu ditolak.
+Generation memakai bundled template dan atomic publication sehingga failure
+tidak meninggalkan partial project atau mengubah path yang sudah ada.
 
 ### Validation
 
 Implement target API:
 
 ```rust
-#[derive(Input)]
+#[derive(serde::Deserialize, Input)]
 struct CreateUser {
     #[validate(email)]
     email: String,
@@ -724,12 +756,49 @@ struct CreateUser {
 Flow:
 
 ```text
-deserialize
+ValidatedJson / ValidatedQuery / ValidatedPath
   ↓
-validate
+Serde deserialize
+  ↓
+Input validate
   ↓
 handler
 ```
+
+Native `Json`, `Query`, dan `Path` tetap tersedia tanpa automatic validation.
+Built-in validator mencakup email, string/collection min-max-exact length,
+nonempty, numeric inclusive range, positive, negative, multiple-of, required
+option, nested input, dan synchronous custom validator. Primitive Rust types,
+struct, enum, tuple, array, vector, option, serta deterministic string-keyed map
+didukung. User dapat menggabungkan derive dengan custom validator atau
+mengimplementasikan `Input` secara manual.
+
+Setelah Serde berhasil, seluruh independent validation issue dikumpulkan dalam
+declaration/index order. Serde conversion sendiri tetap first-error karena
+Serde adalah deserialization authority. Path mengikuti external Serde field dan
+enum representation.
+
+Validation failure memakai status 422 dan schema source-aware:
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "input validation failed",
+    "issues": [
+      {
+        "source": "body",
+        "path": ["email"],
+        "code": "invalid_format",
+        "message": "invalid email address"
+      }
+    ]
+  }
+}
+```
+
+JSON transport failure tetap mempertahankan 413/415 ketika relevan dan memakai
+standard error envelope.
 
 ### Error Model
 
@@ -745,25 +814,114 @@ ValidationError
 InternalError
 ```
 
-Error response schema dibuat konsisten. Common Diesel errors dapat dipetakan ke
-framework result tanpa menghapus kemampuan developer untuk mengembalikan native
-Axum response.
+Error response schema menggunakan `{ "error": { "code", "message" } }` secara
+konsisten untuk MADS-owned standard, validation, Passport, cookie, dan validated
+extractor failure. Existing `HttpError` constructors dan code `bad_request`,
+`not_found`, `conflict`, serta `internal` tetap compatible. Passport 401 tetap
+mengirim `WWW-Authenticate: Bearer`. Internal source tidak pernah masuk body,
+display, atau debug output.
 
-### Typed Config and Deferred Diagnostic UX
+Common MADS `DatabaseResult<T>` dan native Diesel `QueryResult<T>` mendapat
+explicit `.into_http()` opt-in mapping:
 
-Implement generic typed configuration, startup validation, environment
-interpolation policy, dan dedicated secret-safe value APIs. Improved opaque
-trait-bound/compiler diagnostics serta optional machine-readable CLI output
-juga dapat diselesaikan di milestone ini karena tidak memblokir CLI v0.7.
+```text
+Diesel NotFound          -> 404 not_found
+unique constraint       -> 409 conflict
+all other database error -> 500 internal, redacted
+```
+
+Tidak ada automatic blanket conversion. Developer tetap dapat memakai
+`map_err`, native Axum response, extractor, router, dan middleware.
+
+### Typed Config, Secrets, Diagnostics, and CLI Output
+
+Implement generic typed configuration:
+
+```rust
+#[derive(Configuration)]
+#[config(prefix = "app")]
+struct AppConfig {
+    host: String,
+    #[config(default = 3000)]
+    port: u16,
+    api_key: Secret<String>,
+}
+
+let app = config.parse::<AppConfig>()?;
+```
+
+Supported shape mencakup scalar Rust, source-relative `PathBuf`, option,
+`Secret<T>`, string array, nested `Configuration`, dan custom scalar
+`parse_with`. Independent missing/parse/validation error dikumpulkan dalam
+declaration order dengan full dotted key dan winning source tanpa value.
+Application-defined typed config divalidasi secara explicit, biasanya melalui
+selected startup provider; derive yang tidak digunakan tidak menjadi global
+startup requirement.
+
+Existing conventional configuration loading tidak berubah:
+
+```text
+optional .env untuk exact ${NAME} interpolation
+  -> optional mads.toml
+  -> final MADS_* environment overrides
+  -> explicit Config::parse<T>()
+```
+
+Process environment tetap menang atas dotenv untuk interpolation, dotenv tidak
+memutasi process environment, dan `MADS_APP__HOST`/`MADS_SERVER__HOST` tetap
+memetakan `app.host`/`server.host`. Typed parsing tidak memuat environment atau
+file lagi.
+
+`Secret<T>` hanya dapat dibuka melalui explicit `expose`/`into_exposed`.
+Display dan Debug selalu redacted; tidak ada implicit deref atau Serialize, dan
+generic memory zeroization tidak dijanjikan.
+
+Opaque compiler diagnostic diperbaiki hanya untuk constraint yang dimiliki
+MADS macro, termasuk Input/Configuration, controller-route, module import,
+managed dependency, known route signature, dan Passport principal. Cargo,
+rustc, Axum, Diesel, serta application diagnostic lain tetap diteruskan apa
+adanya.
+
+Finite CLI commands mendukung optional `--format human|json`:
+
+```text
+new
+routes
+graph
+doctor
+db generate
+db migrate
+db rollback
+db status
+```
+
+JSON memakai satu versioned envelope dengan `schema_version`, canonical
+`command`, `ok`, command-specific `data`, dan structured `diagnostics` yang
+memiliki `error`/`warning` severity. `run` dan `dev` tetap raw streaming dan
+menolak format JSON. Existing exit code 0/1/2 tidak berubah.
 
 ### Exit Criteria
 
+- `mads new <name>` membuat exact minimal HTTP starter secara offline dan
+  atomic; generated project dapat compile, inspect, run, dan melayani
+  `Hello World!` tanpa database/JWT feature;
 - invalid input tidak masuk handler;
-- validation response konsisten dan source-aware;
-- missing configuration error memiliki source/path yang jelas;
-- common Diesel errors memiliki standard opt-in mapping;
+- seluruh approved validator/type matrix bekerja dan validation response
+  konsisten, deterministic, serta source-aware;
+- seluruh standard error dan MADS-owned rejection memakai safe JSON envelope;
+- missing/invalid configuration error memiliki full key dan source yang jelas
+  tanpa value, serta environment loading tetap compatible;
+- common MADS dan native Diesel errors memiliki standard opt-in mapping;
 - secret values aman dalam display dan debug output;
-- developer tetap dapat return native Axum response.
+- developer tetap dapat return native Axum response;
+- MADS-owned macro failure yang dipilih mempunyai focused stable/MSRV
+  diagnostic tanpa menjanjikan rewrite untuk error eksternal;
+- seluruh finite command menghasilkan schema JSON v1 yang deterministic dan
+  secret-safe, sedangkan `run`/`dev` tetap raw streaming;
+- full release gates berjalan di Linux, platform-sensitive CLI/scaffold/process
+  tests berjalan di Linux, macOS, dan Windows, serta PostgreSQL integration
+  tetap Linux-only;
+- seluruh feature tersedia di `0.8.0-beta.1` sebelum stable promotion.
 
 ---
 
