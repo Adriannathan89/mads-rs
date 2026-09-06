@@ -23,6 +23,7 @@ mod auto_configuration;
 mod builder;
 mod catalog;
 mod config;
+mod configuration;
 mod context;
 mod descriptor;
 mod diagnostic;
@@ -42,6 +43,7 @@ pub use config::{
     Config, ConfigBuilder, ConfigDocument, ConfigSource, ConfigValue, DotenvSource, EnvSource,
     MapSource, TomlSource,
 };
+pub use configuration::{ConfigurationErrors, ConfigurationIssue, ConfigurationResult, Secret};
 pub use context::{ApplicationContext, ConstructionContext};
 pub use descriptor::{
     DependencyDescriptor, Module, ModuleDescriptor, ModuleImportDescriptor, ProviderConstructor,
