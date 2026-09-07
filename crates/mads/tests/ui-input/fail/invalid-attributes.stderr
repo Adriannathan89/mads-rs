@@ -22,8 +22,26 @@ error: duplicate input validator bound
 10 | struct Bounds { #[validate(length(min = 2, min = 3))] value: String }
    |                                            ^^^
 
-error: only custom validation is supported on a complete input
-  --> tests/ui-input/fail/invalid-attributes.rs:12:12
+error: unknown input validator bound
+  --> tests/ui-input/fail/invalid-attributes.rs:12:40
    |
-12 | #[validate(email)]
+12 | struct UnknownBound { #[validate(range(low = 1))] value: i32 }
+   |                                        ^^^
+
+error: unexpected end of input, expected parentheses
+  --> tests/ui-input/fail/invalid-attributes.rs:14:41
+   |
+14 | struct MissingBounds { #[validate(length)] value: String }
+   |                                         ^
+
+error: expected `=`
+  --> tests/ui-input/fail/invalid-attributes.rs:16:43
+   |
+16 | struct MissingCallback { #[validate(custom)] value: String }
+   |                                           ^
+
+error: only custom validation is supported on a complete input
+  --> tests/ui-input/fail/invalid-attributes.rs:18:12
+   |
+18 | #[validate(email)]
    |            ^^^^^

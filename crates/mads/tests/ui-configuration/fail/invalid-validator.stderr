@@ -39,3 +39,15 @@ error: unknown configuration validator
    |
 16 | struct Unknown { #[config(validate(magic))] value: String }
    |                                    ^^^^^
+
+error: unknown configuration validator bound
+  --> tests/ui-configuration/fail/invalid-validator.rs:18:47
+   |
+18 | struct UnknownBound { #[config(validate(range(low = 1)))] value: i64 }
+   |                                               ^^^
+
+error: unexpected end of input, expected nested attribute
+  --> tests/ui-configuration/fail/invalid-validator.rs:20:34
+   |
+20 | struct Empty { #[config(validate())] value: String }
+   |                                  ^

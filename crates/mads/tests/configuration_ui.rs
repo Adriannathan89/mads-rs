@@ -1,12 +1,13 @@
-//! Compile contracts for typed configuration declarations.
+//! Compile-contract matrix for Configuration helper grammar, keys, defaults,
+//! shapes, nested bounds, parsers, renamed dependencies, and generic bounds.
 
 #[test]
-fn configuration_accepts_supported_shapes() {
+fn configuration_accepts_supported_shapes_and_minimal_generic_bounds() {
     trybuild::TestCases::new().pass("tests/ui-configuration/pass/*.rs");
 }
 
 #[test]
-fn configuration_rejects_invalid_declarations() {
+fn configuration_rejects_helper_grammar_keys_shapes_and_parser_contracts() {
     let cases = trybuild::TestCases::new();
     cases.compile_fail("tests/ui-configuration/fail/*.rs");
     let output = std::process::Command::new("rustc")

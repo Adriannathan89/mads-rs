@@ -4,26 +4,38 @@ error: configuration keys must be single nonempty segments
 4 | #[config(prefix = "app.server")]
   |                   ^^^^^^^^^^^^
 
-error: configuration keys must be single nonempty segments
- --> tests/ui-configuration/fail/invalid-keys.rs:7:37
+error: expected one configuration prefix
+ --> tests/ui-configuration/fail/invalid-keys.rs:8:10
   |
-7 | struct EmptyKey { #[config(rename = "")] port: u16 }
-  |                                     ^^
+8 | #[config(prefix = "two")]
+  |          ^^^^^^
 
 error: configuration keys must be single nonempty segments
- --> tests/ui-configuration/fail/invalid-keys.rs:9:38
-  |
-9 | struct DottedKey { #[config(rename = "app.port")] port: u16 }
-  |                                      ^^^^^^^^^^
+  --> tests/ui-configuration/fail/invalid-keys.rs:11:37
+   |
+11 | struct EmptyKey { #[config(rename = "")] port: u16 }
+   |                                     ^^
+
+error: configuration keys must be single nonempty segments
+  --> tests/ui-configuration/fail/invalid-keys.rs:13:38
+   |
+13 | struct DottedKey { #[config(rename = "app.port")] port: u16 }
+   |                                      ^^^^^^^^^^
 
 error: configuration field key collides with another field
-  --> tests/ui-configuration/fail/invalid-keys.rs:13:23
+  --> tests/ui-configuration/fail/invalid-keys.rs:17:23
    |
-13 |     #[config(rename = "port")]
+17 |     #[config(rename = "port")]
    |                       ^^^^^^
 
 error: unknown or duplicate configuration field attribute
-  --> tests/ui-configuration/fail/invalid-keys.rs:17:27
+  --> tests/ui-configuration/fail/invalid-keys.rs:21:54
    |
-17 | struct Unknown { #[config(optional)] port: u16 }
+21 | struct DuplicateAttribute { #[config(rename = "one", rename = "two")] port: u16 }
+   |                                                      ^^^^^^
+
+error: unknown or duplicate configuration field attribute
+  --> tests/ui-configuration/fail/invalid-keys.rs:23:27
+   |
+23 | struct Unknown { #[config(optional)] port: u16 }
    |                           ^^^^^^^^

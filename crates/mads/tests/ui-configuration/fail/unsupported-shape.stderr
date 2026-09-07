@@ -45,3 +45,15 @@ error: generic configuration fields require a Configuration bound or parse_with
    |
 18 | struct Generic<T> { value: T }
    |                            ^
+
+error: nested Option configuration fields are unsupported
+  --> tests/ui-configuration/fail/unsupported-shape.rs:20:37
+   |
+20 | struct NestedOption { value: Option<Option<String>> }
+   |                                     ^^^^^^
+
+error: Secret requires a supported scalar configuration type
+  --> tests/ui-configuration/fail/unsupported-shape.rs:22:47
+   |
+22 | struct SecretCollection { value: mads::Secret<Vec<String>> }
+   |                                               ^^^

@@ -5,9 +5,9 @@ mod checks;
 mod serde_path;
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, quote_spanned};
 use serde_path::Naming;
-use syn::{Data, DeriveInput, Error, Fields, Generics, Path, Type, parse_quote};
+use syn::{Data, DeriveInput, Error, Fields, Generics, Path, Type, parse_quote, spanned::Spanned};
 
 pub(crate) fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
     let mut common = crate::path::common_path()?;
@@ -72,7 +72,15 @@ pub(crate) fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
     };
     let callbacks = whole.iter().map(|validator| {
         let callback = validator.callback.as_ref().expect("whole custom validator");
-        quote!(#common::__private::input_validation::merge(&mut __mads_errors, #callback(self));)
+        quote_spanned! {callback.span()=>
+            {
+                let __mads_whole_callback: fn(&Self) -> #common::ValidationResult = #callback;
+                #common::__private::input_validation::merge(
+                    &mut __mads_errors,
+                    __mads_whole_callback(self),
+                );
+            }
+        }
     });
     let ident = &input.ident;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();

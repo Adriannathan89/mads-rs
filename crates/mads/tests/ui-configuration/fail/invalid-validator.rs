@@ -14,5 +14,9 @@ struct Length { #[config(validate(length(exact = 1, max = 2)))] value: String }
 struct Duplicate { #[config(validate(email, email))] value: String }
 #[derive(Configuration)]
 struct Unknown { #[config(validate(magic))] value: String }
+#[derive(Configuration)]
+struct UnknownBound { #[config(validate(range(low = 1)))] value: i64 }
+#[derive(Configuration)]
+struct Empty { #[config(validate())] value: String }
 
 fn main() {}

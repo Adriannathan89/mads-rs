@@ -309,7 +309,15 @@ fn field_read(
                 "generic configuration fields require a Configuration bound or parse_with",
             ));
         }
-        quote!(#helper::nested::<#ty>(__mads_config, #key))
+        quote_spanned! {ty.span()=> {
+            fn __mads_read_nested_configuration<T: #core::Configuration>(
+                __mads_config: &#core::Config,
+                __mads_key: &str,
+            ) -> #core::ConfigurationResult<T> {
+                #helper::nested::<T>(__mads_config, __mads_key)
+            }
+            __mads_read_nested_configuration::<#ty>(__mads_config, #key)
+        }}
     };
     if let Some(default) = &attributes.default {
         let value = default_value(default, &name)?;

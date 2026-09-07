@@ -69,9 +69,13 @@ pub(super) fn expand(
             "required" => continue,
             "custom" => {
                 let callback = validator.callback.as_ref().unwrap();
-                checks.push(quote_spanned! {validator.span=>
+                checks.push(quote_spanned! {callback.span()=>
                     let __mads_custom_result: #common::ValidationResult = #callback(__mads_checked);
-                    #runtime::merge(&mut __mads_errors, __mads_custom_result.map_err(|errors| errors.__prefix(__mads_path)));
+                    #runtime::merge(
+                        &mut __mads_errors,
+                        __mads_custom_result
+                            .map_err(|errors| errors.__prefix(__mads_path)),
+                    );
                 });
             }
             "nested" => {

@@ -14,6 +14,12 @@ struct Manual;
 impl Input for Manual {
     fn validate(&self) -> ValidationResult { Ok(()) }
 }
+#[derive(Input)]
+struct Coerced {
+    #[validate(custom = field)]
+    text: String,
+}
 fn main() {
     assert!(Borrowed { text: "é🦀", inner: vec![(Manual,)] }.validate().is_ok());
+    assert!(Coerced { text: "value".into() }.validate().is_ok());
 }

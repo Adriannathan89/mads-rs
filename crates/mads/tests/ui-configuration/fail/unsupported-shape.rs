@@ -16,5 +16,9 @@ struct Array { values: [String; 2] }
 struct Map { values: std::collections::BTreeMap<String, String> }
 #[derive(Configuration)]
 struct Generic<T> { value: T }
+#[derive(Configuration)]
+struct NestedOption { value: Option<Option<String>> }
+#[derive(Configuration)]
+struct SecretCollection { value: mads::Secret<Vec<String>> }
 
 fn main() {}
