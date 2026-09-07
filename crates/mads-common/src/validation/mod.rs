@@ -9,7 +9,10 @@ mod string;
 #[doc(hidden)]
 pub mod support;
 
-pub use error::{ValidationErrors, ValidationIssue, ValidationPathSegment, ValidationResult};
+pub use error::{
+    SourcedValidationIssue, ValidationErrors, ValidationIssue, ValidationPathSegment,
+    ValidationResult, ValidationSource,
+};
 
 /// Validates an existing input value without deserializing or transforming it.
 ///

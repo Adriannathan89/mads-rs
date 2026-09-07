@@ -44,7 +44,8 @@ pub use mads_common_macros::Input;
 /// Re-exports transport-independent input validation contracts.
 #[cfg(feature = "http")]
 pub use validation::{
-    Input, ValidationErrors, ValidationIssue, ValidationPathSegment, ValidationResult,
+    Input, SourcedValidationIssue, ValidationErrors, ValidationIssue, ValidationPathSegment,
+    ValidationResult, ValidationSource,
 };
 
 /// Strict cookie extraction, response composition, and established cookie types.
@@ -120,7 +121,10 @@ pub use extract::{Header, Json, Path, Query, Request, headers};
 
 /// Standard Axum-compatible HTTP response types.
 #[cfg(feature = "http")]
-pub use response::{Created, HttpError, HttpResult, NoContent};
+pub use response::{
+    BadRequest, Conflict, Created, Forbidden, HttpError, HttpResult, InternalError, NoContent,
+    NotFound, Unauthorized, ValidationError,
+};
 
 /// Builds a raw Axum router from the application's validated controllers.
 #[cfg(feature = "http")]

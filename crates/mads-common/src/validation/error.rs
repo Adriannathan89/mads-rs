@@ -1,12 +1,46 @@
 //! Ordered validation failures with paths relative to the validated input.
 
+use serde::Serialize;
 use std::fmt;
+
+/// The request representation that produced a validation issue.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ValidationSource {
+    /// The request body.
+    Body,
+    /// The URL query string.
+    Query,
+    /// The URL path parameters.
+    Path,
+}
+
+/// A validation issue explicitly attached to its request representation.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct SourcedValidationIssue {
+    source: ValidationSource,
+    #[serde(flatten)]
+    issue: ValidationIssue,
+}
+
+impl SourcedValidationIssue {
+    /// Returns the request representation that produced this issue.
+    pub fn source(&self) -> ValidationSource {
+        self.source
+    }
+
+    /// Borrows the original, transport-independent issue.
+    pub fn issue(&self) -> &ValidationIssue {
+        &self.issue
+    }
+}
 
 /// The result of validating an already deserialized value.
 pub type ValidationResult = Result<(), ValidationErrors>;
 
 /// One segment of a request-representation path.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(untagged)]
 pub enum ValidationPathSegment {
     /// An external field, variant, or string map key.
     Field(String),
@@ -15,7 +49,7 @@ pub enum ValidationPathSegment {
 }
 
 /// One validation failure without a rejected value or transport source.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ValidationIssue {
     path: Vec<ValidationPathSegment>,
     code: String,
@@ -23,6 +57,14 @@ pub struct ValidationIssue {
 }
 
 impl ValidationIssue {
+    /// Attaches this issue to an explicit request representation.
+    pub fn with_source(self, source: ValidationSource) -> SourcedValidationIssue {
+        SourcedValidationIssue {
+            source,
+            issue: self,
+        }
+    }
+
     /// Creates an application-owned failure at the relative root.
     ///
     /// Custom codes and messages must be safe for clients and ordinary logging;
