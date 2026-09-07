@@ -3,9 +3,11 @@
 use std::fmt;
 
 use axum::{
-    http::{StatusCode, header::WWW_AUTHENTICATE},
+    http::{HeaderValue, header::WWW_AUTHENTICATE},
     response::{IntoResponse, Response},
 };
+
+use crate::{Forbidden, InternalError, Unauthorized};
 
 /// The result type used by Passport strategy APIs.
 pub type PassportResult<T> = std::result::Result<T, PassportError>;
@@ -149,17 +151,17 @@ impl From<PassportError> for PassportRejection {
 
 impl IntoResponse for PassportRejection {
     fn into_response(self) -> Response {
-        match self.kind() {
-            PassportErrorKind::Rejected => (
-                StatusCode::UNAUTHORIZED,
-                [(WWW_AUTHENTICATE, "Bearer")],
-                "Unauthorized",
-            )
-                .into_response(),
-            PassportErrorKind::Forbidden => (StatusCode::FORBIDDEN, "Forbidden").into_response(),
-            PassportErrorKind::Internal => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        let Self(error) = self;
+        match error.kind() {
+            PassportErrorKind::Rejected => {
+                let mut response = Unauthorized::new("authentication was rejected").into_response();
+                response
+                    .headers_mut()
+                    .insert(WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"));
+                response
             }
+            PassportErrorKind::Forbidden => Forbidden::new("access was denied").into_response(),
+            PassportErrorKind::Internal => InternalError::new(error).into_response(),
         }
     }
 }
