@@ -6,6 +6,9 @@ use syn::{Data, DeriveInput, Error, Field, Fields, Ident, Result, Type, spanned:
 
 use crate::path::common_path;
 
+const POLICY_FIELD_TYPE_ERROR: &str =
+    "Passport principal policy fields must provide `.iter()` items implementing `AsRef<str>`";
+
 pub(crate) fn expand(input: DeriveInput) -> Result<TokenStream> {
     reject_item_markers(&input)?;
 
@@ -59,9 +62,11 @@ pub(crate) fn expand(input: DeriveInput) -> Result<TokenStream> {
 
         if field_roles == 1 {
             set_unique(&mut roles, field, "roles")?;
+            reject_known_invalid_policy_field(&field.ty)?;
         }
         if field_permissions == 1 {
             set_unique(&mut permissions, field, "permissions")?;
+            reject_known_invalid_policy_field(&field.ty)?;
         }
     }
 
@@ -95,6 +100,76 @@ fn marker_count<'a>(attributes: impl Iterator<Item = &'a syn::Attribute>, marker
     attributes
         .filter(|attribute| attribute.path().is_ident(marker))
         .count()
+}
+
+fn reject_known_invalid_policy_field(ty: &Type) -> Result<()> {
+    if is_scalar_primitive(ty) || is_known_collection_with_primitive_item(ty) {
+        return Err(Error::new(ty.span(), POLICY_FIELD_TYPE_ERROR));
+    }
+    Ok(())
+}
+
+fn is_scalar_primitive(ty: &Type) -> bool {
+    let Type::Path(type_path) = ty else {
+        return false;
+    };
+    if type_path.qself.is_some() {
+        return false;
+    }
+    let Some(segment) = type_path.path.segments.last() else {
+        return false;
+    };
+    if !matches!(segment.arguments, syn::PathArguments::None) {
+        return false;
+    }
+    matches!(
+        segment.ident.to_string().as_str(),
+        "bool"
+            | "char"
+            | "f32"
+            | "f64"
+            | "i8"
+            | "i16"
+            | "i32"
+            | "i64"
+            | "i128"
+            | "isize"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "u128"
+            | "usize"
+    )
+}
+
+fn is_known_collection_with_primitive_item(ty: &Type) -> bool {
+    let Type::Path(type_path) = ty else {
+        return false;
+    };
+    if type_path.qself.is_some() {
+        return false;
+    }
+    let Some(segment) = type_path.path.segments.last() else {
+        return false;
+    };
+    if !matches!(
+        segment.ident.to_string().as_str(),
+        "Vec" | "VecDeque" | "LinkedList" | "BinaryHeap" | "BTreeSet" | "HashSet"
+    ) {
+        return false;
+    }
+    let syn::PathArguments::AngleBracketed(arguments) = &segment.arguments else {
+        return false;
+    };
+    let mut types = arguments.args.iter().filter_map(|argument| match argument {
+        syn::GenericArgument::Type(ty) => Some(ty),
+        _ => None,
+    });
+    let Some(item) = types.next() else {
+        return false;
+    };
+    types.next().is_none() && is_scalar_primitive(item)
 }
 
 struct PolicyField {

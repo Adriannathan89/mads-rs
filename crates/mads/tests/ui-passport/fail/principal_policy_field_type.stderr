@@ -1,5 +1,5 @@
-error[E0599]: no method named `iter` found for reference `&u64` in the current scope
+error: Passport principal policy fields must provide `.iter()` items implementing `AsRef<str>`
  --> tests/ui-passport/fail/principal_policy_field_type.rs:6:12
   |
 6 |     roles: u64,
-  |            ^^^ method not found in `&u64`
+  |            ^^^

@@ -1,13 +1,5 @@
-error[E0277]: the trait bound `u64: AsRef<str>` is not satisfied
+error: Passport principal policy fields must provide `.iter()` items implementing `AsRef<str>`
  --> tests/ui-passport/fail/principal_wrong_field.rs:6:12
   |
 6 |     roles: Vec<u64>,
-  |            ^^^ the trait `AsRef<str>` is not implemented for `u64`
-  |
-  = note: required for `&u64` to implement `AsRef<str>`
-note: required by a bound in `__mads_contains_passport_policy_string_item`
- --> tests/ui-passport/fail/principal_wrong_field.rs:3:10
-  |
-3 | #[derive(PassportPrincipal)]
-  |          ^^^^^^^^^^^^^^^^^ required by this bound in `__mads_contains_passport_policy_string_item`
-  = note: this error originates in the derive macro `PassportPrincipal` (in Nightly builds, run with -Z macro-backtrace for more info)
+  |            ^^^
