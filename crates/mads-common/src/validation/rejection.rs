@@ -60,7 +60,7 @@ pub(super) fn query_rejection_response(rejection: QueryRejection) -> Response {
 
 pub(super) fn path_rejection_response(rejection: PathRejection) -> Response {
     match rejection {
-        PathRejection::FailedToDeserializePathParams(error) => {
+        PathRejection::FailedToDeserializePathParams(error) if error.status().is_client_error() => {
             schema_error_response(path_issue(&error), ValidationSource::Path)
         }
         rejection => {

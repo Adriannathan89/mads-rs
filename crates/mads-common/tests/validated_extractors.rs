@@ -32,6 +32,37 @@ use tower::ServiceExt;
 
 type HandlerCounter = Arc<AtomicUsize>;
 
+#[tokio::test]
+async fn query_path_server_configuration_errors_are_redacted_internal_errors() {
+    async fn wrong_number(_: ValidatedPath<String>) {
+        panic!("invalid extraction must not invoke the handler");
+    }
+    async fn unsupported(_: ValidatedPath<Option<String>>) {
+        panic!("invalid extraction must not invoke the handler");
+    }
+    let router = Router::new()
+        .route("/wrong/{first}/{second}", get(wrong_number))
+        .route("/unsupported/{value}", get(unsupported));
+
+    for uri in [
+        "/wrong/private-one/private-two",
+        "/unsupported/private-value",
+    ] {
+        let response = router
+            .clone()
+            .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(
+            response_json(response).await,
+            json!({
+                "error": {"code": "internal", "message": "internal server error"}
+            })
+        );
+    }
+}
+
 #[derive(serde::Deserialize, Input)]
 #[serde(rename_all = "camelCase")]
 struct JsonInput {
