@@ -1,6 +1,6 @@
 //! Development commands for running MADS.rs applications and managing migrations.
 //!
-//! The `mads` executable exposes the v0.7 development command surface and
+//! The `mads` executable exposes the development command surface and
 //! preserves application arguments supplied after `--`. CLI syntax failures
 //! exit with 2; configuration, build, and operational failures exit with 1.
 

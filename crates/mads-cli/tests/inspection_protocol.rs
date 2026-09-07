@@ -8,8 +8,18 @@ use tempfile::tempdir;
 
 #[test]
 fn incompatible_direct_mads_version_is_rejected_before_launch() {
+    let current = semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+    for incompatible in [
+        semver::Version::new(current.major + 1, current.minor, 0),
+        semver::Version::new(current.major, current.minor + 1, 0),
+    ] {
+        assert_rejected_before_launch(&incompatible, &current);
+    }
+}
+
+fn assert_rejected_before_launch(incompatible: &semver::Version, current: &semver::Version) {
     let project = tempdir().expect("temporary project should be created");
-    write_project(project.path());
+    write_project(project.path(), incompatible);
     let marker = project.path().join("launched");
 
     let mut command = Command::cargo_bin("mads").expect("CLI binary should build");
@@ -20,13 +30,16 @@ fn incompatible_direct_mads_version_is_rejected_before_launch() {
         .assert()
         .code(1)
         .stderr(contains("MADS203"))
-        .stderr(contains("0.6.0-beta.1"))
-        .stderr(contains("0.7"));
+        .stderr(contains(incompatible.to_string()))
+        .stderr(contains(format!(
+            "direct MADS {}.{} dependency",
+            current.major, current.minor
+        )));
 
     assert!(!marker.exists(), "incompatible application was launched");
 }
 
-fn write_project(root: &Path) {
+fn write_project(root: &Path, version: &semver::Version) {
     fs::create_dir_all(root.join("app/src")).expect("application source directory should exist");
     fs::create_dir_all(root.join("mads/src")).expect("local MADS source directory should exist");
     fs::write(
@@ -36,7 +49,7 @@ fn write_project(root: &Path) {
     .expect("workspace manifest should be written");
     fs::write(
         root.join("mads/Cargo.toml"),
-        "[package]\nname = \"mads\"\nversion = \"0.6.0-beta.1\"\nedition = \"2024\"\n",
+        format!("[package]\nname = \"mads\"\nversion = \"{version}\"\nedition = \"2024\"\n"),
     )
     .expect("MADS manifest should be written");
     fs::write(root.join("mads/src/lib.rs"), "").expect("MADS source should be written");

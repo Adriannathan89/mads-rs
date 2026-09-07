@@ -99,17 +99,21 @@ async fn inspect_application_with_timeouts(
 
 fn ensure_supported_mads_version(built: &BuiltApplication) -> Result<(), CliError> {
     let version = built.target().mads_version();
-    if matches!(version, Some(version) if version.major == 0 && version.minor == 7) {
+    let current = semver::Version::parse(env!("CARGO_PKG_VERSION"))
+        .expect("CLI package version should be valid semver");
+    if matches!(version, Some(version) if version.major == current.major && version.minor == current.minor)
+    {
         return Ok(());
     }
 
     let found = version
         .map(ToString::to_string)
         .unwrap_or_else(|| "no direct mads dependency".into());
+    let supported = format!("{}.{}", current.major, current.minor);
     Err(inspection_error(format!(
-        "the selected application uses {found}; private inspection requires a direct MADS 0.7 dependency"
+        "the selected application uses {found}; private inspection requires a direct MADS {supported} dependency"
     ))
-    .with_suggestion("upgrade the selected application to MADS 0.7"))
+    .with_suggestion(format!("use MADS {supported} in the selected application")))
 }
 
 fn inspection_token() -> Result<String, CliError> {
@@ -179,7 +183,7 @@ async fn supervise(
         ensure_child_is_running(child)?;
         if Instant::now() >= handshake_deadline {
             return Err(inspection_error(
-                "the application did not acknowledge the inspection request in time; v0.7 inspection requires the standard Mads::run::<AppModule>() entry point",
+                "the application did not acknowledge the inspection request in time; private inspection requires the standard Mads::run::<AppModule>() entry point",
             ));
         }
         tokio::time::sleep(timeouts.poll).await;
@@ -217,7 +221,7 @@ fn ensure_child_is_running(child: &mut Child) -> Result<(), CliError> {
         inspection_error("could not observe the inspection application").with_source(error)
     })? {
         Some(status) => Err(inspection_error(format!(
-            "the application exited before completing private inspection ({status}); v0.7 inspection requires the standard Mads::run::<AppModule>() entry point"
+            "the application exited before completing private inspection ({status}); private inspection requires the standard Mads::run::<AppModule>() entry point"
         ))),
         None => Ok(()),
     }
@@ -283,7 +287,7 @@ mod tests {
     use super::{InspectionTimeouts, MADS203, inspect_application_with_timeouts};
 
     #[tokio::test]
-    async fn accepts_matching_acknowledgement_and_report() {
+    async fn accepts_matching_acknowledgement_and_report_from_current_mads_version() {
         let application = fixture_application("success").await;
         let report = inspect_application_with_timeouts(
             &application,
