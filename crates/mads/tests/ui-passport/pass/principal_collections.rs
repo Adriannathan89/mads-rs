@@ -26,6 +26,20 @@ struct BorrowedSetPrincipal {
     permissions: BTreeSet<&'static str>,
 }
 
+struct RoleList(Vec<String>);
+
+impl RoleList {
+    fn iter(&self) -> impl Iterator<Item = &String> {
+        self.0.iter()
+    }
+}
+
+#[derive(PassportPrincipal)]
+struct CustomIteratorPrincipal {
+    #[roles]
+    roles: RoleList,
+}
+
 fn main() {
     let owned_vec = OwnedVecPrincipal {
         roles: vec!["admin".into()],
@@ -46,4 +60,9 @@ fn main() {
         permissions: ["article:read"].into_iter().collect(),
     };
     assert!(borrowed_set.has_permission("article:read"));
+
+    let custom_iterator = CustomIteratorPrincipal {
+        roles: RoleList(vec!["operator".into()]),
+    };
+    assert!(custom_iterator.has_role("operator"));
 }

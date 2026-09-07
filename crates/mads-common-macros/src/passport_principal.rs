@@ -124,19 +124,23 @@ fn membership_body(field: Option<&PolicyField>) -> TokenStream {
             let ident = &field.ident;
             let ty = &field.ty;
             let type_span = ty.span();
+            let policy_values = quote_spanned! {type_span=>
+                let __mads_policy_values: &#ty = &self.#ident;
+            };
             let membership = quote_spanned! {type_span=>
-                __mads_contains_passport_policy_string_item(&self.#ident, requested)
+                __mads_contains_passport_policy_string_item(__mads_policy_values.iter(), requested)
             };
             quote! {
-                fn __mads_contains_passport_policy_string_item<I>(values: I, requested: &str) -> bool
+                fn __mads_contains_passport_policy_string_item<I>(mut values: I, requested: &str) -> bool
                 where
-                    I: ::core::iter::IntoIterator<Item: ::core::convert::AsRef<str>>,
+                    I: ::core::iter::Iterator<Item: ::core::convert::AsRef<str>>,
                 {
-                    values.into_iter().any(|value| {
+                    values.any(|value| {
                         ::core::convert::AsRef::<str>::as_ref(&value) == requested
                     })
                 }
 
+                #policy_values
                 #membership
             }
         },
