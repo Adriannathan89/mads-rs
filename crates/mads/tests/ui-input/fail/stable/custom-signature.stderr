@@ -28,16 +28,24 @@ error[E0308]: mismatched types
   --> tests/ui-input/fail/stable/custom-signature.rs:12:21
    |
 12 | #[validate(custom = wrong_whole_argument)]
-   |                     ^^^^^^^^^^^^^^^^^^^^ expected fn pointer, found fn item
+   |                     ^^^^^^^^^^^^^^^^^^^^
+   |                     |
+   |                     expected `u32`, found `&WholeArgument`
+   |                     arguments to this function are incorrect
    |
-   = note: expected fn pointer `for<'a> fn(&'a WholeArgument) -> Result<(), ValidationErrors>`
-                 found fn item `fn(u32) -> Result<(), ValidationErrors> {wrong_whole_argument}`
+note: function defined here
+  --> tests/ui-input/fail/stable/custom-signature.rs:5:4
+   |
+ 5 | fn wrong_whole_argument(_: u32) -> ValidationResult { Ok(()) }
+   |    ^^^^^^^^^^^^^^^^^^^^ ------
 
 error[E0308]: mismatched types
   --> tests/ui-input/fail/stable/custom-signature.rs:15:21
    |
+14 | #[derive(Input)]
+   |          ----- expected due to this
 15 | #[validate(custom = wrong_whole_result)]
-   |                     ^^^^^^^^^^^^^^^^^^ expected fn pointer, found fn item
+   |                     ^^^^^^^^^^^^^^^^^^ expected `Result<(), ValidationErrors>`, found `bool`
    |
-   = note: expected fn pointer `for<'a> fn(&'a WholeResult) -> Result<(), ValidationErrors>`
-                 found fn item `for<'a> fn(&'a WholeResult) -> bool {wrong_whole_result}`
+   = note: expected enum `Result<(), ValidationErrors>`
+              found type `bool`

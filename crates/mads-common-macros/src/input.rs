@@ -72,12 +72,13 @@ pub(crate) fn expand(input: DeriveInput) -> syn::Result<TokenStream> {
     };
     let callbacks = whole.iter().map(|validator| {
         let callback = validator.callback.as_ref().expect("whole custom validator");
+        // A direct call preserves argument coercions such as &Self to &dyn Trait.
         quote_spanned! {callback.span()=>
             {
-                let __mads_whole_callback: fn(&Self) -> #common::ValidationResult = #callback;
+                let __mads_whole_result: #common::ValidationResult = #callback(self);
                 #common::__private::input_validation::merge(
                     &mut __mads_errors,
-                    __mads_whole_callback(self),
+                    __mads_whole_result,
                 );
             }
         }
