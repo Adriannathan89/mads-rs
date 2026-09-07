@@ -76,6 +76,7 @@ jobs:
       - name: Install PostgreSQL client headers
         run: sudo apt-get update && sudo apt-get install --yes libpq-dev
       - run: cargo test -p mads-common --test database_postgres -- --ignored --test-threads=1
+      - run: cargo test --locked -p mads-common --all-features --test database_http_postgres -- --ignored --test-threads=1
       - run: cargo test -p mads-common server::tests::database_migration_failure_prevents_listener_binding -- --ignored --test-threads=1
       - run: cargo test -p mads-cli --test database_cli -- --ignored --test-threads=1
       - run: cargo test --locked -p mads-cli --test database_generate_postgres -- --ignored --test-threads=1
