@@ -1,5 +1,5 @@
 error: Passport principal policy fields must provide `.iter()` items implementing `AsRef<str>`
  --> tests/ui-passport/fail/principal_wrong_field.rs:6:12
   |
-6 |     roles: Vec<u64>,
+6 |     roles: std::vec::Vec<u64>,
   |            ^^^

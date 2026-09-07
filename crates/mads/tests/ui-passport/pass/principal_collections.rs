@@ -40,6 +40,34 @@ struct CustomIteratorPrincipal {
     roles: RoleList,
 }
 
+mod custom {
+    use std::marker::PhantomData;
+
+    pub struct Vec<T> {
+        values: std::vec::Vec<String>,
+        marker: PhantomData<T>,
+    }
+
+    impl<T> Vec<T> {
+        pub fn new(values: std::vec::Vec<String>) -> Self {
+            Self {
+                values,
+                marker: PhantomData,
+            }
+        }
+
+        pub fn iter(&self) -> std::slice::Iter<'_, String> {
+            self.values.iter()
+        }
+    }
+}
+
+#[derive(PassportPrincipal)]
+struct CustomCollectionPrincipal {
+    #[roles]
+    roles: custom::Vec<u64>,
+}
+
 fn main() {
     let owned_vec = OwnedVecPrincipal {
         roles: vec!["admin".into()],
@@ -65,4 +93,9 @@ fn main() {
         roles: RoleList(vec!["operator".into()]),
     };
     assert!(custom_iterator.has_role("operator"));
+
+    let custom_collection = CustomCollectionPrincipal {
+        roles: custom::Vec::new(vec!["auditor".into()]),
+    };
+    assert!(custom_collection.has_role("auditor"));
 }

@@ -153,10 +153,7 @@ fn is_known_collection_with_primitive_item(ty: &Type) -> bool {
     let Some(segment) = type_path.path.segments.last() else {
         return false;
     };
-    if !matches!(
-        segment.ident.to_string().as_str(),
-        "Vec" | "VecDeque" | "LinkedList" | "BinaryHeap" | "BTreeSet" | "HashSet"
-    ) {
+    if !is_known_standard_collection_path(&type_path.path) {
         return false;
     }
     let syn::PathArguments::AngleBracketed(arguments) = &segment.arguments else {
@@ -170,6 +167,39 @@ fn is_known_collection_with_primitive_item(ty: &Type) -> bool {
         return false;
     };
     types.next().is_none() && is_scalar_primitive(item)
+}
+
+fn is_known_standard_collection_path(path: &syn::Path) -> bool {
+    match path
+        .segments
+        .last()
+        .map(|segment| segment.ident.to_string())
+    {
+        Some(name) if name == "Vec" => {
+            path_matches(path, &["std", "vec", "Vec"])
+                || path_matches(path, &["alloc", "vec", "Vec"])
+        }
+        Some(name)
+            if matches!(
+                name.as_str(),
+                "VecDeque" | "LinkedList" | "BinaryHeap" | "BTreeSet"
+            ) =>
+        {
+            path_matches(path, &["std", "collections", &name])
+                || path_matches(path, &["alloc", "collections", &name])
+        }
+        Some(name) if name == "HashSet" => path_matches(path, &["std", "collections", "HashSet"]),
+        _ => false,
+    }
+}
+
+fn path_matches(path: &syn::Path, expected: &[&str]) -> bool {
+    path.segments.len() == expected.len()
+        && path
+            .segments
+            .iter()
+            .zip(expected)
+            .all(|(segment, expected)| segment.ident == *expected)
 }
 
 struct PolicyField {
