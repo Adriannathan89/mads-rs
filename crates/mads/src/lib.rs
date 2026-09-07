@@ -254,12 +254,16 @@ pub use mads_common::{Header, Json, Path, Query, Request, headers};
 
 /// Re-exports standard HTTP response types.
 #[cfg(feature = "http")]
-pub use mads_common::{Created, HttpError, HttpResult, NoContent};
+pub use mads_common::{
+    BadRequest, Conflict, Created, Forbidden, HttpError, HttpResult, InternalError, NoContent,
+    NotFound, Unauthorized, ValidationError,
+};
 
-/// Validation-only input derive, trait, and ordered issue contracts.
+/// Re-exports validated extractors, the input derive, and ordered issue contracts.
 #[cfg(feature = "http")]
 pub use mads_common::{
-    Input, ValidationErrors, ValidationIssue, ValidationPathSegment, ValidationResult,
+    Input, SourcedValidationIssue, ValidatedJson, ValidatedPath, ValidatedQuery, ValidationErrors,
+    ValidationIssue, ValidationPathSegment, ValidationResult, ValidationSource,
 };
 
 /// Re-exports HTTP router construction, configuration, and runtime startup functions.
@@ -339,12 +343,17 @@ pub mod prelude {
 
     /// Re-exports standard HTTP response types.
     #[cfg(feature = "http")]
-    pub use mads_common::{Created, HttpError, HttpResult, NoContent};
+    pub use mads_common::{
+        BadRequest, Conflict, Created, Forbidden, HttpError, HttpResult, InternalError, NoContent,
+        NotFound, Unauthorized, ValidationError,
+    };
 
-    /// Validation-only input derive, trait, and ordered issue contracts.
+    /// Re-exports validated extractors, the input derive, and ordered issue contracts.
     #[cfg(feature = "http")]
     pub use mads_common::{
-        Input, ValidationErrors, ValidationIssue, ValidationPathSegment, ValidationResult,
+        Input, SourcedValidationIssue, ValidatedJson, ValidatedPath, ValidatedQuery,
+        ValidationErrors, ValidationIssue, ValidationPathSegment, ValidationResult,
+        ValidationSource,
     };
 
     /// Re-exports HTTP router construction, configuration, and runtime startup functions.

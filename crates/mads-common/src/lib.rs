@@ -44,8 +44,8 @@ pub use mads_common_macros::Input;
 /// Re-exports transport-independent input validation contracts.
 #[cfg(feature = "http")]
 pub use validation::{
-    Input, SourcedValidationIssue, ValidatedJson, ValidationErrors, ValidationIssue,
-    ValidationPathSegment, ValidationResult, ValidationSource,
+    Input, SourcedValidationIssue, ValidatedJson, ValidatedPath, ValidatedQuery, ValidationErrors,
+    ValidationIssue, ValidationPathSegment, ValidationResult, ValidationSource,
 };
 
 /// Strict cookie extraction, response composition, and established cookie types.

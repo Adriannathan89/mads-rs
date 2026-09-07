@@ -15,7 +15,7 @@ pub use error::{
     SourcedValidationIssue, ValidationErrors, ValidationIssue, ValidationPathSegment,
     ValidationResult, ValidationSource,
 };
-pub use extract::ValidatedJson;
+pub use extract::{ValidatedJson, ValidatedPath, ValidatedQuery};
 
 /// Validates an existing input value without deserializing or transforming it.
 ///

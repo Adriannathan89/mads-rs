@@ -14,7 +14,7 @@ use std::{
 
 use http_body::Frame;
 use mads_common::{
-    Input, ValidatedJson,
+    Input, ValidatedJson, ValidatedPath, ValidatedQuery,
     axum::{
         Json, Router,
         body::{Body, Bytes, HttpBody, to_bytes},
@@ -24,7 +24,7 @@ use mads_common::{
             header::{CONTENT_TYPE, HeaderValue},
         },
         response::Response,
-        routing::post,
+        routing::{get, post},
     },
 };
 use serde_json::{Value, json};
@@ -80,13 +80,13 @@ async fn response_json(response: Response) -> Value {
     .expect("response body must be JSON")
 }
 
-fn validation_envelope(path: Value, code: &str, message: &str) -> Value {
+fn validation_envelope(source: &str, path: Value, code: &str, message: &str) -> Value {
     json!({
         "error": {
             "code": "validation_error",
             "message": "input validation failed",
             "issues": [{
-                "source": "body",
+                "source": source,
                 "path": path,
                 "code": code,
                 "message": message,
@@ -125,7 +125,12 @@ async fn json_malformed_syntax_is_one_sourced_validation_issue() {
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(
         response_json(response).await,
-        validation_envelope(json!([]), "invalid_syntax", "input syntax is invalid")
+        validation_envelope(
+            "body",
+            json!([]),
+            "invalid_syntax",
+            "input syntax is invalid"
+        )
     );
     assert_eq!(counter.load(Ordering::SeqCst), 0);
 }
@@ -146,6 +151,7 @@ async fn json_type_conversion_is_one_sourced_validation_issue() {
     assert_eq!(
         body,
         validation_envelope(
+            "body",
             json!(["count"]),
             "invalid_type",
             "input has an invalid type"
@@ -167,11 +173,385 @@ async fn json_missing_renamed_field_is_one_required_issue_at_its_external_path()
     assert_eq!(
         response_json(response).await,
         validation_envelope(
+            "body",
             json!(["emailAddress"]),
             "required",
             "required value is missing"
         )
     );
+    assert_eq!(counter.load(Ordering::SeqCst), 0);
+}
+
+#[derive(serde::Deserialize, Input)]
+#[serde(rename_all = "camelCase")]
+struct QueryInput {
+    #[validate(email, length(max = 10))]
+    email_address: String,
+    #[validate(range(min = 1, max = 10), multiple_of = 2)]
+    page_number: i64,
+}
+
+#[derive(serde::Deserialize, Input)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StrictQueryInput {
+    page_number: i64,
+}
+
+async fn accept_query(
+    State(counter): State<HandlerCounter>,
+    input: ValidatedQuery<QueryInput>,
+) -> Json<Value> {
+    let ValidatedQuery(input) = input;
+    counter.fetch_add(1, Ordering::SeqCst);
+    Json(json!({"email": input.email_address, "page": input.page_number}))
+}
+
+async fn accept_strict_query(
+    State(counter): State<HandlerCounter>,
+    _: ValidatedQuery<StrictQueryInput>,
+) {
+    counter.fetch_add(1, Ordering::SeqCst);
+}
+
+fn query_router(counter: HandlerCounter) -> Router {
+    Router::new()
+        .route("/query", get(accept_query))
+        .route("/query-strict", get(accept_strict_query))
+        .with_state(counter)
+}
+
+#[tokio::test]
+async fn query_path_valid_query_uses_external_names_and_ignores_unknown_fields() {
+    let counter = HandlerCounter::default();
+    let response = query_router(counter.clone())
+        .oneshot(
+            Request::get("/query?emailAddress=a%40b.co&pageNumber=4&ordinarySerdeIgnoresThis=yes")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(response).await,
+        json!({"email":"a@b.co","page":4})
+    );
+    assert_eq!(counter.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn query_path_query_type_conversion_is_one_redacted_query_issue() {
+    let counter = HandlerCounter::default();
+    let response = query_router(counter.clone())
+        .oneshot(
+            Request::get("/query?emailAddress=a%40b.co&pageNumber=private-value")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let body = response_json(response).await;
+    assert_eq!(
+        body,
+        validation_envelope(
+            "query",
+            json!(["pageNumber"]),
+            "invalid_type",
+            "input has an invalid type"
+        )
+    );
+    assert!(!body.to_string().contains("private-value"));
+    assert_eq!(counter.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn query_path_query_missing_renamed_field_is_one_required_query_issue() {
+    let counter = HandlerCounter::default();
+    let response = query_router(counter.clone())
+        .oneshot(
+            Request::get("/query?pageNumber=4")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        response_json(response).await,
+        validation_envelope(
+            "query",
+            json!(["emailAddress"]),
+            "required",
+            "required value is missing"
+        )
+    );
+    assert_eq!(counter.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn query_path_query_validation_returns_every_query_issue_in_derive_order() {
+    let counter = HandlerCounter::default();
+    let response = query_router(counter.clone())
+        .oneshot(
+            Request::get("/query?emailAddress=not-an-email&pageNumber=-3")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        response_json(response).await,
+        json!({
+            "error": {
+                "code": "validation_error",
+                "message": "input validation failed",
+                "issues": [
+                    {"source":"query","path":["emailAddress"],"code":"invalid_format","message":"invalid email address"},
+                    {"source":"query","path":["emailAddress"],"code":"too_big","message":"value is too big"},
+                    {"source":"query","path":["pageNumber"],"code":"too_small","message":"value is too small"},
+                    {"source":"query","path":["pageNumber"],"code":"not_multiple_of","message":"value is not a multiple of the required number"},
+                ],
+            },
+        })
+    );
+    assert_eq!(counter.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn query_path_query_honors_serde_deny_unknown_fields() {
+    let counter = HandlerCounter::default();
+    let response = query_router(counter.clone())
+        .oneshot(
+            Request::get("/query-strict?pageNumber=4&unexpected=private-value")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let body = response_json(response).await;
+    assert_eq!(
+        body,
+        validation_envelope(
+            "query",
+            json!(["unexpected"]),
+            "invalid_type",
+            "input has an invalid type"
+        )
+    );
+    assert!(!body.to_string().contains("private-value"));
+    assert_eq!(counter.load(Ordering::SeqCst), 0);
+}
+
+#[derive(serde::Deserialize, Input)]
+#[serde(rename_all = "camelCase")]
+struct PathInput {
+    #[validate(range(min = 1, max = 10), multiple_of = 2)]
+    user_id: i64,
+    #[validate(length(min = 3, max = 5))]
+    slug: String,
+}
+
+#[derive(serde::Deserialize, Input)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StrictPathInput {
+    user_id: i64,
+}
+
+async fn accept_path(
+    State(counter): State<HandlerCounter>,
+    input: ValidatedPath<PathInput>,
+) -> Json<Value> {
+    let input = input.into_inner();
+    counter.fetch_add(1, Ordering::SeqCst);
+    Json(json!({"userId": input.user_id, "slug": input.slug}))
+}
+
+async fn accept_required_path(State(counter): State<HandlerCounter>, _: ValidatedPath<PathInput>) {
+    counter.fetch_add(1, Ordering::SeqCst);
+}
+
+async fn accept_strict_path(
+    State(counter): State<HandlerCounter>,
+    _: ValidatedPath<StrictPathInput>,
+) {
+    counter.fetch_add(1, Ordering::SeqCst);
+}
+
+fn path_router(counter: HandlerCounter) -> Router {
+    Router::new()
+        .route(
+            "/path/{userId}/{slug}/{ordinarySerdeIgnoresThis}",
+            get(accept_path),
+        )
+        .route("/path-required/{userId}", get(accept_required_path))
+        .route(
+            "/path-strict/{userId}/{unexpected}",
+            get(accept_strict_path),
+        )
+        .with_state(counter)
+}
+
+#[tokio::test]
+async fn query_path_valid_path_uses_into_inner_external_names_and_unknown_field_defaults() {
+    let counter = HandlerCounter::default();
+    let response = path_router(counter.clone())
+        .oneshot(
+            Request::get("/path/4/rust/ignored")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response_json(response).await,
+        json!({"userId":4,"slug":"rust"})
+    );
+    assert_eq!(counter.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn query_path_path_invalid_utf8_is_one_redacted_syntax_issue() {
+    let counter = HandlerCounter::default();
+    let response = path_router(counter.clone())
+        .oneshot(
+            Request::get("/path/%FF/rust/ignored")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let body = response_json(response).await;
+    assert_eq!(
+        body,
+        validation_envelope(
+            "path",
+            json!(["userId"]),
+            "invalid_syntax",
+            "input syntax is invalid"
+        )
+    );
+    assert!(!body.to_string().contains("%FF"));
+    assert_eq!(counter.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn query_path_path_type_conversion_is_one_redacted_path_issue() {
+    let counter = HandlerCounter::default();
+    let response = path_router(counter.clone())
+        .oneshot(
+            Request::get("/path/private-value/rust/ignored")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let body = response_json(response).await;
+    assert_eq!(
+        body,
+        validation_envelope(
+            "path",
+            json!(["userId"]),
+            "invalid_type",
+            "input has an invalid type"
+        )
+    );
+    assert!(!body.to_string().contains("private-value"));
+    assert_eq!(counter.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn query_path_path_missing_field_is_one_required_path_issue() {
+    let counter = HandlerCounter::default();
+    let response = path_router(counter.clone())
+        .oneshot(
+            Request::get("/path-required/4")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        response_json(response).await,
+        validation_envelope(
+            "path",
+            json!(["slug"]),
+            "required",
+            "required value is missing"
+        )
+    );
+    assert_eq!(counter.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn query_path_path_validation_returns_every_path_issue_in_derive_order() {
+    let counter = HandlerCounter::default();
+    let response = path_router(counter.clone())
+        .oneshot(
+            Request::get("/path/-3/toolong/ignored")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(
+        response_json(response).await,
+        json!({
+            "error": {
+                "code": "validation_error",
+                "message": "input validation failed",
+                "issues": [
+                    {"source":"path","path":["userId"],"code":"too_small","message":"value is too small"},
+                    {"source":"path","path":["userId"],"code":"not_multiple_of","message":"value is not a multiple of the required number"},
+                    {"source":"path","path":["slug"],"code":"too_big","message":"value is too big"},
+                ],
+            },
+        })
+    );
+    assert_eq!(counter.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn query_path_path_honors_serde_deny_unknown_fields() {
+    let counter = HandlerCounter::default();
+    let response = path_router(counter.clone())
+        .oneshot(
+            Request::get("/path-strict/4/private-value")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let body = response_json(response).await;
+    assert_eq!(
+        body,
+        validation_envelope(
+            "path",
+            json!(["unexpected"]),
+            "invalid_type",
+            "input has an invalid type"
+        )
+    );
+    assert!(!body.to_string().contains("private-value"));
     assert_eq!(counter.load(Ordering::SeqCst), 0);
 }
 
