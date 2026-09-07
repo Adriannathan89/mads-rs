@@ -256,6 +256,12 @@ pub use mads_common::{Header, Json, Path, Query, Request, headers};
 #[cfg(feature = "http")]
 pub use mads_common::{Created, HttpError, HttpResult, NoContent};
 
+/// Validation-only input derive, trait, and ordered issue contracts.
+#[cfg(feature = "http")]
+pub use mads_common::{
+    Input, ValidationErrors, ValidationIssue, ValidationPathSegment, ValidationResult,
+};
+
 /// Re-exports HTTP router construction, configuration, and runtime startup functions.
 #[cfg(feature = "http")]
 pub use mads_common::{
@@ -334,6 +340,12 @@ pub mod prelude {
     /// Re-exports standard HTTP response types.
     #[cfg(feature = "http")]
     pub use mads_common::{Created, HttpError, HttpResult, NoContent};
+
+    /// Validation-only input derive, trait, and ordered issue contracts.
+    #[cfg(feature = "http")]
+    pub use mads_common::{
+        Input, ValidationErrors, ValidationIssue, ValidationPathSegment, ValidationResult,
+    };
 
     /// Re-exports HTTP router construction, configuration, and runtime startup functions.
     #[cfg(feature = "http")]

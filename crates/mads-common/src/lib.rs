@@ -35,6 +35,12 @@ mod server_config;
 #[cfg(feature = "http")]
 mod validation;
 
+extern crate self as mads_common;
+
+/// Derives input validation with built-in, nested, and custom checks.
+#[cfg(feature = "http")]
+pub use mads_common_macros::Input;
+
 /// Re-exports transport-independent input validation contracts.
 #[cfg(feature = "http")]
 pub use validation::{

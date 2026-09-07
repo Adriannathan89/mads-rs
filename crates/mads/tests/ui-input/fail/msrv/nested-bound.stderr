@@ -1,0 +1,16 @@
+error[E0277]: the trait bound `NotInput: Input` is not satisfied
+ --> tests/ui-input/fail/msrv/nested-bound.rs:5:44
+  |
+5 | struct Parent { #[validate(nested)] child: NotInput }
+  |                                            ^^^^^^^^ the trait `Input` is not implemented for `NotInput`
+  |
+  = help: the following other types implement trait `Input`:
+            &T
+            BTreeMap<String, T>
+            HashMap<String, T, S>
+            Option<T>
+            Parent
+            String
+            Vec<T>
+            [T; N]
+          and $N others

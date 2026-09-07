@@ -56,6 +56,9 @@ fn inspect_auto_configuration() {
 }
 
 fn main() {
+    #[derive(Input)]
+    struct RequestInput { #[validate(email)] email: String }
+    assert!(RequestInput { email: "user@example.com".into() }.validate().is_ok());
     assert_eq!(Config::empty().parse::<Settings>().unwrap().host, "localhost");
     let _ = inspect_auto_configuration;
     let _ = diesel_backend;

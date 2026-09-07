@@ -18,12 +18,25 @@ use proc_macro::TokenStream;
 
 mod controller;
 mod guard;
+mod input;
 mod passport_principal;
 #[cfg(feature = "passport")]
 mod passport_strategy;
 mod path;
 mod routes;
 mod verb;
+
+/// Derives deterministic validation without changing Serde deserialization.
+///
+/// Use `#[validate(email)]`, length and numeric bounds, `nested`, or synchronous
+/// custom callbacks on fields. A complete input supports a custom callback.
+#[proc_macro_derive(Input, attributes(validate))]
+pub fn input(input: TokenStream) -> TokenStream {
+    syn::parse(input)
+        .and_then(input::expand)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
 
 /// Derives role and permission membership for a named Passport principal.
 ///

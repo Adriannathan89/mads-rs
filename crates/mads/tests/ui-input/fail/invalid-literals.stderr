@@ -1,0 +1,47 @@
+error: multiple_of must be nonzero
+ --> tests/ui-input/fail/invalid-literals.rs:4:40
+  |
+4 | struct Zero { #[validate(multiple_of = 0)] value: i32 }
+  |                                        ^
+
+error: numeric literal is outside the input field type
+ --> tests/ui-input/fail/invalid-literals.rs:6:42
+  |
+6 | struct Overflow { #[validate(range(max = 256))] value: u8 }
+  |                                          ^^^
+
+error: numeric literal is outside the input field type
+ --> tests/ui-input/fail/invalid-literals.rs:8:47
+  |
+8 | struct FloatOverflow { #[validate(range(max = 1e100))] value: f32 }
+  |                                               ^^^^^
+
+error: minimum input bound exceeds maximum
+  --> tests/ui-input/fail/invalid-literals.rs:10:30
+   |
+10 | struct Reversed { #[validate(range(min = 4, max = 3))] value: u128 }
+   |                              ^^^^^^^^^^^^^^^^^^^^^^^
+
+error: expected min/max bounds or one exact length
+  --> tests/ui-input/fail/invalid-literals.rs:12:27
+   |
+12 | struct Exact { #[validate(length(exact = 3, min = 2))] value: String }
+   |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: length bound contradicts nonempty
+  --> tests/ui-input/fail/invalid-literals.rs:14:57
+   |
+14 | struct Contradictory { #[validate(nonempty)] #[validate(length(max = 0))] value: String }
+   |                                                         ^^^^^^
+
+error: positive and negative input validators contradict each other
+  --> tests/ui-input/fail/invalid-literals.rs:16:36
+   |
+16 | struct Sign { #[validate(positive, negative)] value: i32 }
+   |                                    ^^^^^^^^
+
+error: length bounds must be nonnegative integer literals
+  --> tests/ui-input/fail/invalid-literals.rs:18:46
+   |
+18 | struct FloatLength { #[validate(length(min = 1.5))] value: String }
+   |                                              ^^^

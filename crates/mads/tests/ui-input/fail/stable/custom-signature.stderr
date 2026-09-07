@@ -1,0 +1,24 @@
+error[E0308]: mismatched types
+ --> tests/ui-input/fail/stable/custom-signature.rs:6:30
+  |
+6 | struct Argument { #[validate(custom = wrong_argument)] value: String }
+  |                              ^^^^^^   -------------- arguments to this function are incorrect
+  |                              |
+  |                              expected `u32`, found `&String`
+  |
+note: function defined here
+ --> tests/ui-input/fail/stable/custom-signature.rs:3:4
+  |
+3 | fn wrong_argument(_: u32) -> ValidationResult { Ok(()) }
+  |    ^^^^^^^^^^^^^^ ------
+
+error[E0308]: mismatched types
+ --> tests/ui-input/fail/stable/custom-signature.rs:8:28
+  |
+7 | #[derive(Input)]
+  |          ----- expected due to this
+8 | struct Return { #[validate(custom = wrong_result)] value: String }
+  |                            ^^^^^^^^^^^^^^^^^^^^^ expected `Result<(), ValidationErrors>`, found `bool`
+  |
+  = note: expected enum `Result<(), ValidationErrors>`
+             found type `bool`

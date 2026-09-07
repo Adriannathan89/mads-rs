@@ -20,5 +20,9 @@ async fn build_application() -> web::core::Result<()> {
 }
 
 fn main() {
+    use web::Input;
+    #[derive(web::Input)]
+    struct RequestInput { #[validate(email)] email: String }
+    assert!(RequestInput { email: "user@example.com".into() }.validate().is_ok());
     let _ = build_application;
 }
