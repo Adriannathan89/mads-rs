@@ -184,7 +184,7 @@ fn expand_controller_with_common(
             {
                 #[allow(dead_code)]
                 fn __mads_assert_controller_route() {
-                    let _ = <#ident as #route>::__MADS_ROUTE_CONTRACT;
+                    const _: () = <#ident as #route>::__MADS_ROUTE_CONTRACT;
                 }
             }
         }
