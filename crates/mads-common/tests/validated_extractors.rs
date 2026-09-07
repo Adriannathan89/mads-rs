@@ -32,6 +32,43 @@ use tower::ServiceExt;
 
 type HandlerCounter = Arc<AtomicUsize>;
 
+#[derive(Input)]
+struct CustomRejectedInput;
+
+impl<'de> serde::Deserialize<'de> for CustomRejectedInput {
+    fn deserialize<D: serde::Deserializer<'de>>(_: D) -> Result<Self, D::Error> {
+        Err(serde::de::Error::custom(
+            "unknown field `PRIVATE_SERVER_SENTINEL`, expected safe_field",
+        ))
+    }
+}
+
+#[tokio::test]
+async fn query_path_custom_deserializer_messages_do_not_leak_into_paths() {
+    async fn query(_: ValidatedQuery<CustomRejectedInput>) {}
+    async fn path(_: ValidatedPath<CustomRejectedInput>) {}
+    let router = Router::new()
+        .route("/query", get(query))
+        .route("/path/{value}", get(path));
+    for (uri, source) in [("/query?value=1", "query"), ("/path/1", "path")] {
+        let response = router
+            .clone()
+            .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(
+            response_json(response).await,
+            validation_envelope(
+                source,
+                json!([]),
+                "invalid_type",
+                "input has an invalid type"
+            )
+        );
+    }
+}
+
 #[tokio::test]
 async fn query_path_server_configuration_errors_are_redacted_internal_errors() {
     async fn wrong_number(_: ValidatedPath<String>) {
@@ -577,7 +614,7 @@ async fn query_path_path_honors_serde_deny_unknown_fields() {
         body,
         validation_envelope(
             "path",
-            json!(["unexpected"]),
+            json!([]),
             "invalid_type",
             "input has an invalid type"
         )

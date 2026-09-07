@@ -24,6 +24,7 @@ use mads_common::{
 use tower::ServiceExt;
 
 static HANDLER_CALLS: AtomicUsize = AtomicUsize::new(0);
+static TEST_GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 static STRATEGY_CONTEXT: OnceLock<Mutex<Option<ContextRecord>>> = OnceLock::new();
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
@@ -129,6 +130,7 @@ fn config() -> Config {
 
 #[tokio::test]
 async fn guarded_bearer_route_verifies_before_invoking_the_handler() {
+    let _guard = TEST_GUARD.lock().await;
     HANDLER_CALLS.store(0, Ordering::SeqCst);
     *STRATEGY_CONTEXT
         .get_or_init(|| Mutex::new(None))
@@ -179,6 +181,7 @@ async fn guarded_bearer_route_verifies_before_invoking_the_handler() {
 
 #[tokio::test]
 async fn guarded_bearer_route_rejects_missing_credentials_with_json_and_bearer_challenge() {
+    let _guard = TEST_GUARD.lock().await;
     HANDLER_CALLS.store(0, Ordering::SeqCst);
     let application = Mads::builder_with_config(config()).build().await.unwrap();
     let router = build_router(&application).unwrap();

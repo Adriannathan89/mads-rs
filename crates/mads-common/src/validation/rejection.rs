@@ -114,10 +114,7 @@ fn query_issue(error: &FailedToDeserializeQueryString) -> ValidationIssue {
         support::IssueKind::InvalidType
     };
     let issue = apply_path(support::issue(kind), error.path());
-    apply_fallback_field(
-        issue,
-        missing_field.or_else(|| parse_unknown_field(&error.inner().to_string())),
-    )
+    apply_fallback_field(issue, missing_field)
 }
 
 fn path_issue(error: &FailedToDeserializePathParams) -> ValidationIssue {
@@ -139,10 +136,7 @@ fn path_issue(error: &FailedToDeserializePathParams) -> ValidationIssue {
             } else {
                 support::IssueKind::InvalidType
             };
-            apply_fallback_field(
-                support::issue(kind),
-                missing_field.or_else(|| parse_unknown_field(message)),
-            )
+            apply_fallback_field(support::issue(kind), missing_field)
         }
         _ => support::issue(support::IssueKind::InvalidType),
     }
@@ -175,12 +169,6 @@ fn parse_missing_field(error: &serde_json::Error) -> Option<String> {
 fn parse_plain_missing_field(message: &str) -> Option<String> {
     let field = message.strip_prefix("missing field `")?.strip_suffix('`')?;
     (!field.is_empty()).then(|| field.to_owned())
-}
-
-fn parse_unknown_field(message: &str) -> Option<String> {
-    let remainder = message.strip_prefix("unknown field `")?;
-    let (field, expected) = remainder.split_once("`, expected ")?;
-    (!field.is_empty() && !expected.is_empty()).then(|| field.to_owned())
 }
 
 fn apply_fallback_field(issue: ValidationIssue, field: Option<String>) -> ValidationIssue {
