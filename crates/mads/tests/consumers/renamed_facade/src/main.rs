@@ -22,10 +22,48 @@ fn consume_repository(repository: &RenamedRepository) {
 
 fn diesel_backend(_: std::marker::PhantomData<framework::diesel::pg::Pg>) {}
 
+mod mads {
+    pub struct Json;
+
+    impl<S> framework::axum::extract::FromRequestParts<S> for Json
+    where
+        S: Send + Sync,
+    {
+        type Rejection = framework::axum::http::StatusCode;
+
+        async fn from_request_parts(
+            _parts: &mut framework::axum::http::request::Parts,
+            _state: &S,
+        ) -> Result<Self, Self::Rejection> {
+            Ok(Self)
+        }
+    }
+}
+
+#[derive(serde::Deserialize, framework::Input)]
+struct CreateInput {
+    name: String,
+}
+
 #[routes]
 trait Routes {
     #[get("/")]
     async fn index(&self);
+}
+
+#[routes]
+trait ExtractorRoutes {
+    #[post("/:id")]
+    async fn custom_json_before_path(&self, body: mads::Json, id: framework::Path<u64>);
+
+    #[post("/json")]
+    async fn json(&self, body: framework::Json<String>);
+
+    #[post("/validated")]
+    async fn validated(&self, body: framework::ValidatedJson<CreateInput>);
+
+    #[post("/request")]
+    async fn request(&self, request: framework::Request);
 }
 
 #[controller(routes = [Routes])]
@@ -33,6 +71,21 @@ struct Controller;
 
 impl Routes for Controller {
     async fn index(&self) {}
+}
+
+#[controller(routes = [ExtractorRoutes])]
+struct ExtractorController;
+
+impl ExtractorRoutes for ExtractorController {
+    async fn custom_json_before_path(&self, _body: mads::Json, _id: framework::Path<u64>) {}
+
+    async fn json(&self, _body: framework::Json<String>) {}
+
+    async fn validated(&self, body: framework::ValidatedJson<CreateInput>) {
+        let _ = body.0.name;
+    }
+
+    async fn request(&self, _request: framework::Request) {}
 }
 
 fn inspect_auto_configuration() {

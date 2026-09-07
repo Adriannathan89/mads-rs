@@ -10,7 +10,11 @@ struct CreateUser {
 #[mads::routes]
 trait Routes {
     #[mads::post("/")]
-    async fn create(&self, payload: mads::ValidatedJson<CreateUser>, request: mads::Request);
+    async fn create(
+        &self,
+        payload: mads_common::ValidatedJson<CreateUser>,
+        request: mads_common::Request,
+    );
 }
 
 fn main() {}

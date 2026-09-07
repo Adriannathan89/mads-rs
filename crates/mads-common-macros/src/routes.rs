@@ -441,22 +441,12 @@ fn known_body_consumer(ty: &Type, common: &syn::Path) -> bool {
 }
 
 fn is_mads_type(path: &syn::Path, common: &syn::Path, name: &str) -> bool {
-    path_is(path, &["mads", name])
-        || path_is(path, &["mads", "common", name])
-        || path_is(path, &["mads_common", name])
-        || path_with_suffix_is(path, common, &[name])
-        || facade_path_with_suffix_is(path, common, &[name])
+    path_with_suffix_is(path, common, &[name]) || facade_path_with_suffix_is(path, common, &[name])
 }
 
 fn is_axum_type(path: &syn::Path, common: &syn::Path, name: &str) -> bool {
     path_is(path, &["axum", name])
         || path_is(path, &["axum", "extract", name])
-        || path_is(path, &["mads", "axum", name])
-        || path_is(path, &["mads", "axum", "extract", name])
-        || path_is(path, &["mads", "common", "axum", name])
-        || path_is(path, &["mads", "common", "axum", "extract", name])
-        || path_is(path, &["mads_common", "axum", name])
-        || path_is(path, &["mads_common", "axum", "extract", name])
         || path_with_suffix_is(path, common, &["axum", name])
         || path_with_suffix_is(path, common, &["axum", "extract", name])
         || facade_path_with_suffix_is(path, common, &["axum", name])

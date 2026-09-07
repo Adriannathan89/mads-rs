@@ -277,19 +277,27 @@ fn rejects_duplicate_verb_and_path() {
 
 #[test]
 fn recognizes_only_qualified_standard_body_extractors() {
-    let common = syn::parse_quote!(mads::common);
+    let common = syn::parse_quote!(framework::common);
     for source in [
-        "mads::Json<User>",
-        "mads::common::ValidatedJson<User>",
-        "mads::Request",
+        "framework::Json<User>",
+        "framework::common::Json<User>",
+        "framework::ValidatedJson<User>",
+        "framework::common::ValidatedJson<User>",
+        "framework::Request",
+        "framework::common::Request",
         "axum::extract::Request",
-        "mads::axum::Json<User>",
+        "framework::axum::Json<User>",
     ] {
         let ty = syn::parse_str(source).expect("body extractor type should parse");
         assert!(known_body_consumer(&ty, &common), "{source}");
     }
 
-    for source in ["Json<User>", "Request", "application::Json<User>"] {
+    for source in [
+        "Json<User>",
+        "Request",
+        "application::Json<User>",
+        "mads::Json<User>",
+    ] {
         let ty = syn::parse_str(source).expect("custom extractor type should parse");
         assert!(!known_body_consumer(&ty, &common), "{source}");
     }
