@@ -30,6 +30,7 @@ diesel = { version = "=2.2.12", default-features = false, features = ["postgres"
 diesel_migrations = { version = "=2.2.0", default-features = false, features = ["postgres"] }
 diesel_table_macro_syntax = "=0.2.0"
 dotenvy = "=0.15.7"
+http-body = "1"
 inventory = "0.3"
 jsonwebtoken = { version = "=10.3.0", default-features = false, features = ["rust_crypto", "use_pem"] }
 notify = "=8.2.0"
@@ -39,6 +40,8 @@ quote = "1"
 rustix = { version = "=1.1.4", default-features = false, features = ["fs", "std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_path_to_error = "0.1"
+serde_urlencoded = "0.7"
 semver = "=1.0.28"
 syn = { version = "2", features = ["full", "extra-traits"] }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }

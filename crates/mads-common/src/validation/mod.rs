@@ -1,9 +1,11 @@
-//! Transport-independent validation after deserialization.
+//! Input validation after deserialization and source-aware HTTP extraction.
 
 mod error;
+mod extract;
 mod nested;
 mod number;
 mod primitive;
+mod rejection;
 mod string;
 
 #[doc(hidden)]
@@ -13,6 +15,7 @@ pub use error::{
     SourcedValidationIssue, ValidationErrors, ValidationIssue, ValidationPathSegment,
     ValidationResult, ValidationSource,
 };
+pub use extract::ValidatedJson;
 
 /// Validates an existing input value without deserializing or transforming it.
 ///
