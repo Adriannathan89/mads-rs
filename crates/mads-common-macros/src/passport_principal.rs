@@ -1,8 +1,8 @@
 //! `PassportPrincipal` derive expansion.
 
 use proc_macro2::TokenStream;
-use quote::quote;
-use syn::{Data, DeriveInput, Error, Fields, Ident, Result, spanned::Spanned};
+use quote::{quote, quote_spanned};
+use syn::{Data, DeriveInput, Error, Field, Fields, Ident, Result, Type, spanned::Spanned};
 
 use crate::path::common_path;
 
@@ -57,20 +57,19 @@ pub(crate) fn expand(input: DeriveInput) -> Result<TokenStream> {
             ));
         }
 
-        let ident = field.ident.as_ref().expect("named fields have identifiers");
         if field_roles == 1 {
-            set_unique(&mut roles, ident, "roles")?;
+            set_unique(&mut roles, field, "roles")?;
         }
         if field_permissions == 1 {
-            set_unique(&mut permissions, ident, "permissions")?;
+            set_unique(&mut permissions, field, "permissions")?;
         }
     }
 
     let common = common_path()?;
     let ident = &input.ident;
     let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
-    let role_body = membership_body(roles);
-    let permission_body = membership_body(permissions);
+    let role_body = membership_body(roles.as_ref());
+    let permission_body = membership_body(permissions.as_ref());
 
     Ok(quote! {
         impl #impl_generics #common::PassportPrincipal for #ident #type_generics #where_clause {
@@ -98,25 +97,47 @@ fn marker_count<'a>(attributes: impl Iterator<Item = &'a syn::Attribute>, marker
         .count()
 }
 
-fn set_unique(slot: &mut Option<Ident>, ident: &Ident, marker: &str) -> Result<()> {
+struct PolicyField {
+    ident: Ident,
+    ty: Type,
+}
+
+fn set_unique(slot: &mut Option<PolicyField>, field: &Field, marker: &str) -> Result<()> {
     if slot.is_some() {
+        let ident = field.ident.as_ref().expect("named fields have identifiers");
         return Err(Error::new(
             ident.span(),
             format!("duplicate `#[{marker}]` Passport principal field"),
         ));
     }
-    *slot = Some(ident.clone());
+    *slot = Some(PolicyField {
+        ident: field.ident.clone().expect("named fields have identifiers"),
+        ty: field.ty.clone(),
+    });
     Ok(())
 }
 
-fn membership_body(field: Option<Ident>) -> TokenStream {
+fn membership_body(field: Option<&PolicyField>) -> TokenStream {
     field.map_or_else(
         || quote!(false),
         |field| {
+            let ident = &field.ident;
+            let ty = &field.ty;
+            let type_span = ty.span();
+            let membership = quote_spanned! {type_span=>
+                __mads_contains_passport_policy_string_item(&self.#ident, requested)
+            };
             quote! {
-                self.#field.iter().any(|value| {
-                    ::core::convert::AsRef::<str>::as_ref(value) == requested
-                })
+                fn __mads_contains_passport_policy_string_item<I>(values: I, requested: &str) -> bool
+                where
+                    I: ::core::iter::IntoIterator<Item: ::core::convert::AsRef<str>>,
+                {
+                    values.into_iter().any(|value| {
+                        ::core::convert::AsRef::<str>::as_ref(&value) == requested
+                    })
+                }
+
+                #membership
             }
         },
     )

@@ -45,6 +45,19 @@ struct CreateInput {
     name: String,
 }
 
+#[derive(framework::PassportPrincipal)]
+struct Principal {
+    #[roles]
+    roles: Vec<String>,
+}
+
+fn passport_principal() {
+    let principal = Principal {
+        roles: vec!["member".into()],
+    };
+    assert!(framework::PassportPrincipal::has_role(&principal, "member"));
+}
+
 #[routes]
 trait Routes {
     #[get("/")]
@@ -113,6 +126,7 @@ fn main() {
     struct RequestInput { #[validate(email)] email: String }
     assert!(RequestInput { email: "user@example.com".into() }.validate().is_ok());
     assert_eq!(Config::empty().parse::<Settings>().unwrap().host, "localhost");
+    let _ = passport_principal;
     let _ = inspect_auto_configuration;
     let _ = diesel_backend;
     let _ = consume_repository;

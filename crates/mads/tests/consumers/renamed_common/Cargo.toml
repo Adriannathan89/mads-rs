@@ -5,6 +5,8 @@ edition = "2024"
 rust-version = "1.85"
 
 [dependencies]
-web = { package = "mads-common", path = "../../../../mads-common" }
+web = { package = "mads-common", path = "../../../../mads-common", features = ["jwt"] }
+# Pin the transitive JWT time floor so this standalone MSRV fixture resolves on Rust 1.85.
+time = "=0.3.36"
 
 [workspace]

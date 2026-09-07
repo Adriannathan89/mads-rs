@@ -1,0 +1,8 @@
+error[E0277]: `&u64` is not an iterator
+ --> tests/ui-passport/fail/principal_policy_field_type.rs:6:12
+  |
+6 |     roles: u64,
+  |            ^^^ `&u64` is not an iterator
+  |
+  = help: the trait `Iterator` is not implemented for `&u64`
+  = note: required for `&u64` to implement `IntoIterator`
