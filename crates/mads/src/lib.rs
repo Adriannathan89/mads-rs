@@ -233,6 +233,10 @@ pub use mads_common::{
     MigrationStatus,
 };
 
+/// Re-exports explicit HTTP delivery mapping for managed and native Diesel results.
+#[cfg(all(feature = "http", feature = "database"))]
+pub use mads_common::IntoHttpResult;
+
 /// Re-exports typed JWT claims, service, options, errors, and diagnostics.
 #[cfg(feature = "jwt")]
 pub use mads_common::{
@@ -378,6 +382,10 @@ pub mod prelude {
         DatabasePoolStatus, DatabaseResult, MadsBuilderDatabaseExt, MigrationReport,
         MigrationStatus,
     };
+
+    /// Re-exports explicit HTTP delivery mapping for managed and native Diesel results.
+    #[cfg(all(feature = "http", feature = "database"))]
+    pub use mads_common::IntoHttpResult;
 
     /// Re-exports application-facing Passport JWT contracts and services.
     #[cfg(feature = "jwt")]

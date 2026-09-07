@@ -52,6 +52,17 @@ fn http_includes_tower_http() {
 }
 
 #[test]
+fn http_excludes_database_dependencies() {
+    let tree = dependency_tree("http");
+    for forbidden in ["diesel v", "deadpool-diesel v", "diesel_migrations v"] {
+        assert!(
+            !tree.contains(forbidden),
+            "unexpected database dependency: {forbidden}\n{tree}"
+        );
+    }
+}
+
+#[test]
 fn common_remains_http_and_database_without_authentication() {
     let tree = dependency_tree("common");
     assert!(tree.contains("axum v"));
@@ -62,9 +73,14 @@ fn common_remains_http_and_database_without_authentication() {
 }
 
 #[test]
-fn database_excludes_tower_http() {
+fn database_excludes_http_dependencies() {
     let tree = dependency_tree("database");
-    assert!(!tree.contains("tower-http v"));
+    for forbidden in ["axum v", "axum-extra v", "tower-http v"] {
+        assert!(
+            !tree.contains(forbidden),
+            "unexpected HTTP dependency: {forbidden}\n{tree}"
+        );
+    }
 }
 
 #[test]
