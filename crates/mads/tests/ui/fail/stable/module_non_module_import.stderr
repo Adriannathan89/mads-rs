@@ -14,9 +14,9 @@ help: the trait `Module` is implemented for `AppModule`
   |
 5 | #[module(imports = [NotAModule])]
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-note: required by a bound in `__mads_assert_module`
+note: required by a bound in `__mads_assert_module_import`
  --> tests/ui/fail/stable/module_non_module_import.rs:5:1
   |
 5 | #[module(imports = [NotAModule])]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `__mads_assert_module`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `__mads_assert_module_import`
   = note: this error originates in the attribute macro `module` (in Nightly builds, run with -Z macro-backtrace for more info)
