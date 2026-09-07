@@ -109,6 +109,15 @@ fn standard_debug_and_display_never_reveal_internal_sources() {
     assert!(!format!("{:?}", BadRequest::new("safe message")).contains("safe message"));
 }
 
+#[cfg(not(feature = "database"))]
+#[test]
+fn http_only_standard_errors_remain_send_and_sync() {
+    fn assert_send_and_sync<T: Send + Sync>() {}
+
+    assert_send_and_sync::<HttpError>();
+    assert_send_and_sync::<InternalError>();
+}
+
 #[tokio::test]
 async fn sourced_issues_preserve_paths_order_and_explicit_sources() {
     let issue = ValidationIssue::custom("invalid", "invalid input")

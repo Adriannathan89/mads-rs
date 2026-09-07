@@ -36,7 +36,7 @@ fn map_error(source: impl StdError + Send + 'static, classification: Classificat
     match classification {
         Classification::NotFound => NotFound::from_source(source).into(),
         Classification::Conflict => Conflict::from_source(source).into(),
-        Classification::Internal => InternalError::new(source).into(),
+        Classification::Internal => InternalError::from_source(source).into(),
     }
 }
 

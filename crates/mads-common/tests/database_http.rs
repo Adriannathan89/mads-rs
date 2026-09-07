@@ -4,6 +4,7 @@
 
 use std::error::Error as StdError;
 
+use deadpool_diesel::InteractError;
 use mads_common::{
     DatabaseError, DatabaseResult, HttpError, IntoHttpResult,
     axum::{
@@ -277,6 +278,36 @@ async fn managed_non_query_errors_map_to_the_fixed_redacted_500() {
         source.to_string(),
         format!("database configuration is invalid: {MESSAGE_SENTINEL}")
     );
+    let formatting = format!("{error}\n{error:?}");
+
+    let body = assert_response(error, StatusCode::INTERNAL_SERVER_ERROR, INTERNAL_BODY).await;
+    assert_redacted(&formatting);
+    assert_redacted(&body);
+}
+
+#[tokio::test]
+async fn managed_interaction_errors_retain_send_only_sources_through_the_fixed_redacted_500() {
+    let failure: DatabaseResult<()> = Err(DatabaseError::Interaction(InteractError::Panic(
+        Box::new(MESSAGE_SENTINEL.to_owned()),
+    )));
+    let error = failure.into_http().unwrap_err();
+
+    assert_eq!(error.to_string(), "internal server error");
+    let source = managed_source(&error);
+    assert_eq!(source.to_string(), "database blocking operation failed");
+    let interaction = StdError::source(source)
+        .expect("managed interaction error must retain the interaction source")
+        .downcast_ref::<InteractError>()
+        .expect("managed interaction error must retain the original interaction error");
+    match interaction {
+        InteractError::Panic(payload) => {
+            assert_eq!(
+                payload.downcast_ref::<String>().map(String::as_str),
+                Some(MESSAGE_SENTINEL)
+            );
+        }
+        other => panic!("expected a retained interaction panic, got {other:?}"),
+    }
     let formatting = format!("{error}\n{error:?}");
 
     let body = assert_response(error, StatusCode::INTERNAL_SERVER_ERROR, INTERNAL_BODY).await;
