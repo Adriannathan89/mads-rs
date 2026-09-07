@@ -84,6 +84,10 @@ pub use database::{
     MigrationStatus,
 };
 
+/// Explicit HTTP delivery mapping for managed and native Diesel query results.
+#[cfg(all(feature = "http", feature = "database"))]
+pub use database::IntoHttpResult;
+
 /// Typed JWT claims, service, options, errors, and diagnostics.
 #[cfg(feature = "jwt")]
 pub use jwt::{

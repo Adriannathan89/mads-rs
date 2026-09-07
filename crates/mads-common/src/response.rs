@@ -41,6 +41,31 @@ impl IntoResponse for ResponseDescription<'_> {
     }
 }
 
+#[cfg(feature = "database")]
+#[doc(hidden)]
+pub struct SourceRetainingClientError {
+    message: String,
+    source: Box<dyn Error + Send>,
+}
+
+#[cfg(feature = "database")]
+impl SourceRetainingClientError {
+    fn new(message: impl Into<String>, source: impl Error + Send + 'static) -> Self {
+        Self {
+            message: message.into(),
+            source: Box::new(source),
+        }
+    }
+
+    fn message(&self) -> &str {
+        &self.message
+    }
+
+    fn source(&self) -> &(dyn Error + 'static) {
+        self.source.as_ref()
+    }
+}
+
 /// An HTTP error rendered as a stable JSON response.
 ///
 /// Construct values with [`HttpError::bad_request`],
@@ -58,10 +83,16 @@ pub enum HttpError {
     NotFound(String),
     /// A request that conflicts with the current state of a resource.
     Conflict(String),
+    #[cfg(feature = "database")]
+    #[doc(hidden)]
+    NotFoundWithSource(SourceRetainingClientError),
+    #[cfg(feature = "database")]
+    #[doc(hidden)]
+    ConflictWithSource(SourceRetainingClientError),
     /// Ordered validation issues with explicit request sources.
     Validation(Vec<SourcedValidationIssue>),
     /// An unexpected server-side failure whose source is not exposed to clients.
-    Internal(Box<dyn Error + Send + Sync>),
+    Internal(Box<dyn Error + Send>),
 }
 
 impl HttpError {
@@ -142,7 +173,7 @@ impl HttpError {
     /// assert_eq!(error.to_string(), "internal server error");
     /// assert!(std::error::Error::source(&error).is_some());
     /// ```
-    pub fn internal(source: impl Error + Send + Sync + 'static) -> Self {
+    pub fn internal(source: impl Error + Send + 'static) -> Self {
         Self::Internal(Box::new(source))
     }
 
@@ -153,6 +184,12 @@ impl HttpError {
             Self::Forbidden(message) => (StatusCode::FORBIDDEN, "forbidden", message),
             Self::NotFound(message) => (StatusCode::NOT_FOUND, "not_found", message),
             Self::Conflict(message) => (StatusCode::CONFLICT, "conflict", message),
+            #[cfg(feature = "database")]
+            Self::NotFoundWithSource(error) => {
+                (StatusCode::NOT_FOUND, "not_found", error.message())
+            }
+            #[cfg(feature = "database")]
+            Self::ConflictWithSource(error) => (StatusCode::CONFLICT, "conflict", error.message()),
             Self::Validation(_) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "validation_error",
@@ -187,6 +224,10 @@ impl fmt::Display for HttpError {
 impl Error for HttpError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            #[cfg(feature = "database")]
+            Self::NotFoundWithSource(error) | Self::ConflictWithSource(error) => {
+                Some(error.source())
+            }
             Self::Internal(source) => Some(source.as_ref()),
             _ => None,
         }
@@ -264,8 +305,41 @@ client_error!(
     "A 401 Unauthorized error without an implicit authentication challenge."
 );
 client_error!(Forbidden, forbidden, "A 403 Forbidden error.");
-client_error!(NotFound, not_found, "A 404 Not Found error.");
-client_error!(Conflict, conflict, "A 409 Conflict error.");
+/// A 404 Not Found error.
+pub struct NotFound(HttpError);
+
+impl NotFound {
+    /// Creates an error with an explicitly safe client-facing message.
+    pub fn new(message: impl Into<String>) -> Self {
+        Self(HttpError::not_found(message))
+    }
+
+    #[cfg(feature = "database")]
+    pub(crate) fn from_source(source: impl Error + Send + 'static) -> Self {
+        Self(HttpError::NotFoundWithSource(
+            SourceRetainingClientError::new("resource not found", source),
+        ))
+    }
+}
+named_error_impls!(NotFound);
+
+/// A 409 Conflict error.
+pub struct Conflict(HttpError);
+
+impl Conflict {
+    /// Creates an error with an explicitly safe client-facing message.
+    pub fn new(message: impl Into<String>) -> Self {
+        Self(HttpError::conflict(message))
+    }
+
+    #[cfg(feature = "database")]
+    pub(crate) fn from_source(source: impl Error + Send + 'static) -> Self {
+        Self(HttpError::ConflictWithSource(
+            SourceRetainingClientError::new("resource already exists", source),
+        ))
+    }
+}
+named_error_impls!(Conflict);
 
 /// A 422 validation response with ordered, explicitly sourced issues.
 pub struct ValidationError(HttpError);
@@ -283,7 +357,7 @@ pub struct InternalError(HttpError);
 
 impl InternalError {
     /// Retains the source and fixes the public message to `internal server error`.
-    pub fn new(source: impl Error + Send + Sync + 'static) -> Self {
+    pub fn new(source: impl Error + Send + 'static) -> Self {
         Self(HttpError::internal(source))
     }
 }
