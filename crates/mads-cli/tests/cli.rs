@@ -28,6 +28,7 @@ fn help_is_printed_when_no_command_is_given() {
         .stdout(contains("Usage: mads <command>"))
         .stdout(contains("run"))
         .stdout(contains("dev"))
+        .stdout(contains("new       Create a minimal MADS application"))
         .stdout(contains("routes"))
         .stdout(contains("graph"))
         .stdout(contains("doctor"));

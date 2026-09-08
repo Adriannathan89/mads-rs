@@ -162,6 +162,52 @@ fn syntax_failure_after_json_selection_writes_one_json_document_to_stdout() {
 }
 
 #[test]
+fn new_json_success_uses_the_full_schema_v1_snapshot_for_both_format_placements() {
+    for arguments in [
+        ["--format", "json", "new", "my-app"],
+        ["new", "my-app", "--format", "json"],
+    ] {
+        let invocation = tempdir().expect("temporary invocation directory should be created");
+        let output = Command::cargo_bin("mads")
+            .expect("CLI binary should build")
+            .current_dir(invocation.path())
+            .args(arguments)
+            .output()
+            .expect("CLI should run");
+
+        assert!(output.status.success(), "{arguments:?}: {output:?}");
+        assert!(output.stderr.is_empty(), "stderr was not empty: {output:?}");
+        assert_eq!(
+            one_json_document(&output),
+            json!({
+                "schema_version": 1,
+                "command": "new",
+                "ok": true,
+                "data": {
+                    "project_name": "my-app",
+                    "path": "my-app",
+                    "files": [
+                        "Cargo.toml",
+                        "mads.toml",
+                        "src/main.rs",
+                        "src/app/mod.rs",
+                        "src/app/routes.rs",
+                        "src/app/controller.rs",
+                        "src/app/service.rs"
+                    ]
+                },
+                "diagnostics": []
+            }),
+            "{arguments:?}"
+        );
+        assert!(
+            !String::from_utf8_lossy(&output.stdout).contains("mads dev"),
+            "JSON stdout must not include human next steps: {output:?}"
+        );
+    }
+}
+
+#[test]
 fn database_operational_failure_writes_safe_json_with_null_data() {
     let project = tempdir().expect("temporary project should be created");
     fs::write(

@@ -31,13 +31,14 @@ mod watch;
 use std::{ffi::OsString, io, path::PathBuf, process::ExitCode};
 
 use command::{
-    CanonicalCommand, Command, DatabaseCommand, DatabaseInvocation, InspectionCommand,
-    OutputFormat, ParseFailure,
+    CanonicalCommand, Command, DatabaseCommand, DatabaseInvocation, InspectionCommand, NewCommand,
+    OutputFormat, ParseError, ParseFailure,
 };
 use dev::run_dev;
 use diagnostic::{CliError, MADS201, MADS202};
 use inspection::{inspect_application, inspect_application_silently};
 use project::CargoProject;
+use scaffold::{GENERATED_FILES, publish_project, render_project};
 
 /// Runs the MADS.rs CLI using the process arguments.
 pub fn run() -> ExitCode {
@@ -111,6 +112,7 @@ async fn run_command(
             let root = current_dir.map_err(current_directory_error)?;
             run_dev(command, &root).await
         }
+        Command::New(command) => run_new_command(command, format, current_dir),
         Command::Inspect(command) => run_inspection_command(command, format, current_dir).await,
         Command::Database(DatabaseInvocation {
             command: DatabaseCommand::Help,
@@ -123,6 +125,55 @@ async fn run_command(
             run_database_command(command, package.as_deref(), format, current_dir).await
         }
     }
+}
+
+fn run_new_command(
+    command: NewCommand,
+    format: OutputFormat,
+    current_dir: io::Result<PathBuf>,
+) -> Result<ExitCode, CliError> {
+    let project_name = command.name.to_string();
+    let result = (|| {
+        let invocation_directory = current_dir.map_err(|error| {
+            CliError::scaffolding("could not determine the invocation directory", error)
+        })?;
+        let rendered = render_project(&command.name).map_err(template_error)?;
+        publish_project(&invocation_directory, &command.name, &rendered).map_err(CliError::from)?;
+
+        Ok::<_, CliError>(output::model::NewData::new(
+            &project_name,
+            &project_name,
+            GENERATED_FILES
+                .iter()
+                .map(|path| (*path).to_owned())
+                .collect(),
+        ))
+    })();
+
+    let outcome = match result {
+        Ok(data) => output::Outcome::new(
+            output::model::Envelope::success("new", output::model::CommandData::New(data)),
+            output::HumanOutput::streams(
+                format!("Created project: {project_name}\n\ncd {project_name}\nmads dev\n"),
+                String::new(),
+            ),
+        ),
+        Err(error) => {
+            let diagnostic = output::model::CliDiagnostic::from_error(&error, None);
+            let outcome = output::Outcome::new(
+                output::model::Envelope::failure(Some("new".to_owned()), None, vec![diagnostic]),
+                output::HumanOutput::stderr(format!("{error}\n")),
+            );
+            output::write(format, &outcome)?;
+            return Ok(ExitCode::from(1));
+        }
+    };
+    output::write(format, &outcome)?;
+    Ok(ExitCode::SUCCESS)
+}
+
+fn template_error(error: scaffold::TemplateError) -> CliError {
+    CliError::new(error.code(), error.title(), error.to_string())
 }
 
 async fn run_inspection_command(
@@ -201,23 +252,36 @@ fn current_directory_error(error: io::Error) -> CliError {
 }
 
 fn render_parse_error(failure: &ParseFailure) -> Result<(), CliError> {
-    let diagnostic = CliError::syntax(&failure.error);
+    let diagnostic = parse_diagnostic(&failure.error);
     let command = failure.command.map(output::command_name).map(str::to_owned);
-    let human_stderr = format!(
-        "error: {}\n{}\n",
-        failure.error,
-        if parse_error_needs_database_help(failure) {
-            database_help()
-        } else {
-            help()
-        }
-    );
+    let human_stderr = if matches!(&failure.error, ParseError::InvalidProjectName(_)) {
+        format!("{diagnostic}\n")
+    } else {
+        format!(
+            "error: {}\n{}\n",
+            failure.error,
+            if parse_error_needs_database_help(failure) {
+                database_help()
+            } else {
+                help()
+            }
+        )
+    };
     let outcome = output::Outcome::syntax_failure(
         command,
         output::model::CliDiagnostic::from_error(&diagnostic, None),
         human_stderr,
     );
     output::write(failure.format.unwrap_or_default(), &outcome)
+}
+
+fn parse_diagnostic(error: &ParseError) -> CliError {
+    match error {
+        ParseError::InvalidProjectName(error) => {
+            CliError::new(error.code(), error.title(), error.to_string())
+        }
+        _ => CliError::syntax(error),
+    }
 }
 
 fn parse_error_needs_database_help(failure: &ParseFailure) -> bool {
@@ -235,7 +299,7 @@ fn parse_error_needs_database_help(failure: &ParseFailure) -> bool {
 }
 
 const fn help() -> &'static str {
-    "Usage: mads <command> [options]\n\nCommands:\n  run       Build and run a MADS application\n  dev       Watch, rebuild, and restart a MADS application\n  routes    Inspect application routes\n  graph     Inspect the application graph\n  doctor    Diagnose application configuration and metadata\n  db        Manage PostgreSQL migrations\n\nApplication selection:\n  -p, --package <package>\n      --bin <binary>"
+    "Usage: mads <command> [options]\n\nCommands:\n  run       Build and run a MADS application\n  dev       Watch, rebuild, and restart a MADS application\n  new       Create a minimal MADS application\n  routes    Inspect application routes\n  graph     Inspect the application graph\n  doctor    Diagnose application configuration and metadata\n  db        Manage PostgreSQL migrations\n\nApplication selection:\n  -p, --package <package>\n      --bin <binary>"
 }
 
 const fn database_help() -> &'static str {

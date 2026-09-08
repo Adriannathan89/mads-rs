@@ -65,6 +65,7 @@ pub(crate) fn write_human(
 /// Returns the canonical schema spelling for a finite command.
 pub(crate) const fn command_name(command: CanonicalCommand) -> &'static str {
     match command {
+        CanonicalCommand::New => "new",
         CanonicalCommand::Routes => "routes",
         CanonicalCommand::Graph => "graph",
         CanonicalCommand::Doctor => "doctor",

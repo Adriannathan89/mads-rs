@@ -4,6 +4,8 @@ use std::ffi::{OsStr, OsString};
 
 use mads_common::__private::InspectionKind;
 
+use crate::scaffold::{ProjectName, ProjectNameError};
+
 /// Cargo package and binary selectors for an application command.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct TargetSelection {
@@ -25,6 +27,12 @@ pub(crate) struct InspectionCommand {
     pub(crate) target: TargetSelection,
 }
 
+/// A command that publishes the bundled minimal MADS project.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct NewCommand {
+    pub(crate) name: ProjectName,
+}
+
 /// A database command and its selected Cargo package.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct DatabaseInvocation {
@@ -43,6 +51,8 @@ pub(crate) enum Command {
     Run(ApplicationCommand),
     /// Watches, rebuilds, and restarts an application.
     Dev(ApplicationCommand),
+    /// Creates a minimal MADS application in a new child directory.
+    New(NewCommand),
     /// Inspects an application through its standard MADS entry point.
     Inspect(InspectionCommand),
     /// Runs or describes a database command.
@@ -102,6 +112,8 @@ impl Invocation {
 /// The canonical spelling of a finite command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum CanonicalCommand {
+    /// `mads new`.
+    New,
     /// `mads routes`.
     Routes,
     /// `mads graph`.
@@ -151,6 +163,10 @@ pub(crate) enum ParseError {
     OutputFormatNotSupported,
     /// Output selection was supplied without a command to render.
     MissingCommand,
+    /// `new` was not followed by a project name.
+    MissingProjectName,
+    /// The project name violates the fixed scaffolding policy.
+    InvalidProjectName(ProjectNameError),
     /// Application arguments were supplied to an inspection command.
     ApplicationArgumentsNotAccepted,
     /// `db` was not followed by a database command.
@@ -212,6 +228,7 @@ pub(crate) fn parse(arguments: &[OsString]) -> Result<Invocation, ParseFailure> 
             .map(|command| (Command::Run(command), OutputFormat::Human)),
         Some("dev") => parse_streaming_command(remaining, global_format)
             .map(|command| (Command::Dev(command), OutputFormat::Human)),
+        Some("new") => parse_new_command(remaining, format, global_format),
         Some("routes") => {
             parse_finite_inspection(InspectionKind::Routes, remaining, format, global_format)
         }
@@ -297,6 +314,29 @@ fn parse_finite_inspection(
     parse_inspection_command(kind, &arguments)
         .map(|command| (command, format))
         .map_err(|error| (error, Some(format)))
+}
+
+fn parse_new_command(
+    arguments: &[OsString],
+    format: OutputFormat,
+    global_format: bool,
+) -> CommandParseResult<(Command, OutputFormat)> {
+    let (format, arguments, _) = select_local_format(arguments, format, global_format)?;
+    let Some((name, remaining)) = arguments.split_first() else {
+        return Err((ParseError::MissingProjectName, Some(format)));
+    };
+    let name = name
+        .to_str()
+        .ok_or(ParseError::NonUnicodeValue("project name"))
+        .map_err(|error| (error, Some(format)))?;
+    let name = ProjectName::parse(name)
+        .map_err(ParseError::InvalidProjectName)
+        .map_err(|error| (error, Some(format)))?;
+    if let Some(argument) = remaining.first() {
+        return Err((ParseError::UnknownArgument(argument.clone()), Some(format)));
+    }
+
+    Ok((Command::New(NewCommand { name }), format))
 }
 
 fn parse_inspection_command(
@@ -501,6 +541,7 @@ fn contains_format_before_separator(arguments: &[OsString]) -> bool {
 fn canonical_command(arguments: &[OsString]) -> Option<CanonicalCommand> {
     let (command, remaining) = arguments.split_first()?;
     match command.to_str()? {
+        "new" => Some(CanonicalCommand::New),
         "routes" => Some(CanonicalCommand::Routes),
         "graph" => Some(CanonicalCommand::Graph),
         "doctor" => Some(CanonicalCommand::Doctor),
@@ -553,6 +594,8 @@ impl ParseError {
             | Self::InvalidOutputFormat(_)
             | Self::OutputFormatNotSupported
             | Self::MissingCommand
+            | Self::MissingProjectName
+            | Self::InvalidProjectName(_)
             | Self::ApplicationArgumentsNotAccepted => false,
         }
     }
@@ -585,6 +628,8 @@ impl std::fmt::Display for ParseError {
                 write!(formatter, "output format is not supported for this command")
             }
             Self::MissingCommand => write!(formatter, "missing command for --format"),
+            Self::MissingProjectName => write!(formatter, "missing project name"),
+            Self::InvalidProjectName(error) => error.fmt(formatter),
             Self::ApplicationArgumentsNotAccepted => {
                 write!(
                     formatter,
@@ -610,9 +655,11 @@ mod tests {
 
     use mads_common::__private::InspectionKind;
 
+    use crate::scaffold::ProjectName;
+
     use super::{
         ApplicationCommand, CanonicalCommand, Command, DatabaseCommand, DatabaseInvocation,
-        InspectionCommand, Invocation, OutputFormat, ParseError, TargetSelection,
+        InspectionCommand, Invocation, NewCommand, OutputFormat, ParseError, TargetSelection,
         parse as parse_invocation,
     };
 
@@ -629,6 +676,12 @@ mod tests {
     #[test]
     fn format_is_accepted_before_or_after_every_finite_command() {
         let cases = [
+            (
+                args(&["new", "my-app"]),
+                Command::New(NewCommand {
+                    name: ProjectName::parse("my-app").expect("fixture name should be valid"),
+                }),
+            ),
             (
                 args(&["routes"]),
                 Command::Inspect(InspectionCommand {

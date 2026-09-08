@@ -3,9 +3,12 @@
 use std::{
     fs,
     path::{Path, PathBuf},
+    process::Output,
 };
 
+use assert_cmd::Command;
 use mads_cli::scaffold::{GENERATED_FILES, ProjectName, publish_project, render_project};
+use serde_json::{Deserializer, Value, json};
 use tempfile::tempdir;
 
 #[test]
@@ -249,6 +252,133 @@ fn filesystem_preserves_unrelated_siblings_during_publication() {
     assert_eq!(fs::read_to_string(unrelated).unwrap(), "preserved");
 }
 
+#[test]
+fn command_output_publishes_a_project_with_the_documented_human_next_steps() {
+    let invocation = tempdir().expect("temporary invocation directory should be created");
+
+    let output = mads_command(invocation.path(), &["new", "my-app"]);
+
+    assert!(output.status.success(), "new failed: {output:?}");
+    assert!(output.stderr.is_empty(), "stderr was not empty: {output:?}");
+    assert_eq!(
+        String::from_utf8(output.stdout).expect("human stdout should be UTF-8"),
+        "Created project: my-app\n\ncd my-app\nmads dev\n"
+    );
+    assert_eq!(
+        published_files(&invocation.path().join("my-app")),
+        expected_generated_files()
+    );
+}
+
+#[test]
+fn command_output_uses_syntax_exit_two_for_missing_extra_and_invalid_names() {
+    let cases: &[(&[&str], &str)] = &[
+        (&["new"], "missing project name"),
+        (&["new", "my-app", "extra"], "unknown argument: extra"),
+        (
+            &["new", "My-App"],
+            "project name must start with a lowercase ASCII letter",
+        ),
+    ];
+
+    for (arguments, expected_message) in cases {
+        let invocation = tempdir().expect("temporary invocation directory should be created");
+        let output = mads_command(invocation.path(), arguments);
+
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}: {output:?}");
+        assert!(output.stdout.is_empty(), "stdout was not empty: {output:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(expected_message),
+            "{arguments:?}: {output:?}"
+        );
+        assert!(
+            !invocation.path().join("my-app").exists(),
+            "syntax failures must not publish a project"
+        );
+    }
+
+    let invocation = tempdir().expect("temporary invocation directory should be created");
+    let output = mads_command(invocation.path(), &["new", "My-App"]);
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("error[MADS230]: Project scaffolding failed"),
+        "invalid names must use the ordinary scaffolding diagnostic: {output:?}"
+    );
+}
+
+#[test]
+fn command_output_keeps_json_syntax_and_operational_failures_distinct() {
+    let syntax_invocation = tempdir().expect("temporary invocation directory should be created");
+    let syntax = mads_command(
+        syntax_invocation.path(),
+        &["new", "My-App", "--format", "json"],
+    );
+
+    assert_eq!(syntax.status.code(), Some(2));
+    assert!(syntax.stderr.is_empty(), "stderr was not empty: {syntax:?}");
+    assert_eq!(
+        one_json_document(&syntax),
+        json!({
+            "schema_version": 1,
+            "command": "new",
+            "ok": false,
+            "data": null,
+            "diagnostics": [{
+                "severity": "error",
+                "code": "MADS230",
+                "title": "Project scaffolding failed",
+                "message": "project name must start with a lowercase ASCII letter and use only lowercase ASCII letters, digits, '-' or '_' thereafter",
+                "subject": null,
+                "location": null,
+                "suggestions": []
+            }]
+        })
+    );
+
+    let operational_invocation =
+        tempdir().expect("temporary invocation directory should be created");
+    fs::create_dir(operational_invocation.path().join("my-app"))
+        .expect("existing destination should be created");
+    let operational = mads_command(
+        operational_invocation.path(),
+        &["new", "my-app", "--format", "json"],
+    );
+
+    assert_eq!(operational.status.code(), Some(1));
+    assert!(
+        operational.stderr.is_empty(),
+        "stderr was not empty: {operational:?}"
+    );
+    let document = one_json_document(&operational);
+    assert_eq!(document["command"], "new");
+    assert_eq!(document["ok"], false);
+    assert_eq!(document["data"], Value::Null);
+    assert_eq!(document["diagnostics"][0]["code"], "MADS230");
+    assert_eq!(
+        document["diagnostics"][0]["message"],
+        "the requested project destination already exists"
+    );
+}
+
+#[test]
+fn command_output_rejects_duplicate_and_invalid_output_format_as_syntax() {
+    let cases: &[&[&str]] = &[
+        &["new", "my-app", "--format", "json", "--format", "human"],
+        &["new", "my-app", "--format", "yaml"],
+    ];
+
+    for arguments in cases {
+        let invocation = tempdir().expect("temporary invocation directory should be created");
+        let output = mads_command(invocation.path(), arguments);
+
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}: {output:?}");
+        assert!(
+            !invocation.path().join("my-app").exists(),
+            "format syntax failures must not publish a project"
+        );
+    }
+}
+
 fn published_files(destination: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     collect_files(destination, destination, &mut files);
@@ -287,4 +417,33 @@ fn has_staging_sibling(invocation: &Path, name: &str) -> bool {
             entry.file_name().to_string_lossy().starts_with(&prefix)
                 && entry.file_name().to_string_lossy().ends_with(".tmp")
         })
+}
+
+fn mads_command(invocation: &Path, arguments: &[&str]) -> Output {
+    Command::cargo_bin("mads")
+        .expect("CLI binary should build")
+        .current_dir(invocation)
+        .args(arguments)
+        .output()
+        .expect("CLI should run")
+}
+
+fn one_json_document(output: &Output) -> Value {
+    assert!(
+        output.stdout.ends_with(b"\n"),
+        "JSON stdout must end with one newline: {:?}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    let mut documents = Deserializer::from_slice(&output.stdout).into_iter::<Value>();
+    let document = documents
+        .next()
+        .expect("JSON stdout should contain one document")
+        .expect("JSON stdout should contain a valid document");
+    assert!(
+        documents.next().is_none(),
+        "JSON stdout must contain exactly one document: {:?}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    document
 }
