@@ -85,6 +85,37 @@ fn output_format_is_rejected_before_a_streaming_run_command() {
 }
 
 #[test]
+fn output_format_is_rejected_for_streaming_help_version_and_database_help_commands() {
+    for arguments in [
+        ["--format", "json", "run"].as_slice(),
+        ["run", "--format", "json"].as_slice(),
+        ["--format", "json", "dev"].as_slice(),
+        ["dev", "--format", "json"].as_slice(),
+        ["--format", "json", "--help"].as_slice(),
+        ["--version", "--format", "json"].as_slice(),
+        ["db", "--help", "--format", "json"].as_slice(),
+    ] {
+        Command::cargo_bin("mads")
+            .expect("CLI binary should build")
+            .args(arguments)
+            .assert()
+            .code(2)
+            .stdout(predicates::str::is_empty())
+            .stderr(contains("output format is not supported for this command"));
+    }
+}
+
+#[test]
+fn run_forwards_a_format_looking_application_argument_after_the_separator() {
+    fixture_command("single")
+        .args(["run", "--", "--format", "json"])
+        .assert()
+        .success()
+        .stdout(contains("args=--format|json"))
+        .stdout(predicates::str::contains("schema_version").not());
+}
+
+#[test]
 fn help_lists_database_commands() {
     Command::cargo_bin("mads")
         .expect("binary should build")

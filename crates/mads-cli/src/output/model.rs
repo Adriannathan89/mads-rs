@@ -53,6 +53,10 @@ impl Envelope {
             diagnostics,
         }
     }
+
+    pub(crate) fn command(&self) -> Option<&str> {
+        self.command.as_deref()
+    }
 }
 
 /// Command-specific data embedded in a schema-v1 envelope.

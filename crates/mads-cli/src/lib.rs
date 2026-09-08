@@ -49,18 +49,24 @@ async fn run_with(arguments: Vec<OsString>, current_dir: io::Result<PathBuf>) ->
     let invocation = match command::parse(&arguments) {
         Ok(invocation) => invocation,
         Err(error) => {
+            let format = error.format.unwrap_or_default();
             if let Err(output_error) = render_parse_error(&error) {
-                eprintln!("{output_error}");
+                if format == OutputFormat::Human {
+                    let _ = output::write_human(String::new(), format!("{output_error}\n"));
+                }
                 return ExitCode::from(1);
             }
             return ExitCode::from(2);
         }
     };
 
-    match run_command(invocation.command, invocation.format, current_dir).await {
+    let format = invocation.format;
+    match run_command(invocation.command, format, current_dir).await {
         Ok(exit_code) => exit_code,
         Err(error) => {
-            eprintln!("{error}");
+            if format == OutputFormat::Human {
+                let _ = output::write_human(String::new(), format!("{error}\n"));
+            }
             ExitCode::from(1)
         }
     }
@@ -73,11 +79,14 @@ async fn run_command(
 ) -> Result<ExitCode, CliError> {
     match command {
         Command::Help => {
-            print_help(false);
+            output::write_human(format!("{}\n", help()), String::new())?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Version => {
-            println!("mads {}", env!("CARGO_PKG_VERSION"));
+            output::write_human(
+                format!("mads {}\n", env!("CARGO_PKG_VERSION")),
+                String::new(),
+            )?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Run(command) => {
@@ -105,7 +114,7 @@ async fn run_command(
             command: DatabaseCommand::Help,
             ..
         }) => {
-            print_database_help(false);
+            output::write_human(format!("{}\n", database_help()), String::new())?;
             Ok(ExitCode::SUCCESS)
         }
         Command::Database(DatabaseInvocation { command, package }) => {
@@ -221,26 +230,6 @@ fn parse_error_needs_database_help(failure: &ParseFailure) -> bool {
                     | CanonicalCommand::DatabaseHelp
             )
         )
-}
-
-fn print_help(to_stderr: bool) {
-    let help = help();
-
-    if to_stderr {
-        eprintln!("{help}");
-    } else {
-        println!("{help}");
-    }
-}
-
-fn print_database_help(to_stderr: bool) {
-    let help = database_help();
-
-    if to_stderr {
-        eprintln!("{help}");
-    } else {
-        println!("{help}");
-    }
 }
 
 const fn help() -> &'static str {

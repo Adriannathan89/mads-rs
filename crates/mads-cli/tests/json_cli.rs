@@ -11,7 +11,7 @@ use mads_cli::output::{
     },
     path::normalize_path,
 };
-use serde_json::{Value, json};
+use serde_json::{Deserializer, Value, json};
 use tempfile::tempdir;
 
 #[test]
@@ -188,12 +188,7 @@ fn database_operational_failure_writes_safe_json_with_null_data() {
 
     assert_eq!(output.status.code(), Some(1));
     assert!(output.stderr.is_empty(), "stderr was not empty: {output:?}");
-    let document: Value = serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
-        panic!(
-            "database JSON stdout should be exactly one document: {error}; stdout={:?}",
-            String::from_utf8_lossy(&output.stdout)
-        )
-    });
+    let document = one_json_document(&output);
     assert_eq!(document["command"], "db status");
     assert_eq!(document["ok"], false);
     assert_eq!(document["data"], Value::Null);
@@ -204,6 +199,123 @@ fn database_operational_failure_writes_safe_json_with_null_data() {
         "the database command could not be completed"
     );
     assert!(!document.to_string().contains("database-json-secret"));
+}
+
+#[test]
+fn every_database_operational_failure_is_one_safe_json_document() {
+    let project = tempdir().expect("temporary project should be created");
+    fs::write(
+        project.path().join("Cargo.toml"),
+        "[package]\nname = \"database-json-matrix\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    )
+    .expect("manifest should be written");
+    fs::create_dir(project.path().join("src")).expect("source directory should be created");
+    fs::write(
+        project.path().join("src/lib.rs"),
+        "diesel::table! { users (id) { id -> Int8, name -> Text, } }\n",
+    )
+    .expect("schema source should be written");
+    fs::write(
+        project.path().join("mads.toml"),
+        "[database]\nurl = \"postgres://user:database-matrix-secret@127.0.0.1:1/mads\"\n",
+    )
+    .expect("database configuration should be written");
+    fs::write(
+        project.path().join(".env"),
+        "MADS_PRIVATE_INSPECTION_TOKEN=private-inspection-token-sentinel\nMADS_PRIVATE_INSPECTION_PATH=private-inspection-path-sentinel\nMADS_SQL_SENTINEL=CREATE_TABLE_SQL_SENTINEL\nMADS_CONSTRAINT_SENTINEL=unique_constraint_sentinel\nMADS_SOURCE_SENTINEL=arbitrary-source-error-sentinel\n",
+    )
+    .expect("dotenv sentinels should be written");
+
+    let cases: &[(&[&str], &str)] = &[
+        (&["db", "generate", "--format", "json"], "db generate"),
+        (&["db", "migrate", "--format", "json"], "db migrate"),
+        (&["db", "rollback", "--format", "json"], "db rollback"),
+        (&["db", "status", "--format", "json"], "db status"),
+    ];
+    let private_sentinels = [
+        "database-matrix-secret",
+        "postgres://user:database-matrix-secret@127.0.0.1:1/mads",
+        "private-inspection-token-sentinel",
+        "private-inspection-path-sentinel",
+        "CREATE_TABLE_SQL_SENTINEL",
+        "unique_constraint_sentinel",
+        "arbitrary-source-error-sentinel",
+    ];
+
+    for (arguments, command) in cases {
+        let output = Command::cargo_bin("mads")
+            .expect("CLI binary should build")
+            .current_dir(project.path())
+            .env_remove("DATABASE_URL")
+            .env_remove("MADS_DATABASE__URL")
+            .args(*arguments)
+            .output()
+            .expect("database CLI should run");
+
+        assert_eq!(output.status.code(), Some(1), "{arguments:?}");
+        assert!(output.stderr.is_empty(), "stderr was not empty: {output:?}");
+        let document = one_json_document(&output);
+        assert_eq!(document["command"], *command, "{arguments:?}");
+        assert_eq!(document["ok"], false, "{arguments:?}");
+        assert_eq!(document["data"], Value::Null, "{arguments:?}");
+        assert_eq!(document["diagnostics"][0]["severity"], "error");
+        assert_eq!(document["diagnostics"][0]["code"], "MADS210");
+        assert_no_sensitive_values(&output, &document, &private_sentinels);
+    }
+}
+
+#[test]
+fn every_finite_json_syntax_failure_has_one_canonical_document() {
+    let cases: &[(&[&str], &str)] = &[
+        (&["routes", "--format", "json", "--unknown"], "routes"),
+        (&["graph", "--format", "json", "--unknown"], "graph"),
+        (&["doctor", "--format", "json", "--unknown"], "doctor"),
+        (
+            &["db", "generate", "--format", "json", "--unknown"],
+            "db generate",
+        ),
+        (
+            &["db", "migrate", "--format", "json", "--unknown"],
+            "db migrate",
+        ),
+        (
+            &["db", "rollback", "--format", "json", "--unknown"],
+            "db rollback",
+        ),
+        (
+            &["db", "status", "--format", "json", "--unknown"],
+            "db status",
+        ),
+    ];
+
+    for (arguments, command) in cases {
+        let output = Command::cargo_bin("mads")
+            .expect("CLI binary should build")
+            .args(*arguments)
+            .output()
+            .expect("CLI should run");
+
+        assert_eq!(output.status.code(), Some(2), "{arguments:?}");
+        assert!(output.stderr.is_empty(), "stderr was not empty: {output:?}");
+        let document = one_json_document(&output);
+        assert_eq!(document["schema_version"], 1, "{arguments:?}");
+        assert_eq!(document["command"], *command, "{arguments:?}");
+        assert_eq!(document["ok"], false, "{arguments:?}");
+        assert_eq!(document["data"], Value::Null, "{arguments:?}");
+        assert_eq!(
+            document["diagnostics"],
+            json!([{
+                "severity": "error",
+                "code": "MADS204",
+                "title": "CLI syntax error",
+                "message": "unknown argument: --unknown",
+                "subject": null,
+                "location": null,
+                "suggestions": []
+            }]),
+            "{arguments:?}"
+        );
+    }
 }
 
 #[test]
@@ -394,19 +506,89 @@ fn inspection_failure_before_a_report_uses_null_data() {
     );
 }
 
+#[test]
+fn every_inspection_pre_report_failure_is_one_redacted_json_document() {
+    let private_sentinels = [
+        "MADS_INSPECTION",
+        "protocol_version",
+        "private-inspection-token",
+        "private-inspection-path",
+        "arbitrary-source-error-sentinel",
+    ];
+
+    for arguments in [
+        ["routes", "--format", "json"],
+        ["graph", "--format", "json"],
+        ["doctor", "--format", "json"],
+    ] {
+        let (output, document) = inspection_json("unsupported", arguments);
+
+        assert_eq!(output.status.code(), Some(1), "{arguments:?}");
+        assert!(
+            !String::from_utf8_lossy(&output.stderr).contains("error[MADS"),
+            "MADS-owned human output leaked to stderr: {output:?}"
+        );
+        assert_eq!(document["command"], arguments[0], "{arguments:?}");
+        assert_eq!(document["ok"], false, "{arguments:?}");
+        assert_eq!(document["data"], Value::Null, "{arguments:?}");
+        assert_eq!(document["diagnostics"][0]["severity"], "error");
+        assert_eq!(document["diagnostics"][0]["code"], "MADS203");
+        assert_no_sensitive_values(&output, &document, &private_sentinels);
+    }
+}
+
 fn inspection_json<const N: usize>(fixture_name: &str, arguments: [&str; N]) -> (Output, Value) {
     let output = fixture_command(fixture_name)
         .args(arguments)
         .output()
         .expect("inspection CLI should run");
-    let document = serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
-        panic!(
-            "inspection JSON stdout should be exactly one document: {error}; stdout={:?}; stderr={:?}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        )
-    });
+    let document = one_json_document(&output);
     (output, document)
+}
+
+fn one_json_document(output: &Output) -> Value {
+    assert!(
+        output.stdout.ends_with(b"\n"),
+        "JSON stdout must end with one newline: {:?}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+
+    let mut documents = Deserializer::from_slice(&output.stdout).into_iter::<Value>();
+    let document = documents
+        .next()
+        .expect("JSON stdout should contain one document")
+        .unwrap_or_else(|error| {
+            panic!(
+                "JSON stdout should contain a valid document: {error}; stdout={:?}; stderr={:?}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            )
+        });
+    match documents.next() {
+        None => document,
+        Some(Ok(extra)) => panic!(
+            "JSON stdout must contain exactly one document; extra document={extra}; stdout={:?}",
+            String::from_utf8_lossy(&output.stdout)
+        ),
+        Some(Err(error)) => panic!(
+            "JSON stdout must end after one document: {error}; stdout={:?}",
+            String::from_utf8_lossy(&output.stdout)
+        ),
+    }
+}
+
+fn assert_no_sensitive_values(output: &Output, document: &Value, values: &[&str]) {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let serialized = document.to_string();
+    for value in values {
+        assert!(!stdout.contains(value), "stdout leaked {value}: {stdout}");
+        assert!(!stderr.contains(value), "stderr leaked {value}: {stderr}");
+        assert!(
+            !serialized.contains(value),
+            "JSON model leaked {value}: {serialized}"
+        );
+    }
 }
 
 fn fixture_command(name: &str) -> Command {
