@@ -10,7 +10,8 @@ use crate::{
     diagnostic::{CliError, MADS204},
 };
 
-use self::{human::HumanOutput, model::Envelope};
+pub(crate) use self::human::HumanOutput;
+use self::model::Envelope;
 
 /// A finite-command outcome rendered once at the outer CLI boundary.
 pub(crate) struct Outcome {

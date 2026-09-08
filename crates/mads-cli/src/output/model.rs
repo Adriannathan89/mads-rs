@@ -22,12 +22,20 @@ pub struct Envelope {
 impl Envelope {
     /// Creates a successful command result with structured data.
     pub fn success(command: impl Into<String>, data: CommandData) -> Self {
+        Self::success_with_diagnostics(command, data, Vec::new())
+    }
+
+    pub(crate) fn success_with_diagnostics(
+        command: impl Into<String>,
+        data: CommandData,
+        diagnostics: Vec<CliDiagnostic>,
+    ) -> Self {
         Self {
             schema_version: SCHEMA_VERSION,
             command: Some(command.into()),
             ok: true,
             data: Some(data),
-            diagnostics: Vec::new(),
+            diagnostics,
         }
     }
 

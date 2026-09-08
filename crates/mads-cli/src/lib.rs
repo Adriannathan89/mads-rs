@@ -28,12 +28,13 @@ mod watch;
 
 use std::{ffi::OsString, io, path::PathBuf, process::ExitCode};
 
-use mads_common::__private::{InspectionKind, InspectionReport};
-
-use command::{CanonicalCommand, Command, DatabaseCommand, DatabaseInvocation, ParseFailure};
+use command::{
+    CanonicalCommand, Command, DatabaseCommand, DatabaseInvocation, InspectionCommand,
+    OutputFormat, ParseFailure,
+};
 use dev::run_dev;
 use diagnostic::{CliError, MADS201, MADS202};
-use inspection::inspect_application;
+use inspection::{inspect_application, inspect_application_silently};
 use project::CargoProject;
 
 /// Runs the MADS.rs CLI using the process arguments.
@@ -45,8 +46,8 @@ pub fn run() -> ExitCode {
 }
 
 async fn run_with(arguments: Vec<OsString>, current_dir: io::Result<PathBuf>) -> ExitCode {
-    let command = match command::parse(&arguments) {
-        Ok(invocation) => invocation.command,
+    let invocation = match command::parse(&arguments) {
+        Ok(invocation) => invocation,
         Err(error) => {
             if let Err(output_error) = render_parse_error(&error) {
                 eprintln!("{output_error}");
@@ -56,7 +57,7 @@ async fn run_with(arguments: Vec<OsString>, current_dir: io::Result<PathBuf>) ->
         }
     };
 
-    match run_command(command, current_dir).await {
+    match run_command(invocation.command, invocation.format, current_dir).await {
         Ok(exit_code) => exit_code,
         Err(error) => {
             eprintln!("{error}");
@@ -67,6 +68,7 @@ async fn run_with(arguments: Vec<OsString>, current_dir: io::Result<PathBuf>) ->
 
 async fn run_command(
     command: Command,
+    format: OutputFormat,
     current_dir: io::Result<PathBuf>,
 ) -> Result<ExitCode, CliError> {
     match command {
@@ -98,19 +100,7 @@ async fn run_command(
             let root = current_dir.map_err(current_directory_error)?;
             run_dev(command, &root).await
         }
-        Command::Inspect(command) => {
-            let root = current_dir.map_err(current_directory_error)?;
-            let project = CargoProject::load(root)?;
-            let target = project.resolve_application(&command.target)?;
-            let built = cargo::build_application(&target).await?;
-            let report = inspect_application(&built, command.kind).await?;
-            let (body, diagnostics, exit_code) = render_inspection_report(&report);
-            println!("{body}");
-            if !diagnostics.is_empty() {
-                eprintln!("{diagnostics}");
-            }
-            Ok(exit_code)
-        }
+        Command::Inspect(command) => run_inspection_command(command, format, current_dir).await,
         Command::Database(DatabaseInvocation {
             command: DatabaseCommand::Help,
             ..
@@ -124,19 +114,43 @@ async fn run_command(
     }
 }
 
-fn render_inspection_report(report: &InspectionReport) -> (String, String, ExitCode) {
-    let body = match report.kind {
-        InspectionKind::Routes => render::render_routes(report),
-        InspectionKind::Graph => render::render_graph(report),
-        InspectionKind::Doctor => render::render_doctor(report),
-    };
-    let diagnostics = render::render_diagnostics(report);
-    let exit_code = if report.failed {
-        ExitCode::from(1)
-    } else {
-        ExitCode::SUCCESS
-    };
-    (body, diagnostics, exit_code)
+async fn run_inspection_command(
+    command: InspectionCommand,
+    format: OutputFormat,
+    current_dir: io::Result<PathBuf>,
+) -> Result<ExitCode, CliError> {
+    let kind = command.kind;
+    let result = async {
+        let root = current_dir.map_err(current_directory_error)?;
+        let project = CargoProject::load(root)?;
+        let target = project.resolve_application(&command.target)?;
+        let built = cargo::build_application(&target).await?;
+        let package_root = built.target().package().package_root().to_path_buf();
+        let report = match format {
+            OutputFormat::Human => inspect_application(&built, kind).await?,
+            OutputFormat::Json => inspect_application_silently(&built, kind).await?,
+        };
+        Ok::<_, CliError>((report, package_root))
+    }
+    .await;
+
+    match result {
+        Ok((report, package_root)) => {
+            let exit_code = if report.failed {
+                ExitCode::from(1)
+            } else {
+                ExitCode::SUCCESS
+            };
+            let outcome = inspection::inspection_outcome(&report, &package_root);
+            output::write(format, &outcome)?;
+            Ok(exit_code)
+        }
+        Err(error) => {
+            let outcome = inspection::inspection_failure_outcome(kind, &error);
+            output::write(format, &outcome)?;
+            Ok(ExitCode::from(1))
+        }
+    }
 }
 
 async fn run_database_command(
@@ -231,54 +245,4 @@ const fn help() -> &'static str {
 
 const fn database_help() -> &'static str {
     "Usage: mads db <command> [--package <package>]\n\nCommands:\n  generate  Generate one complete schema diff as <timestamp>_schema_diff\n  migrate   Apply pending migrations\n  rollback  Revert the latest applied migration\n  status    Show applied and pending migrations\n\nApplication selection:\n  -p, --package <package>"
-}
-
-#[cfg(test)]
-mod tests {
-    use std::process::ExitCode;
-
-    use mads_common::__private::{DiagnosticReport, GraphReport, InspectionKind, InspectionReport};
-
-    use super::render_inspection_report;
-
-    #[test]
-    fn inspection_output_selects_renderer_separates_diagnostics_and_maps_failure() {
-        let failed = InspectionReport {
-            kind: InspectionKind::Routes,
-            graph: GraphReport::default(),
-            routes: Vec::new(),
-            checks: Vec::new(),
-            diagnostics: vec![DiagnosticReport {
-                code: "MADS003".into(),
-                title: "missing provider".into(),
-                message: "UserService needs UserRepository".into(),
-                subject: Some("UserRepository".into()),
-                location: None,
-                suggestions: vec!["register UserRepository".into()],
-            }],
-            failed: true,
-        };
-
-        let (body, diagnostics, exit) = render_inspection_report(&failed);
-        assert_eq!(
-            body,
-            "METHOD  PATH        ROUTE                    CONTROLLER       GUARD  SOURCE\n(none)"
-        );
-        assert_eq!(
-            diagnostics,
-            "error[MADS003]: missing provider\n  = subject: UserRepository\n  = UserService needs UserRepository\n  help: register UserRepository"
-        );
-        assert_eq!(exit, ExitCode::from(1));
-
-        let successful = InspectionReport {
-            kind: InspectionKind::Doctor,
-            failed: false,
-            diagnostics: Vec::new(),
-            ..failed
-        };
-        let (body, diagnostics, exit) = render_inspection_report(&successful);
-        assert_eq!(body, "(none)");
-        assert!(diagnostics.is_empty());
-        assert_eq!(exit, ExitCode::SUCCESS);
-    }
 }
