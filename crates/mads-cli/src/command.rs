@@ -293,7 +293,7 @@ fn parse_finite_inspection(
     format: OutputFormat,
     global_format: bool,
 ) -> CommandParseResult<(Command, OutputFormat)> {
-    let (format, arguments) = select_local_format(arguments, format, global_format)?;
+    let (format, arguments, _) = select_local_format(arguments, format, global_format)?;
     parse_inspection_command(kind, &arguments)
         .map(|command| (command, format))
         .map_err(|error| (error, Some(format)))
@@ -390,8 +390,8 @@ fn parse_database_command(
         }
     };
 
-    let (format, options) = select_local_format(options, format, global_format)?;
-    if command == DatabaseCommand::Help && (global_format || format == OutputFormat::Json) {
+    let (format, options, format_selected) = select_local_format(options, format, global_format)?;
+    if command == DatabaseCommand::Help && format_selected {
         return Err((
             ParseError::OutputFormatNotSupported,
             Some(OutputFormat::Human),
@@ -429,7 +429,7 @@ fn select_local_format(
     arguments: &[OsString],
     mut format: OutputFormat,
     mut format_seen: bool,
-) -> CommandParseResult<(OutputFormat, Vec<OsString>)> {
+) -> CommandParseResult<(OutputFormat, Vec<OsString>, bool)> {
     let mut retained = Vec::with_capacity(arguments.len());
     let mut index = 0;
 
@@ -461,7 +461,7 @@ fn select_local_format(
         index += 1;
     }
 
-    Ok((format, retained))
+    Ok((format, retained, format_seen))
 }
 
 fn parse_format_value(value: &OsString) -> Result<OutputFormat, ParseError> {
@@ -747,6 +747,8 @@ mod tests {
             args(&["--version", "--format", "json"]),
             args(&["--format", "json", "db", "--help"]),
             args(&["db", "--help", "--format", "json"]),
+            args(&["--format", "human", "db", "--help"]),
+            args(&["db", "--help", "--format", "human"]),
         ] {
             assert!(matches!(
                 parse_invocation(&arguments),

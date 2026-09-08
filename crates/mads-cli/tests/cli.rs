@@ -94,6 +94,8 @@ fn output_format_is_rejected_for_streaming_help_version_and_database_help_comman
         ["--format", "json", "--help"].as_slice(),
         ["--version", "--format", "json"].as_slice(),
         ["db", "--help", "--format", "json"].as_slice(),
+        ["--format", "human", "db", "--help"].as_slice(),
+        ["db", "--help", "--format", "human"].as_slice(),
     ] {
         Command::cargo_bin("mads")
             .expect("CLI binary should build")
