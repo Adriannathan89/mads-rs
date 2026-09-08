@@ -204,14 +204,34 @@ fn finite_json_syntax_matrix_has_one_document_and_canonical_commands() {
 }
 
 #[test]
-fn release_workflows_use_linux_as_the_only_verification_platform() {
+fn workflows_limit_cross_platform_verification_to_scaffold_safety() {
+    let ci = fs::read_to_string(workspace_root().join(".github/workflows/ci.yml")).unwrap();
+    let scaffold_job = ci
+        .split_once("  scaffold-platform:\n")
+        .and_then(|(_, remaining)| remaining.split_once("\n  msrv:\n"))
+        .map(|(job, _)| job)
+        .expect("CI should define a bounded scaffold-platform job");
+    for required in [
+        "ubuntu-latest",
+        "macos-latest",
+        "windows-latest",
+        "scaffold::publish::tests::destination_race_preserves_the_competing_directory_and_cleans_staging",
+        "model_serializes_nullable_diagnostics_and_normalized_locations",
+        "a_binary_without_standard_run_is_killed_and_diagnosed",
+        "matrix.os == 'ubuntu-latest'",
+        "--test scaffold_consumer",
+        "--test scaffold_http",
+    ] {
+        assert!(scaffold_job.contains(required), "missing {required}");
+    }
+    assert!(!scaffold_job.contains("postgres"));
+
     for workflow_path in [
-        ".github/workflows/ci.yml",
         ".github/workflows/beta-publish.yml",
         ".github/workflows/stable-publish.yml",
     ] {
         let workflow = fs::read_to_string(workspace_root().join(workflow_path)).unwrap();
-        assert!(!workflow.contains("cli-platform"), "{workflow_path}");
+        assert!(!workflow.contains("scaffold-platform"), "{workflow_path}");
         assert!(!workflow.contains("macos-latest"), "{workflow_path}");
         assert!(!workflow.contains("windows-latest"), "{workflow_path}");
         assert!(
