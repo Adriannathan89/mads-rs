@@ -99,6 +99,19 @@ pub(crate) struct MigrationWarning {
     pub(crate) message: String,
 }
 
+impl MigrationWarning {
+    /// Converts this review boundary into one public MADS212 warning record.
+    pub(crate) fn diagnostic(&self) -> crate::output::model::CliDiagnostic {
+        crate::output::model::CliDiagnostic::warning(
+            MADS212,
+            "Migration requires review",
+            &self.message,
+        )
+        .with_subject(&self.subject)
+        .with_suggestion("review up.sql and down.sql before applying")
+    }
+}
+
 /// A deterministic, reversible migration shape plan.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct MigrationPlan {
@@ -127,6 +140,28 @@ impl MigrationPlan {
     pub(crate) fn is_empty(&self) -> bool {
         self.up.is_empty()
     }
+}
+
+/// Returns deterministic, review-safe warnings for public CLI output and SQL comments.
+pub(crate) fn review_warnings(warnings: &[MigrationWarning]) -> Vec<MigrationWarning> {
+    let mut normalized = warnings
+        .iter()
+        .map(|warning| MigrationWarning {
+            subject: escape_warning_line_breaks(&warning.subject),
+            message: escape_warning_line_breaks(&warning.message),
+        })
+        .collect::<Vec<_>>();
+    normalized.sort_by(|left, right| {
+        left.subject
+            .cmp(&right.subject)
+            .then_with(|| left.message.cmp(&right.message))
+    });
+    normalized.dedup();
+    normalized
+}
+
+fn escape_warning_line_breaks(content: &str) -> String {
+    content.replace('\r', "\\r").replace('\n', "\\n")
 }
 
 /// Plans the supported shape changes from a live PostgreSQL snapshot to a desired schema.
@@ -1002,6 +1037,20 @@ mod tests {
             plan.warnings()
                 .iter()
                 .any(|warning| warning.subject == "public.users.obsolete")
+        );
+    }
+
+    #[test]
+    fn review_warning_becomes_one_structured_mads212_diagnostic() {
+        let warning = super::warning(
+            "public.users.email".into(),
+            "changing a column type may require a risky cast; review the generated SQL",
+        );
+
+        assert_eq!(
+            serde_json::to_string(&warning.diagnostic())
+                .expect("review warning diagnostic should serialize"),
+            "{\"severity\":\"warning\",\"code\":\"MADS212\",\"title\":\"Migration requires review\",\"message\":\"changing a column type may require a risky cast; review the generated SQL\",\"subject\":\"public.users.email\",\"location\":null,\"suggestions\":[\"review up.sql and down.sql before applying\"]}"
         );
     }
 

@@ -1,14 +1,18 @@
 //! JSON contract coverage for finite MADS CLI output.
 
-use std::{path::Path, process::Output};
+use std::{fs, path::Path, process::Output};
 
 use assert_cmd::Command;
 use mads_cli::output::{
     json::render,
-    model::{CliDiagnostic, CommandData, Envelope, RoutesData, SourceLocation},
+    model::{
+        CliDiagnostic, CommandData, DatabaseGenerateData, DatabaseMigrateData,
+        DatabaseRollbackData, DatabaseStatusData, Envelope, RoutesData, SourceLocation,
+    },
     path::normalize_path,
 };
 use serde_json::{Value, json};
+use tempfile::tempdir;
 
 #[test]
 fn model_serializes_the_schema_v1_routes_success() {
@@ -98,6 +102,50 @@ fn model_serializes_unavailable_operational_data_and_unknown_syntax_command() {
 }
 
 #[test]
+fn model_serializes_all_database_command_data_variants() {
+    let cases = [
+        (
+            "db generate",
+            CommandData::DatabaseGenerate(DatabaseGenerateData::new(
+                "generated",
+                Some("migrations/20260906120000_schema_diff".into()),
+                true,
+            )),
+            "{\"status\":\"generated\",\"migration_path\":\"migrations/20260906120000_schema_diff\",\"review_required\":true}",
+        ),
+        (
+            "db migrate",
+            CommandData::DatabaseMigrate(DatabaseMigrateData::new(vec!["20260906120000".into()])),
+            "{\"applied\":[\"20260906120000\"]}",
+        ),
+        (
+            "db rollback",
+            CommandData::DatabaseRollback(DatabaseRollbackData::new(vec!["20260906120000".into()])),
+            "{\"reverted\":[\"20260906120000\"]}",
+        ),
+        (
+            "db status",
+            CommandData::DatabaseStatus(DatabaseStatusData::new(
+                vec!["20260906120000".into()],
+                vec!["20260906120001".into()],
+            )),
+            "{\"applied\":[\"20260906120000\"],\"pending\":[\"20260906120001\"]}",
+        ),
+    ];
+
+    for (command, data, expected_data) in cases {
+        let output = render(&Envelope::success(command, data))
+            .expect("database command data should serialize");
+        assert_eq!(
+            output,
+            format!(
+                "{{\"schema_version\":1,\"command\":\"{command}\",\"ok\":true,\"data\":{expected_data},\"diagnostics\":[]}}\n"
+            )
+        );
+    }
+}
+
+#[test]
 fn syntax_failure_after_json_selection_writes_one_json_document_to_stdout() {
     let output = Command::cargo_bin("mads")
         .expect("CLI binary should build")
@@ -111,6 +159,51 @@ fn syntax_failure_after_json_selection_writes_one_json_document_to_stdout() {
         String::from_utf8(output.stdout).expect("stdout should be UTF-8"),
         "{\"schema_version\":1,\"command\":\"routes\",\"ok\":false,\"data\":null,\"diagnostics\":[{\"severity\":\"error\",\"code\":\"MADS204\",\"title\":\"CLI syntax error\",\"message\":\"unknown argument: --unknown\",\"subject\":null,\"location\":null,\"suggestions\":[]}]}\n"
     );
+}
+
+#[test]
+fn database_operational_failure_writes_safe_json_with_null_data() {
+    let project = tempdir().expect("temporary project should be created");
+    fs::write(
+        project.path().join("Cargo.toml"),
+        "[package]\nname = \"database-json-failure\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    )
+    .expect("manifest should be written");
+    fs::create_dir(project.path().join("src")).expect("source directory should be created");
+    fs::write(project.path().join("src/lib.rs"), "").expect("library target should be written");
+    fs::write(
+        project.path().join("mads.toml"),
+        "[database]\nurl = \"postgres://user:database-json-secret@127.0.0.1:1/mads\"\n",
+    )
+    .expect("database configuration should be written");
+
+    let output = Command::cargo_bin("mads")
+        .expect("CLI binary should build")
+        .current_dir(project.path())
+        .env_remove("DATABASE_URL")
+        .env_remove("MADS_DATABASE__URL")
+        .args(["db", "status", "--format", "json"])
+        .output()
+        .expect("database CLI should run");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty(), "stderr was not empty: {output:?}");
+    let document: Value = serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+        panic!(
+            "database JSON stdout should be exactly one document: {error}; stdout={:?}",
+            String::from_utf8_lossy(&output.stdout)
+        )
+    });
+    assert_eq!(document["command"], "db status");
+    assert_eq!(document["ok"], false);
+    assert_eq!(document["data"], Value::Null);
+    assert_eq!(document["diagnostics"][0]["severity"], "error");
+    assert_eq!(document["diagnostics"][0]["code"], "MADS210");
+    assert_eq!(
+        document["diagnostics"][0]["message"],
+        "the database command could not be completed"
+    );
+    assert!(!document.to_string().contains("database-json-secret"));
 }
 
 #[test]

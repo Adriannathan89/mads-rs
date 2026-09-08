@@ -109,7 +109,7 @@ async fn run_command(
             Ok(ExitCode::SUCCESS)
         }
         Command::Database(DatabaseInvocation { command, package }) => {
-            run_database_command(command, package.as_deref(), current_dir).await
+            run_database_command(command, package.as_deref(), format, current_dir).await
         }
     }
 }
@@ -156,24 +156,28 @@ async fn run_inspection_command(
 async fn run_database_command(
     command: DatabaseCommand,
     package: Option<&str>,
+    format: OutputFormat,
     current_dir: io::Result<PathBuf>,
 ) -> Result<ExitCode, CliError> {
-    let root = current_dir.map_err(current_directory_error)?;
-    let project = CargoProject::load(root)?;
-    let package = project.resolve_package(package)?;
-
-    match database::execute(command, package.package_root()).await {
-        Ok(lines) => {
-            for line in lines {
-                println!("{line}");
-            }
-            Ok(ExitCode::SUCCESS)
-        }
-        Err(error) => {
-            eprintln!("error: {error}");
-            Ok(ExitCode::from(1))
-        }
+    let result = async {
+        let root = current_dir
+            .map_err(current_directory_error)
+            .map_err(database::CliError::diagnostic)?;
+        let project = CargoProject::load(root).map_err(database::CliError::diagnostic)?;
+        let package = project
+            .resolve_package(package)
+            .map_err(database::CliError::diagnostic)?;
+        database::execute(command, package.package_root()).await
     }
+    .await;
+    let exit_code = if result.is_ok() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    };
+    let outcome = database::outcome(command, result);
+    output::write(format, &outcome)?;
+    Ok(exit_code)
 }
 
 fn current_directory_error(error: io::Error) -> CliError {
