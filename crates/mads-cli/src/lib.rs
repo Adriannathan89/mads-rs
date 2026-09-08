@@ -28,7 +28,7 @@ use std::{ffi::OsString, io, path::PathBuf, process::ExitCode};
 
 use mads_common::__private::{InspectionKind, InspectionReport};
 
-use command::{Command, DatabaseCommand, DatabaseInvocation, ParseError};
+use command::{CanonicalCommand, Command, DatabaseCommand, DatabaseInvocation, ParseFailure};
 use dev::run_dev;
 use diagnostic::{CliError, MADS201, MADS202};
 use inspection::inspect_application;
@@ -44,7 +44,7 @@ pub fn run() -> ExitCode {
 
 async fn run_with(arguments: Vec<OsString>, current_dir: io::Result<PathBuf>) -> ExitCode {
     let command = match command::parse(&arguments) {
-        Ok(command) => command,
+        Ok(invocation) => invocation.command,
         Err(error) => {
             print_parse_error(&error);
             return ExitCode::from(2);
@@ -166,9 +166,20 @@ fn current_directory_error(error: io::Error) -> CliError {
     .with_source(error)
 }
 
-fn print_parse_error(error: &ParseError) {
-    eprintln!("error: {error}");
-    if error.is_database_command() {
+fn print_parse_error(failure: &ParseFailure) {
+    eprintln!("error: {}", failure.error);
+    if failure.error.is_database_command()
+        || matches!(
+            failure.command,
+            Some(
+                CanonicalCommand::DatabaseGenerate
+                    | CanonicalCommand::DatabaseMigrate
+                    | CanonicalCommand::DatabaseRollback
+                    | CanonicalCommand::DatabaseStatus
+                    | CanonicalCommand::DatabaseHelp
+            )
+        )
+    {
         print_database_help(true);
     } else {
         print_help(true);

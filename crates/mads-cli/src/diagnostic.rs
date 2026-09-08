@@ -1,8 +1,11 @@
 use std::{error::Error, fmt};
 
+use crate::command::ParseError;
+
 pub(crate) const MADS200: &str = "MADS200";
 pub(crate) const MADS201: &str = "MADS201";
 pub(crate) const MADS202: &str = "MADS202";
+pub(crate) const MADS204: &str = "MADS204";
 pub(crate) const MADS210: &str = "MADS210";
 pub(crate) const MADS211: &str = "MADS211";
 pub(crate) const MADS212: &str = "MADS212";
@@ -50,6 +53,11 @@ impl CliError {
 
     pub(crate) const fn code(&self) -> &'static str {
         self.code
+    }
+
+    /// Builds the structured diagnostic reserved for CLI grammar failures.
+    pub(crate) fn syntax(error: &ParseError) -> Self {
+        Self::new(MADS204, "CLI syntax error", error.to_string())
     }
 }
 
@@ -104,7 +112,9 @@ impl Error for CliError {
 mod tests {
     use std::io;
 
-    use super::{CliError, MADS200, MADS201};
+    use crate::command::ParseError;
+
+    use super::{CliError, MADS200, MADS201, MADS204};
 
     #[test]
     fn renders_a_stable_human_diagnostic() {
@@ -131,5 +141,16 @@ mod tests {
         assert!(debug.contains(MADS201));
         assert!(debug.contains("[REDACTED]"));
         assert!(!debug.contains("/absolute"));
+    }
+
+    #[test]
+    fn reserves_mads204_for_cli_syntax() {
+        let error = CliError::syntax(&ParseError::MissingValue("--format"));
+
+        assert_eq!(error.code(), MADS204);
+        assert_eq!(
+            error.to_string(),
+            "error[MADS204]: CLI syntax error\n  = missing value for --format"
+        );
     }
 }

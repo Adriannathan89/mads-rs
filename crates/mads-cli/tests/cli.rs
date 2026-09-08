@@ -75,6 +75,16 @@ fn unknown_arguments_are_rejected_with_help() {
 }
 
 #[test]
+fn output_format_is_rejected_before_a_streaming_run_command() {
+    Command::cargo_bin("mads")
+        .expect("binary should build")
+        .args(["run", "--format", "json"])
+        .assert()
+        .code(2)
+        .stderr(contains("output format is not supported for this command"));
+}
+
+#[test]
 fn help_lists_database_commands() {
     Command::cargo_bin("mads")
         .expect("binary should build")
