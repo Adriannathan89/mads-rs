@@ -1,19 +1,26 @@
 //! Black-box coverage for the complete v0.8 command surface.
 
-#![cfg(unix)]
-
 use std::{
-    fs::{self, OpenOptions},
+    fs,
+    path::{Path, PathBuf},
+    process::{Command as ProcessCommand, Output},
+};
+
+#[cfg(unix)]
+use std::{
+    fs::OpenOptions,
     io::{Read, Write},
     net::{SocketAddr, TcpListener, TcpStream},
-    path::{Path, PathBuf},
-    process::{Child, Command as ProcessCommand, Output, Stdio},
+    process::{Child, Stdio},
     thread,
     time::{Duration, Instant},
 };
 
 use serde_json::{Deserializer, Value};
-use tempfile::{TempDir, tempdir};
+use tempfile::tempdir;
+
+#[cfg(unix)]
+use tempfile::TempDir;
 
 struct CommandCase {
     arguments: &'static [&'static str],
@@ -204,13 +211,25 @@ fn finite_json_syntax_matrix_has_one_document_and_canonical_commands() {
 }
 
 #[test]
-fn workflows_limit_cross_platform_verification_to_scaffold_safety() {
+fn release_workflows_enforce_linux_full_and_cli_platform_split() {
     let ci = fs::read_to_string(workspace_root().join(".github/workflows/ci.yml")).unwrap();
-    let scaffold_job = ci
-        .split_once("  scaffold-platform:\n")
-        .and_then(|(_, remaining)| remaining.split_once("\n  msrv:\n"))
-        .map(|(job, _)| job)
-        .expect("CI should define a bounded scaffold-platform job");
+    let verify_job = workflow_job(&ci, "verify");
+    for required in [
+        "runs-on: ubuntu-latest",
+        "cargo fmt --all --check",
+        "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+        "cargo test --locked --workspace --all-features",
+        "cargo test --locked --workspace --all-features --doc",
+        "cargo doc --locked --workspace --all-features --no-deps",
+        "cargo package --locked --workspace --no-verify",
+    ] {
+        assert!(
+            verify_job.contains(required),
+            "missing Linux verification gate: {required}"
+        );
+    }
+
+    let platform_job = workflow_job(&ci, "cli-platform");
     for required in [
         "ubuntu-latest",
         "macos-latest",
@@ -225,18 +244,22 @@ fn workflows_limit_cross_platform_verification_to_scaffold_safety() {
         "$pg = Get-ChildItem 'C:\\Program Files\\PostgreSQL' -Directory",
         "PQ_LIB_DIR=$($pg.FullName)\\lib",
         "$($pg.FullName)\\bin",
+        "cargo test -p mads-cli --lib command::tests -- --test-threads=1",
+        "cargo test -p mads-cli --test json_cli -- --test-threads=1",
         "scaffold::publish::tests::destination_race_preserves_the_competing_directory_and_cleans_staging",
         "model_serializes_nullable_diagnostics_and_normalized_locations",
+        "cargo test -p mads-cli --test scaffold_cli -- --test-threads=1",
         "a_binary_without_standard_run_is_killed_and_diagnosed",
-        "matrix.os == 'ubuntu-latest'",
-        "--test scaffold_consumer",
-        "--test scaffold_http",
+        "cargo test -p mads-cli --test dev_cli real_dev_loop -- --test-threads=1",
     ] {
-        assert!(scaffold_job.contains(required), "missing {required}");
+        assert!(
+            platform_job.contains(required),
+            "missing platform gate: {required}"
+        );
     }
-    assert!(!scaffold_job.contains("services:"));
-    assert!(!scaffold_job.contains("MADS_TEST_DATABASE_URL"));
-    assert!(!scaffold_job.contains("--ignored"));
+    assert!(!platform_job.contains("services:"));
+    assert!(!platform_job.contains("MADS_TEST_DATABASE_URL"));
+    assert!(!platform_job.contains("--ignored"));
     for postgres_integration_test in [
         "database_postgres",
         "database_http_postgres",
@@ -246,8 +269,26 @@ fn workflows_limit_cross_platform_verification_to_scaffold_safety() {
         "--test postgres_crud",
     ] {
         assert!(
-            !scaffold_job.contains(postgres_integration_test),
-            "scaffold job must not run PostgreSQL integration test {postgres_integration_test}",
+            !platform_job.contains(postgres_integration_test),
+            "platform job must not run PostgreSQL integration test {postgres_integration_test}",
+        );
+    }
+
+    let postgres_job = workflow_job(&ci, "postgres");
+    for required in [
+        "runs-on: ubuntu-latest",
+        "image: postgres:16",
+        "MADS_TEST_DATABASE_URL",
+        "--test database_postgres -- --ignored --test-threads=1",
+        "--test database_http_postgres -- --ignored --test-threads=1",
+        "database_migration_failure_prevents_listener_binding",
+        "--test database_cli -- --ignored --test-threads=1",
+        "--test database_generate_postgres -- --ignored --test-threads=1",
+        "--test postgres_crud -- --ignored --test-threads=1",
+    ] {
+        assert!(
+            postgres_job.contains(required),
+            "missing PostgreSQL gate: {required}"
         );
     }
 
@@ -256,13 +297,18 @@ fn workflows_limit_cross_platform_verification_to_scaffold_safety() {
         ".github/workflows/stable-publish.yml",
     ] {
         let workflow = fs::read_to_string(workspace_root().join(workflow_path)).unwrap();
-        assert!(!workflow.contains("scaffold-platform"), "{workflow_path}");
-        assert!(!workflow.contains("macos-latest"), "{workflow_path}");
-        assert!(!workflow.contains("windows-latest"), "{workflow_path}");
+        let release_platform_job = workflow_job(&workflow, "cli-platform");
+        for required in ["ubuntu-latest", "macos-latest", "windows-latest"] {
+            assert!(
+                release_platform_job.contains(required),
+                "{workflow_path}: {required}"
+            );
+        }
         assert!(
-            workflow.contains("runs-on: ubuntu-latest"),
+            !release_platform_job.contains("services:"),
             "{workflow_path}"
         );
+        assert!(workflow_job(&workflow, "postgres").contains("image: postgres:16"));
     }
 }
 
@@ -330,6 +376,7 @@ fn cli_documentation_lists_the_exact_surface() {
     }
 }
 
+#[cfg(unix)]
 #[test]
 fn dev_starts_an_application_and_can_be_terminated() {
     let fixture = copied_single_fixture();
@@ -431,6 +478,7 @@ fn workspace_fixture() -> PathBuf {
     workspace_root().join("crates/mads-cli/tests/fixtures/matrix/workspace")
 }
 
+#[cfg(unix)]
 fn copied_single_fixture() -> TempDir {
     let destination = tempdir().unwrap();
     copy_directory(&single_fixture(), destination.path()).unwrap();
@@ -445,6 +493,7 @@ fn copied_single_fixture() -> TempDir {
     destination
 }
 
+#[cfg(unix)]
 fn copy_directory(source: &Path, destination: &Path) -> std::io::Result<()> {
     fs::create_dir_all(destination)?;
     for entry in fs::read_dir(source)? {
@@ -459,11 +508,13 @@ fn copy_directory(source: &Path, destination: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn available_localhost_address() -> std::io::Result<SocketAddr> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     listener.local_addr()
 }
 
+#[cfg(unix)]
 fn wait_for_output(path: &Path, expected: &str) {
     wait_until(|| {
         fs::read_to_string(path)
@@ -472,6 +523,7 @@ fn wait_for_output(path: &Path, expected: &str) {
     });
 }
 
+#[cfg(unix)]
 fn wait_for_health(address: SocketAddr) {
     wait_until(|| {
         let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(100))
@@ -486,6 +538,7 @@ fn wait_for_health(address: SocketAddr) {
     });
 }
 
+#[cfg(unix)]
 fn wait_until(mut condition: impl FnMut() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(60);
     while !condition() {
@@ -497,8 +550,10 @@ fn wait_until(mut condition: impl FnMut() -> bool) {
     }
 }
 
+#[cfg(unix)]
 struct ChildGuard(Option<Child>);
 
+#[cfg(unix)]
 impl ChildGuard {
     fn new(child: Child) -> Self {
         Self(Some(child))
@@ -512,6 +567,7 @@ impl ChildGuard {
     }
 }
 
+#[cfg(unix)]
 impl Drop for ChildGuard {
     fn drop(&mut self) {
         self.kill();
@@ -524,4 +580,20 @@ fn workspace_root() -> PathBuf {
         .and_then(Path::parent)
         .unwrap()
         .to_path_buf()
+}
+
+fn workflow_job<'workflow>(workflow: &'workflow str, job: &str) -> &'workflow str {
+    let header = format!("  {job}:\n");
+    let (_, remainder) = workflow
+        .split_once(&header)
+        .unwrap_or_else(|| panic!("workflow should define {job} job"));
+
+    let end = remainder
+        .match_indices("\n  ")
+        .find_map(|(offset, _)| {
+            let line = &remainder[offset + 1..].lines().next()?;
+            (!line.as_bytes().get(2).is_some_and(u8::is_ascii_whitespace)).then_some(offset)
+        })
+        .unwrap_or(remainder.len());
+    &remainder[..end]
 }

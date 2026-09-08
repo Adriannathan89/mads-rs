@@ -1,13 +1,14 @@
 //! Release preparation scripts and stable workflow policy acceptance tests.
 
-#![cfg(unix)]
-
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::{Command, Output},
 };
 
+#[cfg(unix)]
+use std::process::{Command, Output};
+
+#[cfg(unix)]
 use tempfile::{TempDir, tempdir};
 
 const PACKAGES: &[&str] = &[
@@ -20,6 +21,7 @@ const PACKAGES: &[&str] = &[
     "mads-cli",
 ];
 
+#[cfg(unix)]
 #[test]
 fn beta_release_increments_a_matching_base_and_only_changes_versions() {
     let fixture = ReleaseFixture::new("0.7.0-beta.1");
@@ -37,6 +39,7 @@ fn beta_release_increments_a_matching_base_and_only_changes_versions() {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn beta_release_starts_at_one_for_a_new_base() {
     let fixture = ReleaseFixture::new("0.7.0-beta.4");
@@ -47,6 +50,7 @@ fn beta_release_starts_at_one_for_a_new_base() {
     fixture.assert_version("0.8.0-beta.1");
 }
 
+#[cfg(unix)]
 #[test]
 fn stable_release_sets_the_exact_stable_version() {
     let fixture = ReleaseFixture::new("0.7.0-beta.5");
@@ -57,6 +61,7 @@ fn stable_release_sets_the_exact_stable_version() {
     fixture.assert_version("0.7.0");
 }
 
+#[cfg(unix)]
 #[test]
 fn release_scripts_reject_invalid_versions_without_modifying_the_workspace() {
     let fixture = ReleaseFixture::new("0.7.0-beta.1");
@@ -109,6 +114,93 @@ fn stable_workflow_enforces_release_gates_and_dependency_order() {
             .unwrap_or_else(|| panic!("missing package {package} in publication order"));
         offset += relative + package.len();
     }
+}
+
+#[test]
+fn beta_and_stable_workflows_require_the_complete_v080_gate_set() {
+    let root = workspace_root();
+    let beta = fs::read_to_string(root.join(".github/workflows/beta-publish.yml"))
+        .expect("beta publication workflow should exist");
+    let stable = fs::read_to_string(root.join(".github/workflows/stable-publish.yml"))
+        .expect("stable publication workflow should exist");
+
+    for (name, workflow, environment) in [
+        ("beta", &beta, "environment: beta"),
+        ("stable", &stable, "environment: stable"),
+    ] {
+        let verify = workflow_job(workflow, "verify");
+        for required in [
+            "runs-on: ubuntu-latest",
+            "cargo fmt --all --check",
+            "cargo clippy --workspace --all-targets --all-features -- -D warnings",
+            "cargo test --locked --workspace --all-features",
+            "cargo test --locked --workspace --all-features --doc",
+            "cargo doc --locked --workspace --all-features --no-deps",
+            "cargo package --locked --workspace --no-verify",
+        ] {
+            assert!(
+                verify.contains(required),
+                "{name} verify job missing {required}"
+            );
+        }
+
+        let platform = workflow_job(workflow, "cli-platform");
+        for required in [
+            "ubuntu-latest",
+            "macos-latest",
+            "windows-latest",
+            "cargo test -p mads-cli --lib command::tests -- --test-threads=1",
+            "cargo test -p mads-cli --test json_cli -- --test-threads=1",
+            "model_serializes_nullable_diagnostics_and_normalized_locations",
+            "cargo test -p mads-cli --test scaffold_cli -- --test-threads=1",
+            "a_binary_without_standard_run_is_killed_and_diagnosed",
+            "cargo test -p mads-cli --test dev_cli real_dev_loop -- --test-threads=1",
+        ] {
+            assert!(
+                platform.contains(required),
+                "{name} platform job missing {required}"
+            );
+        }
+        assert!(
+            !platform.contains("services:"),
+            "{name} platform job must stay portable"
+        );
+        let postgres = workflow_job(workflow, "postgres");
+        for required in [
+            "runs-on: ubuntu-latest",
+            "image: postgres:16",
+            "MADS_TEST_DATABASE_URL",
+            "--test database_postgres -- --ignored --test-threads=1",
+            "--test database_http_postgres -- --ignored --test-threads=1",
+            "database_migration_failure_prevents_listener_binding",
+            "--test database_cli -- --ignored --test-threads=1",
+            "--test database_generate_postgres -- --ignored --test-threads=1",
+            "--test postgres_crud -- --ignored --test-threads=1",
+        ] {
+            assert!(
+                postgres.contains(required),
+                "{name} PostgreSQL job missing {required}"
+            );
+        }
+
+        for dependency in ["verify", "cli-platform", "msrv", "postgres", "coverage"] {
+            assert!(
+                workflow.contains(&format!("      - {dependency}")),
+                "{name} publish must depend on {dependency}",
+            );
+        }
+        assert!(
+            workflow.contains(environment),
+            "{name} publish must keep its protection"
+        );
+    }
+
+    let beta_feature_gates = feature_test_commands(&beta);
+    let stable_feature_gates = feature_test_commands(&stable);
+    assert_eq!(
+        stable_feature_gates, beta_feature_gates,
+        "stable promotion must verify the same feature set as beta"
+    );
 }
 
 #[test]
@@ -228,10 +320,12 @@ fn documentation_describes_the_v080_compatibility_boundaries() {
     }
 }
 
+#[cfg(unix)]
 struct ReleaseFixture {
     root: TempDir,
 }
 
+#[cfg(unix)]
 impl ReleaseFixture {
     fn new(version: &str) -> Self {
         let root = tempdir().expect("release fixture should be created");
@@ -335,6 +429,7 @@ impl ReleaseFixture {
     }
 }
 
+#[cfg(unix)]
 fn fixture_manifest(package: &str, version: &str) -> String {
     let dependencies = match package {
         "mads-core" => vec![("mads-core-macros", "../mads-core-macros")],
@@ -373,10 +468,12 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
+#[cfg(unix)]
 fn write(path: &Path, contents: &str) {
     fs::write(path, contents).unwrap();
 }
 
+#[cfg(unix)]
 fn assert_success(output: &Output) {
     assert!(
         output.status.success(),
@@ -384,4 +481,29 @@ fn assert_success(output: &Output) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+fn workflow_job<'workflow>(workflow: &'workflow str, job: &str) -> &'workflow str {
+    let header = format!("  {job}:\n");
+    let (_, remainder) = workflow
+        .split_once(&header)
+        .unwrap_or_else(|| panic!("workflow should define {job} job"));
+
+    let end = remainder
+        .match_indices("\n  ")
+        .find_map(|(offset, _)| {
+            let line = &remainder[offset + 1..].lines().next()?;
+            (!line.as_bytes().get(2).is_some_and(u8::is_ascii_whitespace)).then_some(offset)
+        })
+        .unwrap_or(remainder.len());
+    &remainder[..end]
+}
+
+fn feature_test_commands(workflow: &str) -> Vec<&str> {
+    workflow
+        .lines()
+        .map(str::trim)
+        .filter_map(|line| line.strip_prefix("- run: ").or(Some(line)))
+        .filter(|line| line.starts_with("cargo test ") || line.starts_with("cargo llvm-cov "))
+        .collect()
 }

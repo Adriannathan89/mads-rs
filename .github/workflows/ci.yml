@@ -14,8 +14,8 @@ permissions:
   contents: read
 
 jobs:
-  stable:
-    name: Stable
+  verify:
+    name: Linux verification
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,16 +30,18 @@ jobs:
       - name: Lint
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Test
-        run: cargo test --workspace --all-features
+        run: cargo test --locked --workspace --all-features
       - name: Test documentation
-        run: cargo test --workspace --all-features --doc
+        run: cargo test --locked --workspace --all-features --doc
       - name: Build documentation
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc --workspace --all-features --no-deps
+        run: cargo doc --locked --workspace --all-features --no-deps
+      - name: Build distributable crate archives
+        run: cargo package --locked --workspace --no-verify
 
-  scaffold-platform:
-    name: Scaffold safety (${{ matrix.os }})
+  cli-platform:
+    name: CLI platform (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -69,20 +71,15 @@ jobs:
           }
           "PQ_LIB_DIR=$($pg.FullName)\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
           "$($pg.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-      - name: Test scaffold parser, names, templates, layout, targets, and races
+      - name: Test CLI parser, JSON, paths, scaffold, and processes
         run: |
           cargo test -p mads-cli --lib command::tests -- --test-threads=1
+          cargo test -p mads-cli --test json_cli -- --test-threads=1
+          cargo test -p mads-cli --test json_cli model_serializes_nullable_diagnostics_and_normalized_locations -- --test-threads=1
           cargo test -p mads-cli --test scaffold_cli -- --test-threads=1
           cargo test -p mads-cli --lib scaffold::publish::tests::destination_race_preserves_the_competing_directory_and_cleans_staging -- --test-threads=1
-      - name: Test normalized paths and process-safe inspection
-        run: |
-          cargo test -p mads-cli --test json_cli model_serializes_nullable_diagnostics_and_normalized_locations -- --test-threads=1
           cargo test -p mads-cli --test inspection_cli a_binary_without_standard_run_is_killed_and_diagnosed -- --test-threads=1
-      - name: Test generated application compile and HTTP startup
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          cargo test -p mads-cli --test scaffold_consumer -- --test-threads=1
-          cargo test -p mads-cli --test scaffold_http -- --test-threads=1
+          cargo test -p mads-cli --test dev_cli real_dev_loop -- --test-threads=1
 
   msrv:
     name: Rust 1.85.0
@@ -121,12 +118,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install PostgreSQL client headers
         run: sudo apt-get update && sudo apt-get install --yes libpq-dev
-      - run: cargo test -p mads-common --test database_postgres -- --ignored --test-threads=1
+      - run: cargo test --locked -p mads-common --all-features --test database_postgres -- --ignored --test-threads=1
       - run: cargo test --locked -p mads-common --all-features --test database_http_postgres -- --ignored --test-threads=1
-      - run: cargo test -p mads-common server::tests::database_migration_failure_prevents_listener_binding -- --ignored --test-threads=1
-      - run: cargo test -p mads-cli --test database_cli -- --ignored --test-threads=1
+      - run: cargo test --locked -p mads-common --all-features server::tests::database_migration_failure_prevents_listener_binding -- --ignored --test-threads=1
+      - run: cargo test --locked -p mads-cli --test database_cli -- --ignored --test-threads=1
       - run: cargo test --locked -p mads-cli --test database_generate_postgres -- --ignored --test-threads=1
-      - run: cargo test -p mads --test postgres_crud -- --ignored --test-threads=1
+      - run: cargo test --locked -p mads --test postgres_crud -- --ignored --test-threads=1
 
   coverage:
     name: Coverage
