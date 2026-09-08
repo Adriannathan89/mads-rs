@@ -111,6 +111,123 @@ fn stable_workflow_enforces_release_gates_and_dependency_order() {
     }
 }
 
+#[test]
+fn documentation_describes_the_v080_compatibility_boundaries() {
+    let root = workspace_root();
+    let readme = fs::read_to_string(root.join("README.md")).expect("README should exist");
+    let architecture = fs::read_to_string(root.join("docs/ARCHITECTURE.md"))
+        .expect("architecture guide should exist");
+
+    for (name, source) in [("README", &readme), ("architecture", &architecture)] {
+        for required in [
+            "ValidatedJson",
+            "native `Json`",
+            "Config::parse",
+            "Secret",
+            ".into_http()",
+        ] {
+            assert!(
+                source.contains(required),
+                "{name} must document the v0.8 compatibility contract: {required}",
+            );
+        }
+    }
+
+    for stale_claim in [
+        "request-validation derives or schemas",
+        "generic typed configuration, third-party",
+        "machine-readable CLI output are deferred to\nv0.8",
+    ] {
+        assert!(
+            !readme.contains(stale_claim),
+            "README still describes a shipped v0.8 feature as deferred: {stale_claim}",
+        );
+        assert!(
+            !architecture.contains(stale_claim),
+            "architecture still describes a shipped v0.8 feature as deferred: {stale_claim}",
+        );
+    }
+
+    let current_surface = fs::read_to_string(root.join("docs/final_ideav1.md"))
+        .expect("current v1 surface should exist");
+    for required in [
+        "ValidatedJson",
+        "Config::parse",
+        "Secret",
+        ".into_http()",
+        "schema_version",
+        "mads new <name>",
+    ] {
+        assert!(
+            current_surface.contains(required),
+            "current v1 surface must document {required}",
+        );
+    }
+    assert!(!current_surface.contains("validation adalah target v1"));
+    assert!(!current_surface.contains("machine-readable CLI output remain v0.8 directions"));
+
+    let complete_example =
+        fs::read_to_string(root.join("docs/examples/final_application_clean_architecture.md"))
+            .expect("complete application example should exist");
+    for extractor in ["ValidatedJson", "ValidatedQuery", "ValidatedPath"] {
+        assert!(
+            complete_example.contains(extractor),
+            "complete application example must use {extractor}",
+        );
+    }
+    assert!(!complete_example.contains("planned validation API"));
+
+    let passport = fs::read_to_string(root.join("docs/examples/passport_jwt.md"))
+        .expect("Passport example should exist");
+    for required in [
+        "0.8.0-beta.1",
+        "ValidatedJson",
+        "authentication was rejected",
+        "access was denied",
+        "WWW-Authenticate: Bearer",
+    ] {
+        assert!(
+            passport.contains(required),
+            "Passport example missing {required}"
+        );
+    }
+
+    let features = fs::read_to_string(root.join("docs/importance/version_0.8.0/features.md"))
+        .expect("v0.8 feature evidence should exist");
+    for required in [
+        "0.8.0-beta.1",
+        "ValidatedJson",
+        "Config::parse",
+        ".into_http()",
+        "schema_version",
+        "mads new",
+    ] {
+        assert!(
+            features.contains(required),
+            "v0.8 feature guide missing {required}"
+        );
+    }
+
+    let stable = fs::read_to_string(root.join("docs/importance/version_0.8.0/stable-promotion.md"))
+        .expect("v0.8 stable-promotion guide should exist");
+    assert!(stable.contains("no new features"));
+    assert!(stable.contains("0.8.0-beta.1"));
+
+    let changelog = fs::read_to_string(root.join("CHANGELOG.md")).expect("changelog should exist");
+    assert!(changelog.contains("## [0.8.0-beta.1]"));
+    for required in [
+        "mads new",
+        "ValidatedJson",
+        "Config::parse",
+        "schema version 1",
+    ] {
+        assert!(
+            changelog.contains(required),
+            "v0.8 changelog missing {required}"
+        );
+    }
+}
+
 struct ReleaseFixture {
     root: TempDir,
 }

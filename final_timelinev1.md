@@ -34,6 +34,7 @@ Target utama v1:
   └─ beta.1  Complete v0.7 feature set before stable promotion
   ↓
 0.8.0  Input Validation + REST Errors + Configuration UX + Scaffolding
+  └─ beta.1  Complete v0.8 feature set before fix-only stable promotion
   ↓
 0.9.0  Testing + Hardening
   ↓
@@ -712,6 +713,13 @@ sendiri. Scope ini tidak memblokir CLI v0.7.
 `0.8.0-beta.1` membawa seluruh feature set v0.8. Stable `0.8.0` hanya
 menambahkan bug fix, koreksi dokumentasi, dan release verification; stable
 tidak menambahkan feature yang belum ada di beta.1.
+
+Current public contracts are indexed in
+[`docs/importance/version_0.8.0/features.md`](docs/importance/version_0.8.0/features.md),
+with the fix/docs/verification-only stable checklist in
+[`docs/importance/version_0.8.0/stable-promotion.md`](docs/importance/version_0.8.0/stable-promotion.md).
+Final implementation-status checkboxes and evidence links remain gated on the
+complete Plan 8 workspace, platform, package, and PostgreSQL verification.
 
 ### Minimal Project Scaffolding
 

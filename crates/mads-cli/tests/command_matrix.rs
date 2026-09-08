@@ -270,6 +270,7 @@ fn workflows_limit_cross_platform_verification_to_scaffold_safety() {
 fn cli_documentation_lists_the_exact_surface() {
     let documentation = fs::read_to_string(workspace_root().join("docs/CLI.md")).unwrap();
     for command in [
+        "mads new <name>",
         "mads run",
         "mads dev",
         "mads routes",
@@ -282,8 +283,51 @@ fn cli_documentation_lists_the_exact_surface() {
     ] {
         assert!(documentation.contains(command), "missing {command}");
     }
+    for documented_contract in [
+        "mads --format json routes",
+        "mads routes --format json",
+        "mads --format json db status",
+        "mads db status --format json",
+        "schema_version\": 1",
+        "`new`",
+        "`routes`",
+        "`graph`",
+        "`doctor`",
+        "`db generate`",
+        "`db migrate`",
+        "`db rollback`",
+        "`db status`",
+        "Cargo.toml",
+        "mads.toml",
+        "src/main.rs",
+        "src/app/mod.rs",
+        "src/app/routes.rs",
+        "src/app/controller.rs",
+        "src/app/service.rs",
+        "MADS_SERVER__HOST",
+        "MADS_SERVER__PORT",
+        "| 0 |",
+        "| 1 |",
+        "| 2 |",
+    ] {
+        assert!(
+            documentation.contains(documented_contract),
+            "missing CLI documentation contract: {documented_contract}",
+        );
+    }
     assert!(!documentation.contains("mads db generate <name>"));
     assert!(!documentation.contains("mads foundation"));
+    for unsupported_form in [
+        "mads new <name> [--template",
+        "mads new <name> [--database",
+        "mads new <name> [--jwt",
+        "mads new <name> [--vcs",
+    ] {
+        assert!(
+            !documentation.contains(unsupported_form),
+            "unapproved scaffold flag is presented as CLI syntax: {unsupported_form}",
+        );
+    }
 }
 
 #[test]

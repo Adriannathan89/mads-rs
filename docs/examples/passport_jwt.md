@@ -1,17 +1,17 @@
 # Passport/JWT example
 
-This example shows the complete v0.5.5 shape: explicit configuration, access
+This example shows the current v0.8 shape: explicit configuration, access
 and refresh signing, managed strategies, typed principals, inherited/method
-guard policies, cookie response composition, and the native Axum escape hatch.
-Application identity lookup and refresh persistence are intentionally shown as
-application services.
+guard policies, validated login input, normalized rejection responses, cookie
+response composition, and the native Axum escape hatch. Application identity
+lookup and refresh persistence are intentionally shown as application services.
 
 ## Configure
 
 ```toml
 # Cargo.toml: HTTP + Passport + cookies, without the default database feature.
 [dependencies]
-mads = { version = "0.5.5", default-features = false,
+mads = { version = "=0.8.0-beta.1", default-features = false,
   features = ["http", "jwt", "cookies", "runtime-tokio"] }
 serde = { version = "1", features = ["derive"] }
 ```
@@ -142,6 +142,14 @@ fn owns_profile(principal: &UserPrincipal) -> bool {
     principal.user_id != 0
 }
 
+#[derive(serde::Deserialize, Input)]
+struct LoginRequest {
+    #[validate(email)]
+    email: String,
+    #[validate(length(min = 1))]
+    password: String,
+}
+
 #[routes(prefix = "/users")]
 #[guard(
     strategy = "jwt",
@@ -174,13 +182,27 @@ trait UserRoutes {
 
     #[post("/login")]
     #[guard(skip)]
-    async fn login(&self) -> HttpResult<Json<LoginResponse>>;
+    async fn login(
+        &self,
+        request: ValidatedJson<LoginRequest>,
+    ) -> HttpResult<Json<LoginResponse>>;
 }
 ```
 
 The method refresh policy replaces strategy, source, and permissions while
 inheriting principal and roles. The login method removes the inherited guard.
 Roles, permissions, and predicates are ANDed. Each guard reads one source only.
+`ValidatedJson<LoginRequest>` uses Serde followed by `Input` and rejects an
+invalid body with ordered, source-aware 422 issues before login code runs. A
+native `Json<LoginRequest>` is still available as the deliberate no-automatic-
+validation escape hatch.
+
+MADS-owned Passport responses use the v0.8 standard JSON envelope. Strategy
+rejection returns 401 `unauthorized` with message `authentication was rejected`
+and keeps `WWW-Authenticate: Bearer`; policy denial returns 403 `forbidden`
+with message `access was denied`. Internal strategy failures return the fixed,
+redacted 500 response. Cookie parsing failures likewise use the standard safe
+envelope and never expose cookie contents.
 
 ## Native Axum route
 
@@ -203,12 +225,8 @@ Ensure a managed provider directly depends on `JwtService`, or explicitly
 provide a concrete `JwtService` before building the application. Missing that
 service causes `MADS131`.
 
-MADS.rs 0.5.5 does not provide login, refresh endpoints, refresh persistence or
-rotation/revocation, password hashing, CSRF, CORS, auto-binding, remote JWKS,
-JWE, or module scoping. The first four remain application authentication logic;
-CORS/auto-binding are v0.5.6, and module reachability/export eligibility is
-v0.6.0.
-
-> **Roadmap supersession (v0.6.0):** The planned v0.5.6 CORS and HTTP
-> auto-binding milestone was merged into v0.6.0 so it could share the root
-> module scope with provider, route, guard, and strategy discovery.
+MADS.rs 0.8 does not provide application login behavior, refresh endpoints,
+refresh persistence or rotation/revocation, password hashing, CSRF, remote
+JWKS, or JWE. Those remain application authentication and deployment policy.
+Root module scope, CORS, and automatic HTTP binding are already part of the
+current runtime.

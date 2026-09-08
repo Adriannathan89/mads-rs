@@ -6,9 +6,10 @@
 
 MADS.rs adalah opinionated, auto-configuring backend application framework untuk Rust. MADS berdiri di atas ekosistem yang sudah matang—terutama Axum/Tower/Tokio untuk HTTP/runtime dan Diesel untuk persistence—dan berfokus pada application structure, type-driven dependency wiring, conventions, diagnostics, serta developer experience.
 
-Dokumen ini adalah baseline desain **MADS v1**. Bagian yang ditandai target
-atau future menjelaskan arah setelah v0.6.0, bukan API yang sudah dikirim pada
-v0.6.0. Cache dan rate limiting sengaja **tidak termasuk scope v1**. Keduanya
+Dokumen ini adalah baseline desain **MADS v1**, diperbarui untuk public surface
+yang sudah tersedia pada `0.8.0-beta.1`. Bagian yang tetap ditandai target atau
+future menjelaskan arah setelah v0.8.0, bukan API saat ini. Cache dan rate
+limiting sengaja **tidak termasuk scope v1**. Keduanya
 direncanakan sebagai capability opsional di `mads/extra` setelah fondasi v1
 stabil.
 
@@ -219,14 +220,25 @@ Application-facing types:
 Json<T>
 Path<T>
 Query<T>
+ValidatedJson<T>
+ValidatedPath<T>
+ValidatedQuery<T>
 Header<T>
 Request
 Created<T>
 NoContent
+BadRequest
+Unauthorized
+Forbidden
 NotFound
 Conflict
-BadRequest
+ValidationError
+InternalError
 ```
+
+`Json<T>`, `Path<T>`, dan `Query<T>` tetap native Axum escape hatch tanpa
+automatic `Input` validation. Wrapper `Validated*` adalah boundary opt-in yang
+melakukan Serde deserialization lalu validasi sebelum handler dipanggil.
 
 ### Database / Diesel
 
@@ -339,7 +351,7 @@ GET /users/:id
 
 ## 9. Module Model
 
-Module adalah architecture boundary, bukan manual DI manifest. Pada v0.6.0,
+Module adalah architecture boundary, bukan manual DI manifest. Sejak v0.6.0,
 ownership berasal dari Rust namespace dan root menentukan reachable module
 graph; module tidak memiliki HTTP path.
 
@@ -553,7 +565,10 @@ Routes mendeskripsikan HTTP intent:
 #[routes(prefix = "/users")]
 trait UserRoutes {
     #[post("/")]
-    async fn create_user(&self, body: Json<CreateUser>) -> Result<Created<User>>;
+    async fn create_user(
+        &self,
+        body: ValidatedJson<CreateUser>,
+    ) -> HttpResult<Created<Json<User>>>;
 }
 
 #[controller(routes = [UserRoutes])]
@@ -562,8 +577,11 @@ struct UserController {
 }
 
 impl UserRoutes for UserController {
-    async fn create_user(&self, body: Json<CreateUser>) -> Result<Created<User>> {
-        Ok(Created(self.users.create(body.into_inner()).await?))
+    async fn create_user(
+        &self,
+        body: ValidatedJson<CreateUser>,
+    ) -> HttpResult<Created<Json<User>>> {
+        Ok(Created(Json(self.users.create(body.into_inner()).await?)))
     }
 }
 ```
@@ -571,22 +589,23 @@ impl UserRoutes for UserController {
 MADS mengklasifikasikan parameter melalui type metadata:
 
 ```text
-Json<CreateUser> → HTTP body; validation adalah target v1
-Path<i64>        → HTTP path
-Query<T>         → HTTP query
-UserService      → controller/application dependency
+ValidatedJson<CreateUser> → HTTP body + Input validation
+ValidatedPath<i64>        → HTTP path + Input validation
+ValidatedQuery<T>         → HTTP query + Input validation
+Json/Path/Query            → native Axum extraction without Input
+UserService                → controller/application dependency
 ```
 
 Common path tidak memerlukan `State<AppState>` atau `Arc<UserService>`.
 
 ---
 
-## 15. Validation and Errors (target v1, not shipped in v0.6.0)
+## 15. Validation and Errors (shipped in v0.8.0-beta.1)
 
-Future input API:
+Current input API:
 
 ```rust
-#[derive(Input)]
+#[derive(serde::Deserialize, Input)]
 pub struct CreateUser {
     #[validate(email)]
     pub email: String,
@@ -608,6 +627,15 @@ validate
 handler
 ```
 
+`ValidatedJson`, `ValidatedQuery`, dan `ValidatedPath` menambahkan source
+`body`, `query`, atau `path` ke ordered issues. Built-in validator adalah
+`email`, Unicode code-point `length`, `nonempty`, numeric `range`, `positive`,
+`negative`, `multiple_of`, `required`, dan recursive `nested`. Synchronous
+`custom = path`, whole-value callback, serta manual `Input` implementation
+menjadi extension points. Invalid input menghasilkan 422
+`validation_error` tanpa memanggil handler. Native `Json`, `Query`, dan `Path`
+tetap tidak menjalankan `Input`.
+
 Framework memiliki standard application/HTTP errors untuk common path:
 
 ```text
@@ -621,6 +649,35 @@ InternalError
 ```
 
 Tetapi custom Axum response harus tetap mungkin digunakan.
+
+Seluruh MADS-owned HTTP error memakai safe
+`{ "error": { "code", "message" } }` envelope; validation menambahkan
+source-aware `issues`. Passport rejected tetap mengirim
+`WWW-Authenticate: Bearer`, sedangkan internal sources tidak diserialisasi.
+Dengan feature `http + database`, `DatabaseResult<T>` dan native Diesel
+`QueryResult<T>` dapat memilih `.into_http()`: typed not-found menjadi 404,
+typed unique violation menjadi 409, dan error lain menjadi redacted 500. Tidak
+ada blanket automatic database conversion.
+
+Typed application configuration juga merupakan API core v0.8:
+
+```rust
+#[derive(Configuration)]
+#[config(prefix = "app")]
+struct AppConfig {
+    host: String,
+    #[config(default = 3000, validate(range(min = 1, max = 65535)))]
+    port: u16,
+    api_key: Secret<String>,
+}
+
+let app = config.parse::<AppConfig>()?;
+```
+
+`Config::parse` membaca `Config` yang sudah dimuat; derive tidak melakukan
+global registration atau loading kedua. Selected provider membuat parsing
+sebagai startup requirement. `Secret<T>` hanya dibuka melalui `expose` atau
+`into_exposed`; `Display` dan `Debug` selalu `[REDACTED]`.
 
 ---
 
@@ -700,6 +757,7 @@ Automatic wiring tidak boleh menjadi black box.
 CLI v1 ditargetkan menyediakan:
 
 ```bash
+mads new my-app
 mads dev
 mads run
 mads routes
@@ -711,12 +769,32 @@ mads db rollback
 mads db status
 ```
 
-The v0.7 beta implements this command surface as human-readable CLI behavior.
+The v0.8 beta implements this command surface and adds `mads new <name>`.
 `mads db generate` has no positional name: it creates one automatically named,
-review-required schema diff from the loaded Diesel schema. Input validation,
-structured errors, and machine-readable CLI output remain v0.8 directions.
+review-required schema diff from the loaded Diesel schema. Human output remains
+the default. Finite commands (`new`, `routes`, `graph`, `doctor`, and every
+`db` operation) accept `--format human|json`; `run` and `dev` remain raw
+streams and reject it.
 
-`mads graph` future:
+Machine output contains exactly one newline-terminated versioned envelope:
+
+```json
+{
+  "schema_version": 1,
+  "command": "routes",
+  "ok": true,
+  "data": { "routes": [] },
+  "diagnostics": []
+}
+```
+
+Schema version 1 allows additive fields; removal, rename, type changes, or
+semantic changes require a new schema version. CLI exits remain 0 for success,
+1 for operational failure, and 2 for syntax failure. `mads new <name>` creates
+the exact bundled seven-file HTTP starter atomically and offline, with only
+`http` and `runtime-tokio` enabled.
+
+One useful `mads graph` human rendering is:
 
 ```text
 AppModule

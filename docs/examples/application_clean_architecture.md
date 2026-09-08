@@ -1,4 +1,4 @@
-# MADS.rs — Clean Architecture with v0.4 Persistence
+# MADS.rs — Clean Architecture with v0.8 Persistence
 
 MADS belongs at the composition and delivery edge. Domain and application code
 should not depend on Axum, Diesel, or HTTP response types.
@@ -13,7 +13,7 @@ Application use cases and ports
 Domain
 ```
 
-## Available in v0.4
+## Available in v0.8
 
 `Database` and `Database::run` are available now. A repository can accept the
 managed database and keep native Diesel details inside infrastructure:
@@ -45,7 +45,11 @@ The database URL stays as `${DATABASE_URL}` in tracked configuration; real
 values belong in ignored `.env` locally or in production process variables.
 
 Delivery code maps application outcomes to HTTP deliberately. A failed
-`Database::run` does **not** automatically become an HTTP error response.
+`Database::run` does **not** automatically become an HTTP error response. When
+the generic safe mapping is suitable, `DatabaseResult<T>` and native Diesel
+`QueryResult<T>` can opt in with `.into_http()` (not-found is 404, typed unique
+violation is 409, every other database failure is redacted 500). Domain code
+still need not depend on HTTP types.
 
 ## Project shape
 
@@ -55,7 +59,7 @@ src/
 ├── application/            # use cases and repository-port traits
 ├── infrastructure/         # Diesel schemas/models/repositories
 ├── delivery/http/          # MADS route traits and controllers
-└── main.rs                 # ConfigBuilder + DatabaseBootstrap composition root
+└── main.rs                 # Config + typed provider + DatabaseBootstrap composition root
 ```
 
 The application layer owns an ordinary Rust repository-port trait. The
@@ -63,13 +67,59 @@ infrastructure implementation owns its Diesel schema/query types, and the
 controller depends on application-facing behavior rather than moving database
 types into the domain.
 
-## Target/future APIs
+## v0.8 input and configuration edge
 
-The following are intentionally **not** v0.4 APIs:
+Request DTO validation is a delivery concern and uses `ValidatedJson`, not a
+renamed native `Json` alias:
 
-- `#[repository(as = Port)]` trait-binding syntax;
-- zero-bootstrap database auto-configuration; and
-- a MADS database test DSL.
+```rust,ignore
+use mads::prelude::*;
 
-They remain targets for later milestones. v0.4 also does not provide automatic
-validation or automatic HTTP error normalization.
+#[derive(serde::Deserialize, Input)]
+struct CreateUserRequest {
+    #[validate(email)]
+    email: String,
+    #[validate(length(min = 8))]
+    password: String,
+}
+
+#[routes(prefix = "/users")]
+trait UserRoutes {
+    #[post("/")]
+    async fn create(&self, body: ValidatedJson<CreateUserRequest>) -> HttpResult<Json<User>>;
+}
+```
+
+The application layer receives the typed DTO only after validation. Native
+`Json<T>` remains available for an application-owned extraction policy and does
+not validate automatically.
+
+Configuration has the same explicit edge. A selected provider calls
+`Config::parse::<AppConfig>()`; a failing typed view prevents startup before
+the listener binds. Use `Secret<String>` for credentials and deliberately call
+`.expose()` only at the infrastructure boundary. Its normal `Display` and
+`Debug` representations are `[REDACTED]`.
+
+```rust,ignore
+#[derive(Configuration)]
+#[config(prefix = "app")]
+struct AppConfig {
+    #[config(default = "clean-user-api")]
+    name: String,
+    database_password: Secret<String>,
+}
+
+#[provider]
+fn app_config(config: Config) -> mads::core::Result<AppConfig> {
+    Ok(config.parse()?)
+}
+```
+
+`Config::parse` does not reload sources. Conventional `Mads::run` still uses
+optional `.env` for exact `${NAME}` interpolation, optional `mads.toml`, then
+final scalar `MADS_*` overrides. Typed errors aggregate full keys and winning
+sources without configured values.
+
+Trait-binding syntax, a MADS database test DSL, and automatic database-to-HTTP
+conversion remain outside this example. The v0.8 mapping is opt in through
+`.into_http()` so application delivery policy stays explicit.
