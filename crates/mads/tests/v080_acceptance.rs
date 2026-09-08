@@ -9,7 +9,7 @@ use std::{
 
 use mads::{
     axum::{
-        Json as AxumJson, Router,
+        Router,
         body::{Body, to_bytes},
         http::{Method, Request, StatusCode, header},
         response::{IntoResponse, Response},
@@ -116,7 +116,7 @@ async fn response_json(response: Response) -> Value {
     .expect("response should contain JSON")
 }
 
-async fn native_json(_: AxumJson<application::CreateAccount>) -> &'static str {
+async fn native_json(_: mads::Json<application::CreateAccount>) -> &'static str {
     NATIVE_HANDLER_CALLS.fetch_add(1, Ordering::SeqCst);
     "native"
 }
