@@ -1,4 +1,4 @@
-//! Black-box coverage for the complete v0.7 command surface.
+//! Black-box coverage for the complete v0.8 command surface.
 
 #![cfg(unix)]
 
@@ -23,6 +23,12 @@ struct CommandCase {
 }
 
 const USAGE_CASES: &[CommandCase] = &[
+    CommandCase {
+        arguments: &["new"],
+        expected_code: 2,
+        stdout_contains: &[],
+        stderr_contains: &["missing project name"],
+    },
     CommandCase {
         arguments: &["foundation"],
         expected_code: 2,
@@ -75,6 +81,18 @@ fn complete_command_matrix_has_stable_usage_and_exit_classes() {
         let output = cli_command(&single_fixture(), arguments).output().unwrap();
         assert_eq!(output.status.code(), Some(0), "{arguments:?}");
     }
+
+    let new_invocation = tempdir().unwrap();
+    let output = cli_command(new_invocation.path(), &["new", "matrix-app"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0));
+    assert!(
+        new_invocation
+            .path()
+            .join("matrix-app/Cargo.toml")
+            .is_file()
+    );
 
     let output = cli_command(
         &workspace_fixture(),
@@ -141,6 +159,10 @@ fn operational_database_failures_are_redacted_and_exit_one() {
 #[test]
 fn finite_json_syntax_matrix_has_one_document_and_canonical_commands() {
     let cases: &[(&[&str], &str)] = &[
+        (
+            &["new", "matrix-app", "--format", "json", "--matrix-unknown"],
+            "new",
+        ),
         (
             &["routes", "--format", "json", "--matrix-unknown"],
             "routes",
