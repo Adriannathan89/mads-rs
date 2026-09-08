@@ -17,6 +17,8 @@ mod dev_state;
 #[allow(dead_code)]
 mod diagnostic;
 mod inspection;
+/// Versioned finite-command output records and serializers.
+pub mod output;
 mod process;
 #[allow(dead_code)]
 mod project;
@@ -46,7 +48,10 @@ async fn run_with(arguments: Vec<OsString>, current_dir: io::Result<PathBuf>) ->
     let command = match command::parse(&arguments) {
         Ok(invocation) => invocation.command,
         Err(error) => {
-            print_parse_error(&error);
+            if let Err(output_error) = render_parse_error(&error) {
+                eprintln!("{output_error}");
+                return ExitCode::from(1);
+            }
             return ExitCode::from(2);
         }
     };
@@ -166,9 +171,28 @@ fn current_directory_error(error: io::Error) -> CliError {
     .with_source(error)
 }
 
-fn print_parse_error(failure: &ParseFailure) {
-    eprintln!("error: {}", failure.error);
-    if failure.error.is_database_command()
+fn render_parse_error(failure: &ParseFailure) -> Result<(), CliError> {
+    let diagnostic = CliError::syntax(&failure.error);
+    let command = failure.command.map(output::command_name).map(str::to_owned);
+    let human_stderr = format!(
+        "error: {}\n{}\n",
+        failure.error,
+        if parse_error_needs_database_help(failure) {
+            database_help()
+        } else {
+            help()
+        }
+    );
+    let outcome = output::Outcome::syntax_failure(
+        command,
+        output::model::CliDiagnostic::from_error(&diagnostic, None),
+        human_stderr,
+    );
+    output::write(failure.format.unwrap_or_default(), &outcome)
+}
+
+fn parse_error_needs_database_help(failure: &ParseFailure) -> bool {
+    failure.error.is_database_command()
         || matches!(
             failure.command,
             Some(
@@ -179,15 +203,10 @@ fn print_parse_error(failure: &ParseFailure) {
                     | CanonicalCommand::DatabaseHelp
             )
         )
-    {
-        print_database_help(true);
-    } else {
-        print_help(true);
-    }
 }
 
 fn print_help(to_stderr: bool) {
-    let help = "Usage: mads <command> [options]\n\nCommands:\n  run       Build and run a MADS application\n  dev       Watch, rebuild, and restart a MADS application\n  routes    Inspect application routes\n  graph     Inspect the application graph\n  doctor    Diagnose application configuration and metadata\n  db        Manage PostgreSQL migrations\n\nApplication selection:\n  -p, --package <package>\n      --bin <binary>";
+    let help = help();
 
     if to_stderr {
         eprintln!("{help}");
@@ -197,13 +216,21 @@ fn print_help(to_stderr: bool) {
 }
 
 fn print_database_help(to_stderr: bool) {
-    let help = "Usage: mads db <command> [--package <package>]\n\nCommands:\n  generate  Generate one complete schema diff as <timestamp>_schema_diff\n  migrate   Apply pending migrations\n  rollback  Revert the latest applied migration\n  status    Show applied and pending migrations\n\nApplication selection:\n  -p, --package <package>";
+    let help = database_help();
 
     if to_stderr {
         eprintln!("{help}");
     } else {
         println!("{help}");
     }
+}
+
+const fn help() -> &'static str {
+    "Usage: mads <command> [options]\n\nCommands:\n  run       Build and run a MADS application\n  dev       Watch, rebuild, and restart a MADS application\n  routes    Inspect application routes\n  graph     Inspect the application graph\n  doctor    Diagnose application configuration and metadata\n  db        Manage PostgreSQL migrations\n\nApplication selection:\n  -p, --package <package>\n      --bin <binary>"
+}
+
+const fn database_help() -> &'static str {
+    "Usage: mads db <command> [--package <package>]\n\nCommands:\n  generate  Generate one complete schema diff as <timestamp>_schema_diff\n  migrate   Apply pending migrations\n  rollback  Revert the latest applied migration\n  status    Show applied and pending migrations\n\nApplication selection:\n  -p, --package <package>"
 }
 
 #[cfg(test)]

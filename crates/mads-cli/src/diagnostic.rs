@@ -1,4 +1,8 @@
-use std::{error::Error, fmt};
+use std::{
+    error::Error,
+    fmt,
+    path::{Path, PathBuf},
+};
 
 use crate::command::ParseError;
 
@@ -12,12 +16,43 @@ pub(crate) const MADS212: &str = "MADS212";
 pub(crate) const MADS213: &str = "MADS213";
 pub(crate) const MADS220: &str = "MADS220";
 
+/// A source location attached to a CLI-owned diagnostic before output rendering.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ErrorLocation {
+    path: PathBuf,
+    line: u32,
+    column: u32,
+}
+
+impl ErrorLocation {
+    /// Returns the compiler-provided path before package-relative normalization.
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Returns the one-based source line.
+    pub(crate) const fn line(&self) -> u32 {
+        self.line
+    }
+
+    /// Returns the one-based source column.
+    pub(crate) const fn column(&self) -> u32 {
+        self.column
+    }
+}
+
+#[derive(Default)]
+struct CliErrorDetails {
+    subject: Option<String>,
+    location: Option<ErrorLocation>,
+    suggestions: Vec<String>,
+}
+
 pub(crate) struct CliError {
     code: &'static str,
     title: &'static str,
     message: String,
-    subject: Option<String>,
-    suggestions: Vec<String>,
+    details: Box<CliErrorDetails>,
     source: Option<Box<dyn Error + Send + Sync>>,
 }
 
@@ -27,19 +62,33 @@ impl CliError {
             code,
             title,
             message: message.into(),
-            subject: None,
-            suggestions: Vec::new(),
+            details: Box::default(),
             source: None,
         }
     }
 
     pub(crate) fn with_subject(mut self, subject: impl Into<String>) -> Self {
-        self.subject = Some(subject.into());
+        self.details.subject = Some(subject.into());
         self
     }
 
     pub(crate) fn with_suggestion(mut self, suggestion: impl Into<String>) -> Self {
-        self.suggestions.push(suggestion.into());
+        self.details.suggestions.push(suggestion.into());
+        self
+    }
+
+    /// Attaches a one-based source location for structured rendering.
+    pub(crate) fn with_location(
+        mut self,
+        path: impl Into<PathBuf>,
+        line: u32,
+        column: u32,
+    ) -> Self {
+        self.details.location = Some(ErrorLocation {
+            path: path.into(),
+            line,
+            column,
+        });
         self
     }
 
@@ -55,6 +104,31 @@ impl CliError {
         self.code
     }
 
+    /// Returns the short stable diagnostic title.
+    pub(crate) const fn title(&self) -> &'static str {
+        self.title
+    }
+
+    /// Returns the safe diagnostic message.
+    pub(crate) fn message(&self) -> &str {
+        &self.message
+    }
+
+    /// Returns the related subject when one is available.
+    pub(crate) fn subject(&self) -> Option<&str> {
+        self.details.subject.as_deref()
+    }
+
+    /// Returns the source location when one is available.
+    pub(crate) fn location(&self) -> Option<&ErrorLocation> {
+        self.details.location.as_ref()
+    }
+
+    /// Returns the ordered remediation suggestions.
+    pub(crate) fn suggestions(&self) -> &[String] {
+        &self.details.suggestions
+    }
+
     /// Builds the structured diagnostic reserved for CLI grammar failures.
     pub(crate) fn syntax(error: &ParseError) -> Self {
         Self::new(MADS204, "CLI syntax error", error.to_string())
@@ -64,11 +138,11 @@ impl CliError {
 impl fmt::Display for CliError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(formatter, "error[{}]: {}", self.code, self.title)?;
-        if let Some(subject) = &self.subject {
+        if let Some(subject) = &self.details.subject {
             write!(formatter, "\n  = subject: {subject}")?;
         }
         write!(formatter, "\n  = {}", self.message)?;
-        for suggestion in &self.suggestions {
+        for suggestion in &self.details.suggestions {
             write!(formatter, "\n  help: {suggestion}")?;
         }
         Ok(())
@@ -93,8 +167,9 @@ impl fmt::Debug for CliError {
             .field("code", &self.code)
             .field("title", &self.title)
             .field("message", &message)
-            .field("subject", &self.subject)
-            .field("suggestions", &self.suggestions)
+            .field("subject", &self.details.subject)
+            .field("location", &self.details.location)
+            .field("suggestions", &self.details.suggestions)
             .field("source", &source)
             .finish()
     }
