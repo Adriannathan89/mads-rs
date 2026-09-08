@@ -15,6 +15,7 @@ pub(crate) const MADS211: &str = "MADS211";
 pub(crate) const MADS212: &str = "MADS212";
 pub(crate) const MADS213: &str = "MADS213";
 pub(crate) const MADS220: &str = "MADS220";
+pub(crate) const MADS230: &str = "MADS230";
 
 /// A source location attached to a CLI-owned diagnostic before output rendering.
 #[derive(Clone, Debug, Eq, PartialEq)]

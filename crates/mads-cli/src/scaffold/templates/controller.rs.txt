@@ -1,0 +1,15 @@
+// src/app/controller.rs
+use mads::prelude::*;
+
+use super::{routes::AppRoutes, service::AppService};
+
+#[controller(routes = [AppRoutes])]
+pub struct AppController {
+    service: AppService,
+}
+
+impl AppRoutes for AppController {
+    async fn hello(&self) -> &'static str {
+        self.service.hello()
+    }
+}

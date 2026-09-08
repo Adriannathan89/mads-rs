@@ -23,6 +23,8 @@ mod process;
 #[allow(dead_code)]
 mod project;
 mod render;
+/// Project-name validation and bundled minimal-project templates.
+pub mod scaffold;
 #[allow(dead_code)]
 mod watch;
 
