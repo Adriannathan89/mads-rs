@@ -49,6 +49,26 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install libpq (Ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes libpq-dev
+      - name: Install libpq (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install libpq
+          echo "LIBRARY_PATH=$(brew --prefix libpq)/lib" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$(brew --prefix libpq)/lib/pkgconfig" >> "$GITHUB_ENV"
+      - name: Configure preinstalled libpq (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $pg = Get-ChildItem 'C:\Program Files\PostgreSQL' -Directory |
+            Sort-Object Name -Descending | Select-Object -First 1
+          if ($null -eq $pg) {
+            throw 'The Windows runner does not provide a PostgreSQL client library.'
+          }
+          "PQ_LIB_DIR=$($pg.FullName)\lib" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "$($pg.FullName)\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
       - name: Test scaffold parser, names, templates, layout, targets, and races
         run: |
           cargo test -p mads-cli --lib command::tests -- --test-threads=1

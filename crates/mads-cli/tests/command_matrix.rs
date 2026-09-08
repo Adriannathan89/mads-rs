@@ -215,6 +215,16 @@ fn workflows_limit_cross_platform_verification_to_scaffold_safety() {
         "ubuntu-latest",
         "macos-latest",
         "windows-latest",
+        "if: runner.os == 'Linux'",
+        "sudo apt-get update && sudo apt-get install --yes libpq-dev",
+        "if: runner.os == 'macOS'",
+        "brew install libpq",
+        "LIBRARY_PATH=$(brew --prefix libpq)/lib",
+        "PKG_CONFIG_PATH=$(brew --prefix libpq)/lib/pkgconfig",
+        "if: runner.os == 'Windows'",
+        "$pg = Get-ChildItem 'C:\\Program Files\\PostgreSQL' -Directory",
+        "PQ_LIB_DIR=$($pg.FullName)\\lib",
+        "$($pg.FullName)\\bin",
         "scaffold::publish::tests::destination_race_preserves_the_competing_directory_and_cleans_staging",
         "model_serializes_nullable_diagnostics_and_normalized_locations",
         "a_binary_without_standard_run_is_killed_and_diagnosed",
@@ -224,7 +234,22 @@ fn workflows_limit_cross_platform_verification_to_scaffold_safety() {
     ] {
         assert!(scaffold_job.contains(required), "missing {required}");
     }
-    assert!(!scaffold_job.contains("postgres"));
+    assert!(!scaffold_job.contains("services:"));
+    assert!(!scaffold_job.contains("MADS_TEST_DATABASE_URL"));
+    assert!(!scaffold_job.contains("--ignored"));
+    for postgres_integration_test in [
+        "database_postgres",
+        "database_http_postgres",
+        "database_migration_failure_prevents_listener_binding",
+        "--test database_cli",
+        "database_generate_postgres",
+        "--test postgres_crud",
+    ] {
+        assert!(
+            !scaffold_job.contains(postgres_integration_test),
+            "scaffold job must not run PostgreSQL integration test {postgres_integration_test}",
+        );
+    }
 
     for workflow_path in [
         ".github/workflows/beta-publish.yml",
