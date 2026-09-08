@@ -794,11 +794,11 @@ semantic changes require a new schema version. CLI exits remain 0 for success,
 the exact bundled seven-file HTTP starter atomically and offline, with only
 `http` and `runtime-tokio` enabled.
 
-One useful `mads graph` human rendering is:
+This conceptual dependency diagram is **not** `mads graph` human output:
 
 ```text
 AppModule
-└── UserModule (route prefix: /users)
+└── UserModule
     ├── UserRepository
     │   └── Database
     │       └── DieselPool
@@ -807,6 +807,10 @@ AppModule
     └── GET /:id
         └── UserService
 ```
+
+Actual `mads graph` human output has separate `Modules`, `Providers`,
+`Dependencies`, and `Construction order` sections. Modules show imports;
+routes and route prefixes belong to `mads routes`, not the graph renderer.
 
 `mads doctor` dapat menjelaskan auto-configuration yang aktif, skipped, atau overridden.
 
