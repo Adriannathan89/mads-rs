@@ -139,7 +139,25 @@ fn filesystem_publishes_the_complete_project_without_a_staging_sibling() {
     assert_eq!(destination, invocation.path().join("minimal-app"));
     assert_eq!(published_files(&destination), expected_generated_files());
     assert!(
-        !has_staging_sibling(invocation.path()),
+        !has_staging_sibling(invocation.path(), name.as_str()),
+        "successful publication must not leave a staging directory"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn filesystem_windows_publishes_the_complete_project_layout() {
+    let invocation = tempdir().expect("temporary invocation directory should be created");
+    let name = ProjectName::parse("windows-app").expect("fixture name should be valid");
+    let rendered = render_project(&name).expect("bundled templates should render");
+
+    let destination = publish_project(invocation.path(), &name, &rendered)
+        .expect("Windows directory synchronization must not prevent publication");
+
+    assert_eq!(destination, invocation.path().join("windows-app"));
+    assert_eq!(published_files(&destination), expected_generated_files());
+    assert!(
+        !has_staging_sibling(invocation.path(), name.as_str()),
         "successful publication must not leave a staging directory"
     );
 }
@@ -175,7 +193,7 @@ fn filesystem_refuses_existing_files_and_directories_without_touching_them() {
             _ => unreachable!("the fixture cases are fixed"),
         }
         assert!(
-            !has_staging_sibling(invocation.path()),
+            !has_staging_sibling(invocation.path(), name.as_str()),
             "rejected destination must not create a staging directory"
         );
     }
@@ -211,7 +229,7 @@ fn filesystem_refuses_ordinary_and_dangling_destination_symlinks() {
             assert_eq!(fs::read_to_string(&target).unwrap(), "preserved");
         }
         assert!(
-            !has_staging_sibling(invocation.path()),
+            !has_staging_sibling(invocation.path(), name.as_str()),
             "rejected symlink must not create a staging directory"
         );
     }
@@ -260,15 +278,13 @@ fn expected_generated_files() -> Vec<PathBuf> {
     files
 }
 
-fn has_staging_sibling(invocation: &Path) -> bool {
+fn has_staging_sibling(invocation: &Path, name: &str) -> bool {
+    let prefix = format!(".{name}.mads-");
     fs::read_dir(invocation)
         .expect("invocation directory should be readable")
         .filter_map(Result::ok)
         .any(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with(".minimal-app.mads-")
+            entry.file_name().to_string_lossy().starts_with(&prefix)
                 && entry.file_name().to_string_lossy().ends_with(".tmp")
         })
 }

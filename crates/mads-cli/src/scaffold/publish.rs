@@ -3,12 +3,15 @@
 use std::{
     error::Error,
     fmt,
-    fs::{self, File, OpenOptions},
+    fs::{self, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
     process,
     sync::atomic::{AtomicU64, Ordering},
 };
+
+#[cfg(not(windows))]
+use std::fs::File;
 
 use crate::diagnostic::CliError;
 
@@ -189,6 +192,12 @@ fn write_new_file(path: &Path, contents: &[u8]) -> io::Result<()> {
     file.sync_all()
 }
 
+#[cfg(windows)]
+fn sync_directory(_path: &Path) -> io::Result<()> {
+    Ok(())
+}
+
+#[cfg(not(windows))]
 fn sync_directory(path: &Path) -> io::Result<()> {
     match File::open(path).and_then(|file| file.sync_all()) {
         Ok(()) => Ok(()),
@@ -397,6 +406,27 @@ mod tests {
             "preserved"
         );
         assert_no_staging_sibling(invocation.path());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn directory_sync_is_a_safe_noop_on_windows() {
+        let directory = tempdir().expect("temporary directory should be created");
+
+        sync_directory(directory.path())
+            .expect("Windows directory synchronization must not reject a staging directory");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn directory_sync_propagates_supported_platform_errors() {
+        let directory = tempdir().expect("temporary directory should be created");
+        let missing_directory = directory.path().join("missing");
+
+        let error = sync_directory(&missing_directory)
+            .expect_err("supported platforms must report directory-sync failures");
+
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
     }
 
     fn assert_no_staging_sibling(invocation: &Path) {
