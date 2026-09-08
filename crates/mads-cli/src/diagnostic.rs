@@ -101,6 +101,14 @@ impl CliError {
         self
     }
 
+    /// Builds the stable, source-redacting diagnostic for scaffold operations.
+    pub(crate) fn scaffolding<E>(message: &'static str, source: E) -> Self
+    where
+        E: Error + Send + Sync + 'static,
+    {
+        Self::new(MADS230, "Project scaffolding failed", message).with_source(source)
+    }
+
     pub(crate) const fn code(&self) -> &'static str {
         self.code
     }

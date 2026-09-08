@@ -5,9 +5,11 @@
 //! failure can be reported without touching a destination.
 
 mod name;
+mod publish;
 mod template;
 
 pub use self::{
     name::{ProjectName, ProjectNameError},
+    publish::{ScaffoldError, publish_project},
     template::{GENERATED_FILES, RenderedFile, RenderedProject, TemplateError, render_project},
 };
