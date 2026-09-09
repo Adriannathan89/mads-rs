@@ -204,6 +204,83 @@ fn beta_and_stable_workflows_require_the_complete_v080_gate_set() {
 }
 
 #[test]
+fn release_workflows_verify_v080_feature_boundaries_and_package_contents() {
+    let root = workspace_root();
+    let beta = fs::read_to_string(root.join(".github/workflows/beta-publish.yml"))
+        .expect("beta publication workflow should exist");
+    let stable = fs::read_to_string(root.join(".github/workflows/stable-publish.yml"))
+        .expect("stable publication workflow should exist");
+
+    for (name, workflow) in [("beta", &beta), ("stable", &stable)] {
+        let verify = workflow_job(workflow, "verify");
+        for command in [
+            "cargo check -p mads-core --no-default-features",
+            "cargo check -p mads-common --no-default-features --features http",
+            "cargo check -p mads-common --no-default-features --features database",
+            "cargo check -p mads-common --no-default-features --features http,database",
+            "cargo check -p mads-common --no-default-features --features jwt",
+            "cargo check -p mads-common --no-default-features --features cookies",
+            "cargo check -p mads --no-default-features",
+            "cargo check -p mads --no-default-features --features http,runtime-tokio",
+            "cargo check -p mads --no-default-features --features http,database",
+            "cargo package --locked --workspace --no-verify",
+        ] {
+            assert!(
+                verify.contains(command),
+                "{name} release gate is missing feature or archive verification: {command}"
+            );
+        }
+        for package in PACKAGES {
+            let command = format!("cargo package --locked --list -p {package}");
+            assert!(
+                verify.contains(&command),
+                "{name} release gate must inspect the package list for {package}"
+            );
+        }
+    }
+}
+
+#[test]
+fn workspace_packages_use_exact_v080_beta_internal_pins() {
+    const VERSION: &str = "0.8.0-beta.1";
+
+    let root = workspace_root();
+    let workspace_manifest =
+        fs::read_to_string(root.join("Cargo.toml")).expect("workspace manifest should exist");
+    assert!(
+        workspace_manifest.contains(&format!("version = \"{VERSION}\"")),
+        "the workspace must remain at the approved beta version"
+    );
+
+    let lockfile =
+        fs::read_to_string(root.join("Cargo.lock")).expect("workspace lockfile should exist");
+    for package in PACKAGES {
+        let manifest = fs::read_to_string(root.join("crates").join(package).join("Cargo.toml"))
+            .unwrap_or_else(|error| panic!("{package} manifest should exist: {error}"));
+        assert!(
+            manifest.contains("version.workspace = true"),
+            "{package} must inherit the workspace beta version"
+        );
+
+        for dependency in manifest
+            .lines()
+            .filter(|line| line.contains("path = \"../"))
+        {
+            assert!(
+                dependency.contains(&format!("version = \"={VERSION}\"")),
+                "{package} internal dependency must use an exact beta pin: {dependency}"
+            );
+        }
+
+        let record = format!("name = \"{package}\"\nversion = \"{VERSION}\"");
+        assert!(
+            lockfile.contains(&record),
+            "lockfile must contain {package} at {VERSION}"
+        );
+    }
+}
+
+#[test]
 fn documentation_describes_the_v080_compatibility_boundaries() {
     let root = workspace_root();
     let readme = fs::read_to_string(root.join("README.md")).expect("README should exist");
