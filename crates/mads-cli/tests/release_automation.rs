@@ -231,13 +231,30 @@ fn release_workflows_verify_v080_feature_boundaries_and_package_contents() {
             );
         }
         for package in PACKAGES {
-            let command = format!("cargo package --locked --list -p {package}");
             assert!(
-                verify.contains(&command),
-                "{name} release gate must inspect the package list for {package}"
+                verify.contains("bash script/verify-package-contents.sh"),
+                "{name} release gate must execute the package-content policy for {package}"
             );
         }
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn package_content_policy_checks_every_workspace_archive() {
+    let root = workspace_root();
+    let policy = root.join("script/verify-package-contents.sh");
+    assert!(
+        policy.is_file(),
+        "package-content policy script should exist"
+    );
+
+    let output = Command::new("bash")
+        .arg(&policy)
+        .current_dir(root)
+        .output()
+        .expect("package-content policy should start");
+    assert_success(&output);
 }
 
 #[test]

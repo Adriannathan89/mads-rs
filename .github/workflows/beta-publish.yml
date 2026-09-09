@@ -56,13 +56,7 @@ jobs:
           cargo check -p mads --no-default-features
           cargo check -p mads --no-default-features --features http,runtime-tokio
           cargo check -p mads --no-default-features --features http,database
-          cargo package --locked --list -p mads-core-macros
-          cargo package --locked --list -p mads-common-macros
-          cargo package --locked --list -p mads-core
-          cargo package --locked --list -p mads-extra
-          cargo package --locked --list -p mads-common
-          cargo package --locked --list -p mads
-          cargo package --locked --list -p mads-cli
+          bash script/verify-package-contents.sh
       - name: Build distributable crate archives
         run: cargo package --locked --workspace --no-verify
 
