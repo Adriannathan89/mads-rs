@@ -1,12 +1,12 @@
 # MADS.rs — Clean Architecture CRUD User Example
 
 > **Version scope:** The module declarations, standard
-> `Mads::run::<AppModule>()` startup, and CLI workflow shown here are the MADS
-> v0.7.0 API. Trait bindings, `Inject<dyn Trait>`, and validation
-> annotations later in this document are deferred v0.8/v1 concepts and are
-> not part of the current release.
+> `Mads::run::<AppModule>()` startup, CLI workflow, typed configuration,
+> validation extractors, and REST errors shown here are the MADS
+> `0.8.0-beta.1` API. Trait bindings and `Inject<dyn Trait>` remain conceptual
+> v1 APIs and are labelled where they appear.
 
-## v0.7 CLI workflow
+## v0.8 CLI workflow
 
 Use the standard entry point from the project root:
 
@@ -157,7 +157,7 @@ app/main        → composition root
 
 ## 3. Cargo.toml
 
-Conceptual target:
+Current outer-layer dependency baseline:
 
 ```toml
 [package]
@@ -166,7 +166,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-mads = "1"
+mads = { version = "=0.8.0-beta.1", default-features = false, features = ["database", "http", "runtime-tokio"] }
 serde = { version = "1", features = ["derive"] }
 ```
 
@@ -183,6 +183,7 @@ Strict projects may split each architecture layer into separate Rust crates late
 ```toml
 [app]
 name = "clean-user-api"
+api_key = "${APP_API_KEY}"
 
 [server]
 host = "127.0.0.1"
@@ -198,11 +199,38 @@ Environment:
 
 ```bash
 export DATABASE_URL="postgres://postgres:postgres@localhost/clean_user_api"
+export APP_API_KEY="replace-in-deployment"
 ```
 
 Infrastructure configuration stays outside domain/application.
 
-Standard v0.7.0 startup does not discover embedded migrations from the
+The composition edge can make application settings a startup requirement
+without adding configuration concerns to the inner layers:
+
+```rust
+use mads::prelude::*;
+
+#[derive(Configuration)]
+#[config(prefix = "app")]
+struct AppConfig {
+    #[config(default = "clean-user-api")]
+    name: String,
+    api_key: Secret<String>,
+}
+
+#[provider]
+fn app_config(config: Config) -> mads::core::Result<AppConfig> {
+    Ok(config.parse()?)
+}
+```
+
+Only a selected provider makes this parse mandatory. A failure reports the
+full key and winning source without the value and stops before lifecycle or
+listener binding. Infrastructure deliberately calls `api_key.expose()` only
+where the credential must cross into a client library; normal formatting is
+always `[REDACTED]`.
+
+Standard v0.8 startup does not discover embedded migrations from the
 `migrations/` directory. Readers who set `migrate = true` must use the
 documented low-level builder registration path,
 `builder.database_migrations(MIGRATIONS)?`, before `build().await`.
@@ -487,7 +515,7 @@ impl DeleteUserUsecase {
 ```
 
 > **Conceptual v1:** `Inject<dyn UserRepositoryPort>` illustrates the planned
-> trait-binding API. MADS v0.6.0 does not ship trait bindings or
+> trait-binding API. MADS v0.8 does not ship trait bindings or
 > `Inject<dyn Trait>`.
 
 Each use case has one public application operation named `execute`. This keeps
@@ -706,7 +734,7 @@ impl UserRepositoryPort for DieselUserRepository {
 
 > **Conceptual v1:** The exact `#[repository(as = ...)]` syntax is a planned
 > trait-binding API: it means that this infrastructure adapter satisfies the
-> application-owned repository port. It is not part of v0.6.0.
+> application-owned repository port. It is not part of v0.8.
 
 MADS can therefore resolve:
 
@@ -742,9 +770,9 @@ pub use diesel_repository::*;
 
 HTTP request models belong in delivery because validation/deserialization can be transport-specific.
 
-> **Conceptual v1:** The `Input` derive and `#[validate(...)]` annotations in
-> this section describe the planned validation API. They are not part of
-> v0.6.0.
+The `Input` derive and validated extractor family in this section are the
+current v0.8 request boundary. Native Axum extractors remain available when an
+application intentionally owns validation itself.
 
 `src/delivery/http/user/input.rs`:
 
@@ -845,13 +873,13 @@ concrete managed type such as `DieselUserRepository`.
 Delivery maps application semantics to HTTP:
 
 ```rust
-fn map_user_error(error: UserApplicationError) -> mads::Error {
+fn map_user_error(error: UserApplicationError) -> HttpError {
     match error {
-        UserApplicationError::NotFound => NotFound::new("user").into(),
+        UserApplicationError::NotFound => NotFound::new("user not found").into(),
         UserApplicationError::EmailAlreadyExists => {
             Conflict::new("email already exists").into()
         }
-        UserApplicationError::Unexpected(error) => error.into(),
+        UserApplicationError::Unexpected(error) => InternalError::new(error).into(),
     }
 }
 ```
@@ -896,33 +924,33 @@ pub trait UserRoutes {
     #[get("/")]
     async fn list_users(
         &self,
-        query: Query<ListUsersRequest>,
-    ) -> Result<Json<Vec<UserResponse>>>;
+        query: ValidatedQuery<ListUsersRequest>,
+    ) -> HttpResult<Json<Vec<UserResponse>>>;
 
     #[get("/:id")]
     async fn get_user(
         &self,
-        id: Path<i64>,
-    ) -> Result<Json<UserResponse>>;
+        id: ValidatedPath<i64>,
+    ) -> HttpResult<Json<UserResponse>>;
 
     #[post("/")]
     async fn create_user(
         &self,
-        request: Json<CreateUserRequest>,
-    ) -> Result<Created<UserResponse>>;
+        request: ValidatedJson<CreateUserRequest>,
+    ) -> HttpResult<Created<Json<UserResponse>>>;
 
     #[put("/:id")]
     async fn update_user(
         &self,
-        id: Path<i64>,
-        request: Json<UpdateUserRequest>,
-    ) -> Result<Json<UserResponse>>;
+        id: ValidatedPath<i64>,
+        request: ValidatedJson<UpdateUserRequest>,
+    ) -> HttpResult<Json<UserResponse>>;
 
     #[delete("/:id")]
     async fn delete_user(
         &self,
-        id: Path<i64>,
-    ) -> Result<NoContent>;
+        id: ValidatedPath<i64>,
+    ) -> HttpResult<NoContent>;
 }
 
 #[controller(routes = [UserRoutes])]
@@ -937,8 +965,9 @@ pub struct UserController {
 impl UserRoutes for UserController {
     async fn list_users(
         &self,
-        query: Query<ListUsersRequest>,
-    ) -> Result<Json<Vec<UserResponse>>> {
+        query: ValidatedQuery<ListUsersRequest>,
+    ) -> HttpResult<Json<Vec<UserResponse>>> {
+        let query = query.into_inner();
         let users = self.list_users_usecase
             .execute(ListUsersQuery {
                 page: query.page.unwrap_or(1),
@@ -952,10 +981,10 @@ impl UserRoutes for UserController {
 
     async fn get_user(
         &self,
-        id: Path<i64>,
-    ) -> Result<Json<UserResponse>> {
+        id: ValidatedPath<i64>,
+    ) -> HttpResult<Json<UserResponse>> {
         let user = self.get_user_usecase
-            .execute(*id)
+            .execute(id.into_inner())
             .await
             .map_err(map_user_error)?;
         Ok(Json(user.into()))
@@ -963,8 +992,8 @@ impl UserRoutes for UserController {
 
     async fn create_user(
         &self,
-        request: Json<CreateUserRequest>,
-    ) -> Result<Created<UserResponse>> {
+        request: ValidatedJson<CreateUserRequest>,
+    ) -> HttpResult<Created<Json<UserResponse>>> {
         let request = request.into_inner();
         let user = self.input_user_usecase
             .execute(CreateUserCommand {
@@ -974,18 +1003,19 @@ impl UserRoutes for UserController {
             .await
             .map_err(map_user_error)?;
 
-        Ok(Created(user.into()))
+        Ok(Created(Json(user.into())))
     }
 
     async fn update_user(
         &self,
-        id: Path<i64>,
-        request: Json<UpdateUserRequest>,
-    ) -> Result<Json<UserResponse>> {
+        id: ValidatedPath<i64>,
+        request: ValidatedJson<UpdateUserRequest>,
+    ) -> HttpResult<Json<UserResponse>> {
+        let id = id.into_inner();
         let request = request.into_inner();
         let user = self.update_user_usecase
             .execute(
-                *id,
+                id,
                 UpdateUserCommand {
                     email: request.email,
                     name: request.name,
@@ -999,10 +1029,10 @@ impl UserRoutes for UserController {
 
     async fn delete_user(
         &self,
-        id: Path<i64>,
-    ) -> Result<NoContent> {
+        id: ValidatedPath<i64>,
+    ) -> HttpResult<NoContent> {
         self.delete_user_usecase
-            .execute(*id)
+            .execute(id.into_inner())
             .await
             .map_err(map_user_error)?;
         Ok(NoContent)
@@ -1352,7 +1382,7 @@ Diesel pool
 Axum router
 route registry
 startup
-conceptual-v1 validation plumbing
+validated request extraction
 framework diagnostics
 ```
 

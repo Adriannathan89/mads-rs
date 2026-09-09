@@ -52,7 +52,21 @@ async fn spawn_dev_application_from_parts(
         )
     })?;
     let shutdown_path = control_directory.path().join("shutdown");
-    let mut command = Command::new(executable);
+    // Windows locks a running executable, so Cargo cannot replace the build
+    // artifact during the next dev-loop rebuild. Run an owned shadow copy.
+    let mut shadow_executable = control_directory.path().join("application");
+    if let Some(extension) = executable.extension() {
+        shadow_executable.set_extension(extension);
+    }
+    tokio::fs::copy(executable, &shadow_executable)
+        .await
+        .map_err(|error| {
+            process_error(
+                "could not prepare the selected application for development",
+                error,
+            )
+        })?;
+    let mut command = Command::new(shadow_executable);
     command
         .args(arguments)
         .current_dir(package_root)

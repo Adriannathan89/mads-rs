@@ -547,6 +547,53 @@ impl fmt::Debug for Config {
 }
 
 impl Config {
+    /// Parses a typed view without loading any additional configuration sources.
+    pub fn parse<T: crate::Configuration>(&self) -> crate::ConfigurationResult<T> {
+        T::from_config(self)
+    }
+
+    pub(crate) fn project(&self, prefix: &str) -> Self {
+        if prefix.is_empty() {
+            return self.clone();
+        }
+        let prefix = format!("{prefix}.");
+        Self {
+            values: self
+                .values
+                .iter()
+                .filter_map(|(key, value)| {
+                    key.strip_prefix(&prefix)
+                        .map(|key| (key.to_owned(), value.clone()))
+                })
+                .collect(),
+            string_arrays: self
+                .string_arrays
+                .iter()
+                .filter_map(|(key, value)| {
+                    key.strip_prefix(&prefix)
+                        .map(|key| (key.to_owned(), value.clone()))
+                })
+                .collect(),
+            tables: self
+                .tables
+                .iter()
+                .filter_map(|(key, value)| {
+                    key.strip_prefix(&prefix)
+                        .map(|key| (key.to_owned(), value.clone()))
+                })
+                .collect(),
+        }
+    }
+
+    pub(crate) fn has_descendants(&self, key: &str) -> bool {
+        let prefix = format!("{key}.");
+        self.values
+            .keys()
+            .chain(self.string_arrays.keys())
+            .chain(self.tables.keys())
+            .any(|candidate| candidate.starts_with(&prefix))
+    }
+
     /// Creates an empty configuration.
     pub fn empty() -> Self {
         Self::default()

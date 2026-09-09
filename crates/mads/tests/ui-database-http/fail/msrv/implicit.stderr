@@ -1,0 +1,15 @@
+error[E0277]: the trait bound `HttpError: From<mads::DatabaseError>` is not satisfied
+ --> tests/ui-database-http/fail/msrv/implicit.rs:4:39
+  |
+4 |     let _: HttpError = database_error.into();
+  |                                       ^^^^ the trait `From<mads::DatabaseError>` is not implemented for `HttpError`
+  |
+  = help: the following other types implement trait `From<T>`:
+            `HttpError` implements `From<InternalError>`
+            `HttpError` implements `From<ValidationError>`
+            `HttpError` implements `From<mads::BadRequest>`
+            `HttpError` implements `From<mads::Conflict>`
+            `HttpError` implements `From<mads::Forbidden>`
+            `HttpError` implements `From<mads::NotFound>`
+            `HttpError` implements `From<mads::Unauthorized>`
+  = note: required for `mads::DatabaseError` to implement `Into<HttpError>`

@@ -167,7 +167,7 @@ async fn assert_forbidden(response: axum::response::Response) {
             .await
             .unwrap()
             .as_ref(),
-        b"Forbidden"
+        b"{\"error\":{\"code\":\"forbidden\",\"message\":\"access was denied\"}}"
     );
     assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), 0);
 }

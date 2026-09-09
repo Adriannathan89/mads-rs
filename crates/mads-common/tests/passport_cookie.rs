@@ -143,7 +143,7 @@ async fn assert_generic_authentication_failure(response: axum::response::Respons
             .await
             .unwrap()
             .as_ref(),
-        b"Unauthorized"
+        b"{\"error\":{\"code\":\"unauthorized\",\"message\":\"authentication was rejected\"}}"
     );
     assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), 0);
 }

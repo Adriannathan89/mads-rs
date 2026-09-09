@@ -1,0 +1,11 @@
+// src/app/service.rs
+use mads::prelude::*;
+
+#[service]
+pub struct AppService;
+
+impl AppService {
+    pub fn hello(&self) -> &'static str {
+        "Hello World!"
+    }
+}

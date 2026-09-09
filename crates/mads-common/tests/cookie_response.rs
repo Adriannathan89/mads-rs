@@ -4,12 +4,37 @@
 
 use axum::{
     Router,
-    body::Body,
+    body::{Body, to_bytes},
     http::{Request, StatusCode, header::SET_COOKIE},
     routing::get,
 };
-use mads_common::{Cookie, CookieJar, SameSite, cookie::time};
+use mads_common::{
+    Cookie, CookieError, CookieErrorKind, CookieJar, CookieRejection, SameSite, cookie::time,
+};
 use tower::ServiceExt;
+
+async fn assert_internal_cookie_rejection(response: axum::response::Response, sentinels: &[&str]) {
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response.headers().get_all(SET_COOKIE).iter().count(), 0);
+    for sentinel in sentinels {
+        assert!(
+            response
+                .headers()
+                .values()
+                .all(|value| { !String::from_utf8_lossy(value.as_bytes()).contains(sentinel) })
+        );
+    }
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = std::str::from_utf8(&body).unwrap();
+    assert_eq!(
+        body,
+        "{\"error\":{\"code\":\"internal\",\"message\":\"internal server error\"}}"
+    );
+    for sentinel in sentinels {
+        assert!(!body.contains(sentinel));
+    }
+}
 
 #[tokio::test]
 async fn tuple_response_emits_each_cookie_with_all_attributes() {
@@ -121,8 +146,7 @@ async fn malformed_set_cookie_header_values_are_rejected_without_disclosure() {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-        assert_eq!(response.headers().get_all(SET_COOKIE).iter().count(), 0);
+        assert_internal_cookie_rejection(response, &["private", "secret"]).await;
     }
 }
 
@@ -166,15 +190,7 @@ async fn same_site_none_requires_secure_unless_unspecified() {
         .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
         .await
         .unwrap();
-    assert_eq!(invalid_response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    assert_eq!(
-        invalid_response
-            .headers()
-            .get_all(SET_COOKIE)
-            .iter()
-            .count(),
-        0
-    );
+    assert_internal_cookie_rejection(invalid_response, &["session", "token"]).await;
 
     let valid_response = Router::new()
         .route("/", get(valid))
@@ -244,28 +260,35 @@ async fn invalid_batch_is_atomic() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    assert_eq!(response.headers().get_all(SET_COOKIE).iter().count(), 0);
+    assert_internal_cookie_rejection(
+        response,
+        &["access", "valid-token", "refresh", "private-token"],
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn response_errors_are_redacted_and_stably_classified() {
     use axum::response::IntoResponse;
 
-    let response = CookieJar::new()
-        .add(
-            Cookie::build(("sentinel_name", "sentinel_value"))
-                .path("/\n")
-                .build(),
-        )
-        .into_response();
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    assert_eq!(response.headers().get_all(SET_COOKIE).iter().count(), 0);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    let body = std::str::from_utf8(&body).unwrap();
-    assert_eq!(body, "response cookie is invalid");
-    assert!(!body.contains("sentinel_name"));
-    assert!(!body.contains("sentinel_value"));
+    const NAME_SENTINEL: &str = "sentinel_name";
+    const VALUE_SENTINEL: &str = "sentinel_value";
+    let jar = CookieJar::new().add(
+        Cookie::build((NAME_SENTINEL, VALUE_SENTINEL))
+            .path("/\n")
+            .build(),
+    );
+    let debug = format!("{jar:?}");
+    assert!(!debug.contains(NAME_SENTINEL));
+    assert!(!debug.contains(VALUE_SENTINEL));
+    assert_internal_cookie_rejection(jar.into_response(), &[NAME_SENTINEL, VALUE_SENTINEL]).await;
+
+    let rejection = CookieRejection::from(CookieError::new(CookieErrorKind::InvalidResponse));
+    let display = rejection.to_string();
+    let debug = format!("{rejection:?}");
+    assert_eq!(display, "response cookie is invalid");
+    assert!(!display.contains(NAME_SENTINEL));
+    assert!(!display.contains(VALUE_SENTINEL));
+    assert!(!debug.contains(NAME_SENTINEL));
+    assert!(!debug.contains(VALUE_SENTINEL));
 }

@@ -65,10 +65,12 @@ use std::{collections::BTreeMap, fmt};
 
 use axum::{
     extract::FromRequestParts,
-    http::{HeaderMap, HeaderValue, StatusCode, header::COOKIE, request::Parts},
+    http::{HeaderMap, HeaderValue, header::COOKIE, request::Parts},
     response::{IntoResponse, IntoResponseParts, Response, ResponseParts},
 };
 use axum_extra::extract::cookie::CookieJar as AxumCookieJar;
+
+use crate::{BadRequest, InternalError};
 
 pub use ::cookie::{Cookie, Expiration, SameSite, time};
 
@@ -183,11 +185,13 @@ impl From<CookieError> for CookieRejection {
 
 impl IntoResponse for CookieRejection {
     fn into_response(self) -> Response {
-        let status = match self.kind() {
-            CookieErrorKind::MalformedRequest => StatusCode::BAD_REQUEST,
-            CookieErrorKind::InvalidResponse => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        (status, self.to_string()).into_response()
+        let Self(error) = self;
+        match error.kind() {
+            CookieErrorKind::MalformedRequest => {
+                BadRequest::new("cookie request is malformed").into_response()
+            }
+            CookieErrorKind::InvalidResponse => InternalError::new(error).into_response(),
+        }
     }
 }
 

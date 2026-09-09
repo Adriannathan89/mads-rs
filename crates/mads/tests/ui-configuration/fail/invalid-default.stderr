@@ -1,0 +1,23 @@
+error: optional configuration fields cannot declare defaults
+ --> tests/ui-configuration/fail/invalid-default.rs:4:49
+  |
+4 | struct Optional { #[config(default = 1)] value: Option<u16> }
+  |                                                 ^^^^^^
+
+error: secret configuration fields cannot declare defaults
+ --> tests/ui-configuration/fail/invalid-default.rs:6:61
+  |
+6 | struct SecretDefault { #[config(default = "secret")] value: Secret<String> }
+  |                                                             ^^^^^^
+
+error: configuration default is incompatible with the field type
+ --> tests/ui-configuration/fail/invalid-default.rs:8:35
+  |
+8 | struct Wrong { #[config(default = "wrong")] value: u16 }
+  |                                   ^^^^^^^
+
+error: configuration defaults must be compatible literals
+  --> tests/ui-configuration/fail/invalid-default.rs:10:40
+   |
+10 | struct Expression { #[config(default = 1 + 2)] value: u16 }
+   |                                        ^

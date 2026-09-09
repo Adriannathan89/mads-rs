@@ -10,7 +10,10 @@ use std::time::Duration;
 use axum::{
     body::{Body, to_bytes},
     extract::connect_info::ConnectInfo,
-    http::{Method, Request, StatusCode, header::AUTHORIZATION},
+    http::{
+        Method, Request, StatusCode,
+        header::{AUTHORIZATION, WWW_AUTHENTICATE},
+    },
 };
 use mads_common::{
     Authenticated, JwtClaims, JwtService, JwtSignOptions, JwtTokenKind, PassportContext,
@@ -21,6 +24,7 @@ use mads_common::{
 use tower::ServiceExt;
 
 static HANDLER_CALLS: AtomicUsize = AtomicUsize::new(0);
+static TEST_GUARD: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 static STRATEGY_CONTEXT: OnceLock<Mutex<Option<ContextRecord>>> = OnceLock::new();
 
 #[derive(Clone, serde::Deserialize, serde::Serialize)]
@@ -126,6 +130,7 @@ fn config() -> Config {
 
 #[tokio::test]
 async fn guarded_bearer_route_verifies_before_invoking_the_handler() {
+    let _guard = TEST_GUARD.lock().await;
     HANDLER_CALLS.store(0, Ordering::SeqCst);
     *STRATEGY_CONTEXT
         .get_or_init(|| Mutex::new(None))
@@ -172,4 +177,37 @@ async fn guarded_bearer_route_verifies_before_invoking_the_handler() {
             remote_addr: Some("127.0.0.1:8443".to_owned()),
         })
     );
+}
+
+#[tokio::test]
+async fn guarded_bearer_route_rejects_missing_credentials_with_json_and_bearer_challenge() {
+    let _guard = TEST_GUARD.lock().await;
+    HANDLER_CALLS.store(0, Ordering::SeqCst);
+    let application = Mads::builder_with_config(config()).build().await.unwrap();
+    let router = build_router(&application).unwrap();
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .uri("/users/profile")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        response.headers().get_all(WWW_AUTHENTICATE).iter().count(),
+        1
+    );
+    assert_eq!(response.headers()[WWW_AUTHENTICATE], "Bearer");
+    assert_eq!(
+        to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap()
+            .as_ref(),
+        b"{\"error\":{\"code\":\"unauthorized\",\"message\":\"authentication was rejected\"}}"
+    );
+    assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), 0);
 }

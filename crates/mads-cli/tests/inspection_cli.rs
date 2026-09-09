@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
+use serde_json::Value;
 use tempfile::tempdir;
 
 #[test]
@@ -119,6 +120,23 @@ fn invalid_routes_preserve_partial_route_evidence() {
         .stdout(contains("GET"))
         .stdout(contains("/duplicate"))
         .stderr(contains("MADS030"));
+}
+
+#[test]
+fn json_inspection_keeps_the_human_table_out_of_machine_stdout() {
+    let output = fixture_command("standard")
+        .args(["routes", "--format", "json"])
+        .output()
+        .expect("inspection CLI should run");
+
+    assert!(output.status.success(), "routes failed: {output:?}");
+    let stdout = String::from_utf8(output.stdout).expect("JSON stdout should be UTF-8");
+    let document: Value =
+        serde_json::from_str(&stdout).expect("stdout should be one JSON document");
+    assert_eq!(document["command"], "routes");
+    assert_eq!(document["ok"], true);
+    assert!(!stdout.contains("METHOD  PATH"));
+    assert!(!stdout.contains("error[MADS"));
 }
 
 fn fixture_command(name: &str) -> Command {
