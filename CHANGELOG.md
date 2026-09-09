@@ -2,7 +2,7 @@
 
 All notable changes to MADS.rs are documented in this file.
 
-## [0.8.0-beta.1] - Unreleased
+## [0.8.0-beta.1] - 2026-09-09
 
 Complete beta of the MADS.rs validation, configuration, REST delivery, machine
 output, and minimal-project workflow. Stable `0.8.0` will promote this same
