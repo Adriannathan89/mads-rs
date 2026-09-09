@@ -174,7 +174,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes libpq-dev
       - uses: taiki-e/install-action@cargo-llvm-cov
       - name: Enforce line coverage
-        run: cargo llvm-cov --workspace --all-features --ignore-filename-regex '(^|/)tests/ui/' --fail-under-lines 85 -- --include-ignored --test-threads=1
+        run: cargo llvm-cov --workspace --all-features --ignore-filename-regex '(^|/)tests/ui/' --fail-under-lines 85
 
   publish:
     name: Publish crates to crates.io

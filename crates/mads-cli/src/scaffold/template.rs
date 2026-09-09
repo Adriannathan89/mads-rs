@@ -103,6 +103,7 @@ pub fn render_project(name: &ProjectName) -> Result<RenderedProject, TemplateErr
             Ok(RenderedFile {
                 path,
                 contents: template
+                    .replace("\r\n", "\n")
                     .replace(PROJECT_NAME_TOKEN, name.as_str())
                     .replace(MADS_VERSION_TOKEN, env!("CARGO_PKG_VERSION")),
             })
