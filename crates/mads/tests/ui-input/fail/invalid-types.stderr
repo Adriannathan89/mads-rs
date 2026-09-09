@@ -1,0 +1,35 @@
+error: input validator is incompatible with the field type
+ --> tests/ui-input/fail/invalid-types.rs:4:27
+  |
+4 | struct Email { #[validate(email)] value: u32 }
+  |                           ^^^^^
+
+error: input validator is incompatible with the field type
+ --> tests/ui-input/fail/invalid-types.rs:6:30
+  |
+6 | struct Negative { #[validate(negative)] value: u64 }
+  |                              ^^^^^^^^
+
+error: input validator is incompatible with the field type
+ --> tests/ui-input/fail/invalid-types.rs:8:30
+  |
+8 | struct Required { #[validate(required)] value: String }
+  |                              ^^^^^^^^
+
+error: input validator is incompatible with the field type
+  --> tests/ui-input/fail/invalid-types.rs:10:27
+   |
+10 | struct Range { #[validate(range(min = 0))] value: bool }
+   |                           ^^^^^
+
+error: automatic input map validation requires String keys
+  --> tests/ui-input/fail/invalid-types.rs:12:41
+   |
+12 | struct Map { #[validate(nested)] value: std::collections::HashMap<u32, String> }
+   |                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: input validator is incompatible with the field type
+  --> tests/ui-input/fail/invalid-types.rs:14:32
+   |
+14 | struct Collection { #[validate(length(min = 1))] value: std::collections::HashSet<String> }
+   |                                ^^^^^^

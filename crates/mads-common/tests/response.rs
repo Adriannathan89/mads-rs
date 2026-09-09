@@ -5,7 +5,8 @@
 use std::io;
 
 use mads_common::{
-    Created, HttpError, HttpResult, Json, NoContent,
+    BadRequest, Conflict, Created, Forbidden, HttpError, HttpResult, InternalError, Json,
+    NoContent, NotFound, Unauthorized, ValidationError, ValidationIssue, ValidationSource,
     axum::{
         body::{Body, to_bytes},
         http::{
@@ -16,7 +17,11 @@ use mads_common::{
     },
 };
 
-async fn assert_error_response(error: HttpError, expected_status: StatusCode, expected_body: &str) {
+async fn assert_error_response(
+    error: impl IntoResponse,
+    expected_status: StatusCode,
+    expected_body: &str,
+) {
     let response = error.into_response();
 
     assert_eq!(response.status(), expected_status);
@@ -33,6 +38,100 @@ async fn assert_error_response(error: HttpError, expected_status: StatusCode, ex
         .expect("error response body must be UTF-8"),
         expected_body
     );
+}
+
+#[tokio::test]
+async fn named_errors_and_conversions_share_the_standard_envelope() {
+    macro_rules! check {
+        ($error:expr, $status:expr, $body:expr) => {{
+            assert_error_response($error, $status, $body).await;
+            let converted: HttpError = $error.into();
+            assert_error_response(converted, $status, $body).await;
+        }};
+    }
+    check!(
+        BadRequest::new("safe message"),
+        StatusCode::BAD_REQUEST,
+        r#"{"error":{"code":"bad_request","message":"safe message"}}"#
+    );
+    check!(
+        Unauthorized::new("safe message"),
+        StatusCode::UNAUTHORIZED,
+        r#"{"error":{"code":"unauthorized","message":"safe message"}}"#
+    );
+    check!(
+        Forbidden::new("safe message"),
+        StatusCode::FORBIDDEN,
+        r#"{"error":{"code":"forbidden","message":"safe message"}}"#
+    );
+    check!(
+        NotFound::new("safe message"),
+        StatusCode::NOT_FOUND,
+        r#"{"error":{"code":"not_found","message":"safe message"}}"#
+    );
+    check!(
+        Conflict::new("safe message"),
+        StatusCode::CONFLICT,
+        r#"{"error":{"code":"conflict","message":"safe message"}}"#
+    );
+    check!(
+        InternalError::new(io::Error::other("response-secret")),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        r#"{"error":{"code":"internal","message":"internal server error"}}"#
+    );
+    check!(
+        ValidationError::new(
+            [ValidationIssue::custom("invalid_email", "email is invalid")
+                .at_field("email")
+                .with_source(ValidationSource::Body)]
+        ),
+        StatusCode::UNPROCESSABLE_ENTITY,
+        r#"{"error":{"code":"validation_error","message":"input validation failed","issues":[{"source":"body","path":["email"],"code":"invalid_email","message":"email is invalid"}]}}"#
+    );
+}
+
+#[test]
+fn standard_debug_and_display_never_reveal_internal_sources() {
+    let error = InternalError::new(io::Error::other("response-secret"));
+    assert_eq!(
+        std::error::Error::source(&error).unwrap().to_string(),
+        "response-secret"
+    );
+    assert_eq!(error.to_string(), "internal server error");
+    assert!(!format!("{error:?}").contains("response-secret"));
+    let error: HttpError = error.into();
+    assert_eq!(
+        std::error::Error::source(&error).unwrap().to_string(),
+        "response-secret"
+    );
+    assert!(!format!("{error:?}").contains("response-secret"));
+    assert_eq!(error.to_string(), "internal server error");
+    assert!(!format!("{:?}", BadRequest::new("safe message")).contains("safe message"));
+}
+
+#[cfg(not(feature = "database"))]
+#[test]
+fn http_only_standard_errors_remain_send_and_sync() {
+    fn assert_send_and_sync<T: Send + Sync>() {}
+
+    assert_send_and_sync::<HttpError>();
+    assert_send_and_sync::<InternalError>();
+}
+
+#[tokio::test]
+async fn sourced_issues_preserve_paths_order_and_explicit_sources() {
+    let issue = ValidationIssue::custom("invalid", "invalid input")
+        .at_field("items")
+        .at_index(2);
+    let sourced = issue.clone().with_source(ValidationSource::Query);
+    assert_eq!(sourced.source(), ValidationSource::Query);
+    assert_eq!(sourced.issue(), &issue);
+    assert_eq!(
+        serde_json::to_value(&sourced).unwrap(),
+        serde_json::json!({"source":"query","path":["items",2],"code":"invalid","message":"invalid input"})
+    );
+    assert_error_response(ValidationError::new([sourced, ValidationIssue::custom("required", "required input").with_source(ValidationSource::Path)]), StatusCode::UNPROCESSABLE_ENTITY,
+        r#"{"error":{"code":"validation_error","message":"input validation failed","issues":[{"source":"query","path":["items",2],"code":"invalid","message":"invalid input"},{"source":"path","path":[],"code":"required","message":"required input"}]}}"#).await;
 }
 
 #[tokio::test]

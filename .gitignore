@@ -6,6 +6,7 @@ crates/mads/tests/**/target/
 /coverage/
 /docs/proposed/
 /.codex/
+**/target/
 .env
 .env.*
 !.env.example

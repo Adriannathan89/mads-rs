@@ -1,21 +1,35 @@
 # MADS.rs
 
-MADS.rs 0.7.0 is a Rust application framework with a framework-neutral core,
-a scoped Axum HTTP runtime, and explainable PostgreSQL/Diesel conditional
-defaults. A root module selects one application; startup validates its scoped
-graph and routes before it starts lifecycle hooks, checks a database, or binds
-a socket.
+MADS.rs 0.8.0-beta.1 is a Rust application framework with a framework-neutral
+core, a scoped Axum HTTP runtime, source-aware typed configuration, safe REST
+errors, request validation, and explicit PostgreSQL/Diesel integration. A root
+module selects one application; startup validates its scoped graph and routes
+before it starts lifecycle hooks, checks a database, or binds a socket.
 
 ## CLI quick start
 
-From a project containing one MADS package and binary:
+Create a minimal HTTP application, then start its development server:
+
+```bash
+mads new my-app
+cd my-app
+mads dev
+```
+
+`mads new` creates exactly `Cargo.toml`, `mads.toml`, `src/main.rs`, and
+`src/app/{mod,routes,controller,service}.rs`. The generated application has
+only the `http` and `runtime-tokio` MADS features—no database, JWT, cookie,
+migration, or authentication setup—and answers `GET /` with `Hello World!`.
+The application package starts at `0.1.0`; its MADS dependency is pinned to the
+installed CLI version. See [the CLI reference](docs/CLI.md) for its atomic,
+offline generator contract, naming rules, exact JSON output, and non-goals.
+
+From an existing project, inspect or run a selected application:
 
 ```bash
 mads doctor
 mads routes
 mads run
-# during development
-mads dev
 ```
 
 See the [authoritative CLI reference](docs/CLI.md) for target selectors,
@@ -62,7 +76,7 @@ strategies, and official auto-configurations reachable through that graph.
 
 ```toml
 [dependencies]
-mads = "0.7.0"
+mads = "0.8.0-beta.1"
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
@@ -73,10 +87,13 @@ MADS.rs supports Rust 1.85 and uses Rust edition 2024.
 
 The default `common` feature remains the compatibility aggregate for HTTP and
 PostgreSQL; it does not silently enable authentication. For an HTTP API without
-Diesel, use `default-features = false` with `features = ["http", "jwt",
-"cookies", "runtime-tokio"]`. `jwt` alone does not pull in Axum, while
-`cookies` includes HTTP. Passport strategies and Bearer guards require `http +
-jwt`; cookie guards additionally require `cookies`.
+Diesel, use `default-features = false` with `features = ["http",
+"runtime-tokio"]`. Add `jwt` and `cookies` only when the application needs
+Passport/cookie support. `jwt` alone does not pull in Axum, while `cookies`
+includes HTTP. Passport strategies and Bearer guards require `http + jwt`;
+cookie guards additionally require `cookies`. Input validation and the REST
+error family are `http` APIs; `.into_http()` requires both `http` and
+`database`.
 
 ## Conventional configuration and HTTP
 
@@ -85,13 +102,13 @@ current working directory in this order:
 
 1. optional `.env`, used only for interpolation;
 2. optional `mads.toml` as ordinary configuration;
-3. final `MADS_*` environment overrides.
+3. final scalar `MADS_*` environment overrides.
 
 Process variables win during `${NAME}` interpolation, dotenv loading never
-mutates the process environment, and `MADS_SERVER__PORT` maps to
-`server.port`. Both files may be absent; a present unreadable or malformed file
-is a bootstrap failure. MADS does not search parent directories or
-`CARGO_MANIFEST_DIR`.
+mutates the process environment, `MADS_SERVER__HOST` maps to `server.host`, and
+`MADS_SERVER__PORT` maps to `server.port`. Both files may be absent; a present
+unreadable or malformed file is a bootstrap failure. MADS does not search
+parent directories or `CARGO_MANIFEST_DIR`.
 
 ```toml
 # mads.toml
@@ -126,6 +143,182 @@ policy, not authorization or CSRF protection.
 Use the tracked [`.env.example`](.env.example) as a local template, copy it to
 the ignored `.env`, and put real secrets in process variables in CI and
 production.
+
+## Validated requests and REST errors
+
+Use `#[derive(serde::Deserialize, Input)]` with `ValidatedJson<T>`,
+`ValidatedQuery<T>`, or `ValidatedPath<T>` to deserialize, validate, attach a
+`body`, `query`, or `path` source, and invoke a handler only on valid input.
+
+```rust,no_run
+use mads::prelude::*;
+
+#[derive(serde::Deserialize, Input)]
+struct CreateUser {
+    #[validate(email, length(max = 254))]
+    email: String,
+    #[validate(length(min = 8))]
+    password: String,
+}
+
+#[routes(prefix = "/users")]
+trait UserRoutes {
+    #[post("/")]
+    async fn create(&self, body: ValidatedJson<CreateUser>) -> HttpResult<Json<User>>;
+}
+# struct User;
+```
+
+The built-ins are `email`, `length(min = N)`, `length(max = N)`,
+`length(exact = N)`, `nonempty`, `range(min = N)`, `range(max = N)`,
+`positive`, `negative`, `multiple_of = N`, `required`, `nested`, and
+`custom = path`. They cover supported strings, numbers, `Option`, structs,
+enums, tuples, arrays, `Vec`, and string-keyed `HashMap`/`BTreeMap` shapes;
+string length is Unicode code-point length. Derived callbacks can report one or
+many relative `ValidationIssue`s, and applications may implement `Input`
+manually for complete control. Validators run in source order; nested values
+follow declaration, index, and lexical map-key order.
+
+Email follows the practical default Zod syntax policy on the unmodified
+string; MADS does not trim, normalize, perform DNS checks, or claim full-RFC
+mailbox validation. Numeric bounds are inclusive, while `positive` and
+`negative` are strict.
+
+```rust,ignore
+fn validate_username(value: &str) -> ValidationResult {
+    if value == "root" {
+        Err(ValidationErrors::from_issue(
+            ValidationIssue::custom("reserved_username", "username is reserved"),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+// Use #[validate(custom = validate_username)] on a field, a whole-value
+// callback on the derived type, or implement Input manually for full control.
+```
+
+Custom issue paths are relative; derive-generated nesting prefixes external
+Serde field/variant names or collection indices. Body/query/path source is
+attached only by the validated extractor, so transport-independent manual and
+derived implementations share the same HTTP boundary.
+
+Validation returns status 422 with the fixed safe envelope:
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "input validation failed",
+    "issues": [{
+      "source": "body",
+      "path": ["email"],
+      "code": "invalid_format",
+      "message": "invalid email address"
+    }]
+  }
+}
+```
+
+Serde conversion remains authoritative and can report its first conversion
+issue; after successful deserialization MADS aggregates independent validation
+issues. Rejected values never appear in built-in issues. Validated JSON keeps
+415 unsupported-media-type and 413 body-limit semantics in the standard error
+envelope.
+
+Native `Json<T>`, `Query<T>`, and `Path<T>` remain the unmodified Axum
+extractors and deliberately do not run `Input`. Use them when an application
+needs its own extraction or validation policy; do not rename a native `Json`
+alias and present it as validation.
+
+The `http` feature exports the seven standard errors: `BadRequest` (400),
+`Unauthorized` (401), `Forbidden` (403), `NotFound` (404), `Conflict` (409),
+`ValidationError` (422), and `InternalError` (500). They use one
+`{ "error": { "code", "message" } }` envelope; validation alone adds ordered
+issues. Internal errors always render `internal server error` and retain their
+source only for server-side error chaining. MADS-owned Passport and cookie
+failures use this envelope; Passport authentication rejection retains
+`WWW-Authenticate: Bearer`. Native Axum responses remain native.
+
+| Type | Status | Code | Message policy |
+| --- | ---: | --- | --- |
+| `BadRequest` | 400 | `bad_request` | application-supplied safe message |
+| `Unauthorized` | 401 | `unauthorized` | application-supplied safe message |
+| `Forbidden` | 403 | `forbidden` | application-supplied safe message |
+| `NotFound` | 404 | `not_found` | application-supplied safe message |
+| `Conflict` | 409 | `conflict` | application-supplied safe message |
+| `ValidationError` | 422 | `validation_error` | fixed `input validation failed` |
+| `InternalError` | 500 | `internal` | fixed `internal server error` |
+
+MADS fixes its own Passport messages to `authentication was rejected` or
+`access was denied`, malformed cookies to `cookie request is malformed`,
+unsupported validated JSON content types to
+`content type must be application/json`, payload overflow to
+`request body is too large`, other safe client body-read failures to
+`request body could not be read`, and all server-class failures to
+`internal server error`.
+
+When both `http` and `database` are selected, conversion is still a deliberate
+delivery-policy decision:
+
+```rust,ignore
+let user = database.run(move |connection| query.first(connection)).await.into_http()?;
+```
+
+`.into_http()` maps only typed Diesel not-found to 404 and typed unique
+violations to 409; every other database error is a redacted 500. There is no
+automatic `From<DatabaseError>` mapping, so applications can keep native
+Diesel results or use a domain-specific `map_err` policy.
+
+## Typed configuration and secrets
+
+Typed configuration reads the existing loaded `Config`; it does not introduce a
+new loader or global type discovery. Derive a named configuration struct and
+request it explicitly through `Config::parse`:
+
+```rust,no_run
+use mads::prelude::*;
+
+#[derive(Configuration)]
+#[config(prefix = "app")]
+struct AppConfig {
+    #[config(rename = "bind_host")]
+    host: String,
+    #[config(default = 3000, validate(range(min = 1, max = 65535)))]
+    port: u16,
+    api_key: Secret<String>,
+}
+
+#[provider]
+fn app_config(config: Config) -> mads::core::Result<AppConfig> {
+    Ok(config.parse()?)
+}
+```
+
+Supported fields are strings, booleans, characters, finite numeric primitives,
+source-relative `PathBuf`, `Option<T>`, `Secret<T>`, `Option<Secret<T>>`,
+`Vec<String>`, nested `Configuration`, and a scalar `parse_with` callback.
+Prefixes and `rename` compose dotted keys; defaults and compatible validators
+are checked at compile time. Missing, parse, and validation failures aggregate
+in declaration order with full keys, stable codes, and winning-source labels,
+never configured values.
+
+A `parse_with` callback receives `&str` and returns `Result<FieldType, E>`;
+arbitrary parser error text is discarded so it cannot leak an input. Options
+become `None` only when absent, present invalid values never fall back to a
+default, and secrets cannot have source-code defaults. Maps, non-string
+vectors, arbitrary arrays, inline tables, arrays of tables, and TOML datetimes
+remain outside the existing flattened `Config` shape.
+
+The provider makes parsing a startup requirement only when the selected graph
+uses it: failure occurs before lifecycle startup and listener binding. The
+conventional source order is unchanged: optional `.env` for interpolation,
+optional `mads.toml`, then final scalar `MADS_*` overrides. Only an entire
+`${NAME}` scalar/array element is interpolated; process variables win over
+dotenv, and dotenv is not a configuration source. `Secret<T>` exposes a value
+only through `.expose()` or `.into_exposed()`; ordinary `Display` and `Debug`
+always print `[REDACTED]`.
 
 ## Low-level builder
 
@@ -473,23 +666,24 @@ limitations, resource measurements, and interpretation guidance.
 
 ## Current scope
 
-Version 0.7.0 provides root-module scope, Rust-namespace ownership, direct
-public cross-module access, scoped providers/controllers/routes/guards/
-strategies/auto-configuration, conventional configuration, automatic one-listener
-HTTP startup, strict application-wide CORS, raw native-router composition, the
-Cargo-native run/dev CLI, compiled route/graph/doctor inspection, and bounded
-PostgreSQL schema-diff generation. It preserves the low-level builder and
-complete-catalog rootless compatibility.
+Version 0.8.0-beta.1 includes rooted module scope, conventional startup, CORS,
+native router composition, typed input validation, the seven REST errors,
+explicit typed configuration and redacted secrets, focused MADS macro
+diagnostics, Cargo-native run/dev, compiled route/graph/doctor inspection,
+version-1 finite-command JSON, bounded PostgreSQL migration work, and the
+offline atomic minimal-project generator. It preserves the low-level builder,
+the complete-catalog rootless compatibility path, native Axum extractors and
+responses, ordinary human CLI output, and application-owned database policy.
 
 It does **not** implement trait or interface bindings, `Inject<dyn Trait>`,
-request-validation derives or schemas, login or credential validation, refresh
-endpoints or persistence/rotation/revocation, password hashing, CSRF, remote
-JWKS, JWE, generic typed configuration, third-party auto-configuration, or
-multiple-listener/TLS/HTTP2 server configuration. Database errors are not
-automatically mapped to HTTP responses; applications choose their delivery
-policy. Input validation, expanded standard HTTP errors, generic typed
-configuration, compiler-diagnostic rewriting, and machine-readable CLI output
-are v0.8 work.
+asynchronous or database-backed derive validators, automatic validation for
+native extractors, full-RFC/DNS email validation, login or credential
+validation, refresh endpoints or persistence/rotation/revocation, password
+hashing, CSRF, remote JWKS, JWE, third-party auto-configuration, arbitrary
+configuration sources/shapes, multiple-listener/TLS/HTTP2 server configuration,
+JSON-wrapped run/dev streams, or scaffold database/JWT/cookie/migration/Git
+setup. Database errors never map automatically: applications opt in with
+`.into_http()` or retain a custom/native delivery policy.
 
 ## Development
 

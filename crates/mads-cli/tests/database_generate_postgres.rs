@@ -20,6 +20,7 @@ use diesel::{
     sql_types::{Bool, Integer, Nullable, Text},
 };
 use mads::diesel;
+use serde_json::{Value, json};
 use tempfile::{TempDir, tempdir};
 
 static TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -149,6 +150,83 @@ fn changes_integer_to_bigint_with_castable_data() {
             )]),
         )
         .with_warnings(&["risky cast"]),
+    );
+}
+
+#[test]
+#[ignore = "requires PostgreSQL through MADS_TEST_DATABASE_URL"]
+fn generate_json_emits_one_top_level_mads212_warning_without_data_duplication() {
+    with_project(
+        GenerationCase::new(
+            "CREATE TABLE __MADS_TEST_SCHEMA__.scores (id bigint PRIMARY KEY, score integer NOT NULL);",
+            schema_files(&[schema("scores (id)", "id -> Int8,\nscore -> Int8,")]),
+            shape(&[table(
+                "scores",
+                &[
+                    column("id", "bigint", false),
+                    column("score", "bigint", false),
+                ],
+                &["id"],
+            )]),
+        ),
+        |mut project| {
+            project.apply_live_start_sql();
+            project.write_schema_files();
+
+            let output = project.run_generate_json_output();
+            assert_success(&output);
+            assert!(output.stderr.is_empty(), "stderr was not empty: {output:?}");
+            let document: Value = serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+                panic!(
+                    "JSON stdout should be exactly one document: {error}; stdout={:?}",
+                    String::from_utf8_lossy(&output.stdout)
+                )
+            });
+
+            assert_eq!(document["command"], "db generate");
+            assert_eq!(document["ok"], true);
+            let data = document["data"]
+                .as_object()
+                .expect("data should be an object");
+            assert_eq!(
+                data.keys().map(String::as_str).collect::<Vec<_>>(),
+                ["migration_path", "review_required", "status"]
+            );
+            assert_eq!(data["status"], "generated");
+            assert_eq!(data["review_required"], true);
+            assert!(
+                data["migration_path"].as_str().is_some_and(
+                    |path| path.starts_with("migrations/") && path.ends_with("_schema_diff")
+                ),
+                "migration path was not package-relative: {document}"
+            );
+            assert!(
+                !document["data"].to_string().contains("risky cast"),
+                "review warning leaked into data: {}",
+                document["data"]
+            );
+
+            assert_eq!(
+                document["diagnostics"],
+                json!([{
+                    "severity": "warning",
+                    "code": "MADS212",
+                    "title": "Migration requires review",
+                    "message": "changing a column type may require a risky cast; review the generated SQL",
+                    "subject": format!("{}.scores.score", project.schema_name),
+                    "location": null,
+                    "suggestions": ["review up.sql and down.sql before applying"]
+                }])
+            );
+
+            let migration = only_migration_directory(project.root());
+            let up_sql = fs::read_to_string(migration.join("up.sql"))
+                .expect("generated up.sql should be readable");
+            let down_sql = fs::read_to_string(migration.join("down.sql"))
+                .expect("generated down.sql should be readable");
+            assert_warning_comment(&up_sql, "risky cast");
+            assert_warning_comment(&down_sql, "risky cast");
+        },
     );
 }
 
@@ -623,6 +701,18 @@ impl RoundTripProject {
             .args(["db", "generate"])
             .output()
             .expect("mads db generate should run")
+    }
+
+    fn run_generate_json_output(&self) -> Output {
+        let mut command = Command::cargo_bin("mads").expect("mads test binary should build");
+        command
+            .current_dir(self.root())
+            .env_remove("DATABASE_URL")
+            .env_remove("MADS_DATABASE__URL")
+            .env("MADS_TEST_DATABASE_URL", &self.database_url)
+            .args(["db", "generate", "--format", "json"])
+            .output()
+            .expect("mads db generate JSON should run")
     }
 
     fn apply_sql(&mut self, sql: &str) {

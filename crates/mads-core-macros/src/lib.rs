@@ -5,12 +5,25 @@
 
 use proc_macro::TokenStream;
 
+mod configuration;
 #[path = "main.rs"]
 mod main_attribute;
 mod managed;
 mod module;
 mod path;
 mod provider;
+
+/// Derives an explicit typed view over an already loaded configuration.
+///
+/// Named structs support `#[config(prefix = "...")]` and field-level
+/// `rename`, literal `default`, `parse_with`, and compatible `validate` attributes.
+#[proc_macro_derive(Configuration, attributes(config))]
+pub fn configuration(input: TokenStream) -> TokenStream {
+    syn::parse(input)
+        .and_then(configuration::expand)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
 
 /// Replaces an asynchronous application entry point with a Tokio-backed main function.
 #[proc_macro_attribute]

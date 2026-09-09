@@ -1,0 +1,35 @@
+error[E0277]: the trait bound `NotCloneProvider: Clone` is not satisfied
+  --> tests/ui/fail/managed_dependency.rs:17:25
+   |
+17 | fn provide(_dependency: NotCloneProvider) -> ProviderOutput {
+   |                         ^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `NotCloneProvider`
+   |
+note: required by a bound in `__mads_assert_provider_dependency`
+  --> tests/ui/fail/managed_dependency.rs:16:1
+   |
+16 | #[mads::provider]
+   | ^^^^^^^^^^^^^^^^^ required by this bound in `__mads_assert_provider_dependency`
+   = note: this error originates in the attribute macro `mads::provider` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider annotating `NotCloneProvider` with `#[derive(Clone)]`
+   |
+11 + #[derive(Clone)]
+12 | struct NotCloneProvider;
+   |
+
+error[E0277]: the trait bound `NotCloneManaged: Clone` is not satisfied
+  --> tests/ui/fail/managed_dependency.rs:25:17
+   |
+25 |     dependency: NotCloneManaged,
+   |                 ^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `NotCloneManaged`
+   |
+note: required by a bound in `__mads_assert_managed_dependency`
+  --> tests/ui/fail/managed_dependency.rs:23:1
+   |
+23 | #[mads::service]
+   | ^^^^^^^^^^^^^^^^ required by this bound in `__mads_assert_managed_dependency`
+   = note: this error originates in the attribute macro `mads::service` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: consider annotating `NotCloneManaged` with `#[derive(Clone)]`
+   |
+21 + #[derive(Clone)]
+22 | struct NotCloneManaged;
+   |

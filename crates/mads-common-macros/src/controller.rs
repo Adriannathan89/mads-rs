@@ -8,7 +8,7 @@
 use std::collections::BTreeSet;
 
 use proc_macro2::TokenStream;
-use quote::{ToTokens, format_ident, quote};
+use quote::{ToTokens, format_ident, quote, quote_spanned};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::visit_mut::{self, VisitMut};
@@ -136,23 +136,26 @@ fn expand_controller_with_common(
                 .iter()
                 .cloned()
                 .map(|mut field| {
+                    let dependency_span = field.ty.span();
                     normalize_self_type(&mut field.ty, &ident);
-                    field
+                    (field, dependency_span)
                 })
                 .collect();
-            let declarations = normalized_fields.iter().map(|field| {
+            let declarations = normalized_fields.iter().map(|(field, _)| {
                 let attrs = &field.attrs;
                 let vis = &field.vis;
                 let ident = &field.ident;
                 let ty = &field.ty;
                 quote!(#(#attrs)* #vis #ident: #ty)
             });
-            let resolutions = normalized_fields.iter().map(|field| {
+            let resolutions = normalized_fields.iter().map(|(field, dependency_span)| {
                 let ident = field.ident.as_ref().expect("named fields have identifiers");
                 let ty = &field.ty;
-                quote!(#ident: context.resolve::<#ty>()?.as_ref().clone())
+                quote_spanned! {*dependency_span=>
+                    #ident: __mads_assert_controller_dependency::<#ty>(context)?
+                }
             });
-            let descriptors = normalized_fields.iter().map(|field| {
+            let descriptors = normalized_fields.iter().map(|(field, _)| {
                 let ty = &field.ty;
                 quote! {
                     #core::DependencyDescriptor::new(
@@ -176,10 +179,16 @@ fn expand_controller_with_common(
     } else {
         quote!(#inner_ident #resolve_fields)
     };
-    let route_assertions = arguments
-        .routes
-        .iter()
-        .map(|route| quote!(let _ = <#ident as #route>::__MADS_ROUTE_CONTRACT;));
+    let route_assertions = arguments.routes.iter().map(|route| {
+        quote_spanned! {route.span()=>
+            {
+                #[allow(dead_code)]
+                fn __mads_assert_controller_route() {
+                    const _: () = <#ident as #route>::__MADS_ROUTE_CONTRACT;
+                }
+            }
+        }
+    });
     let route_contracts = arguments.routes.iter().map(|route| {
         quote! {
             #common::RouteContractDescriptor::new(
@@ -226,63 +235,70 @@ fn expand_controller_with_common(
         #(#cfg_attrs)*
         const _: () = {
             #(#route_assertions)*
+            fn __mads_assert_controller_dependency<'a, T>(
+                context: &'a #core::ConstructionContext<'a>,
+            ) -> #core::Result<T>
+            where
+                T: ::core::clone::Clone
+                    + ::core::marker::Send
+                    + ::core::marker::Sync
+                    + 'static,
+            {
+                Ok(::core::clone::Clone::clone(context.resolve::<T>()?.as_ref()))
+            }
+
+            #[doc(hidden)]
+            #[allow(non_snake_case)]
+            fn #constructor_ident<'a>(
+                context: &'a #core::ConstructionContext<'a>,
+            ) -> #core::ProviderFuture<'a> {
+                ::std::boxed::Box::pin(async move {
+                    let value = #ident(::std::sync::Arc::new(#inner_value));
+                    let erased: #core::ErasedProvider = ::std::sync::Arc::new(value);
+                    Ok(erased)
+                })
+            }
+
+            #[doc(hidden)]
+            #[allow(non_snake_case)]
+            fn #registrar_ident(
+                mut __mads_router: #common::__private::Router,
+                __mads_runtime: &#common::__private::RouterBuildContext<'_>,
+                __mads_routes: &mut #common::__private::ValidatedRouteIter<'_>,
+            ) -> #core::Result<#common::__private::Router> {
+                let __mads_controller = __mads_runtime.application()
+                    .resolve::<#ident>()?
+                    .as_ref()
+                    .clone();
+                #(#route_registrations)*
+                __mads_routes.finish()?;
+                Ok(__mads_router)
+            }
+
+            #core::__private::inventory::submit! {
+                #core::ProviderDescriptor::new(
+                    #core::ProviderKind::Service,
+                    concat!(module_path!(), "::", stringify!(#ident)),
+                    || ::core::any::TypeId::of::<#ident>(),
+                    #dependencies,
+                    #provider_visibility,
+                    #core::SourceLocation::new(file!(), line!(), column!()),
+                    #constructor_ident,
+                )
+                .with_runtime_type_name(|| ::core::any::type_name::<#ident>())
+                .with_namespace(module_path!())
+            }
+
+            #core::__private::inventory::submit! {
+                #common::ControllerRouteDescriptor::with_registrar(
+                    concat!(module_path!(), "::", stringify!(#ident)),
+                    || ::core::any::TypeId::of::<#ident>(),
+                    &[#(#route_contracts,)*],
+                    #registrar_ident,
+                )
+                .with_namespace(module_path!())
+            }
         };
-
-        #(#cfg_attrs)*
-        #[doc(hidden)]
-        #[allow(non_snake_case)]
-        fn #constructor_ident<'a>(
-            context: &'a #core::ConstructionContext<'a>,
-        ) -> #core::ProviderFuture<'a> {
-            ::std::boxed::Box::pin(async move {
-                let value = #ident(::std::sync::Arc::new(#inner_value));
-                let erased: #core::ErasedProvider = ::std::sync::Arc::new(value);
-                Ok(erased)
-            })
-        }
-
-        #(#cfg_attrs)*
-        #[doc(hidden)]
-        #[allow(non_snake_case)]
-        fn #registrar_ident(
-            mut __mads_router: #common::__private::Router,
-            __mads_runtime: &#common::__private::RouterBuildContext<'_>,
-            __mads_routes: &mut #common::__private::ValidatedRouteIter<'_>,
-        ) -> #core::Result<#common::__private::Router> {
-            let __mads_controller = __mads_runtime.application()
-                .resolve::<#ident>()?
-                .as_ref()
-                .clone();
-            #(#route_registrations)*
-            __mads_routes.finish()?;
-            Ok(__mads_router)
-        }
-
-        #(#cfg_attrs)*
-        #core::__private::inventory::submit! {
-            #core::ProviderDescriptor::new(
-                #core::ProviderKind::Service,
-                concat!(module_path!(), "::", stringify!(#ident)),
-                || ::core::any::TypeId::of::<#ident>(),
-                #dependencies,
-                #provider_visibility,
-                #core::SourceLocation::new(file!(), line!(), column!()),
-                #constructor_ident,
-            )
-            .with_runtime_type_name(|| ::core::any::type_name::<#ident>())
-            .with_namespace(module_path!())
-        }
-
-        #(#cfg_attrs)*
-        #core::__private::inventory::submit! {
-            #common::ControllerRouteDescriptor::with_registrar(
-                concat!(module_path!(), "::", stringify!(#ident)),
-                || ::core::any::TypeId::of::<#ident>(),
-                &[#(#route_contracts,)*],
-                #registrar_ident,
-            )
-            .with_namespace(module_path!())
-        }
     })
 }
 

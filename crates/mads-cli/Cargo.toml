@@ -12,8 +12,8 @@ description = "Command-line tools for MADS.rs applications"
 [dependencies]
 cargo_metadata.workspace = true
 diesel_table_macro_syntax.workspace = true
-mads = { path = "../mads", version = "=0.7.0" }
-mads-common = { path = "../mads-common", version = "=0.7.0", default-features = false, features = ["http"] }
+mads = { path = "../mads", version = "=0.8.0-beta.1" }
+mads-common = { path = "../mads-common", version = "=0.8.0-beta.1", default-features = false, features = ["http"] }
 notify.workspace = true
 semver.workspace = true
 serde.workspace = true

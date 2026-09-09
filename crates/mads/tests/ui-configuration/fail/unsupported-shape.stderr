@@ -1,0 +1,59 @@
+error: Configuration requires a named-field struct
+ --> tests/ui-configuration/fail/unsupported-shape.rs:4:8
+  |
+4 | struct Tuple(String);
+  |        ^^^^^
+
+error: Configuration requires a named-field struct
+ --> tests/ui-configuration/fail/unsupported-shape.rs:6:8
+  |
+6 | struct Unit;
+  |        ^^^^
+
+error: Configuration requires a named-field struct
+ --> tests/ui-configuration/fail/unsupported-shape.rs:8:6
+  |
+8 | enum Enum { Value }
+  |      ^^^^
+
+error: Configuration requires a named-field struct
+  --> tests/ui-configuration/fail/unsupported-shape.rs:10:7
+   |
+10 | union Union { value: u32 }
+   |       ^^^^^
+
+error: configuration arrays support only Vec<String>
+  --> tests/ui-configuration/fail/unsupported-shape.rs:12:29
+   |
+12 | struct Collection { values: Vec<u32> }
+   |                             ^^^
+
+error: unsupported configuration field shape
+  --> tests/ui-configuration/fail/unsupported-shape.rs:14:24
+   |
+14 | struct Array { values: [String; 2] }
+   |                        ^^^^^^^^^^^
+
+error: unsupported configuration field shape
+  --> tests/ui-configuration/fail/unsupported-shape.rs:16:22
+   |
+16 | struct Map { values: std::collections::BTreeMap<String, String> }
+   |                      ^^^
+
+error: generic configuration fields require a Configuration bound or parse_with
+  --> tests/ui-configuration/fail/unsupported-shape.rs:18:28
+   |
+18 | struct Generic<T> { value: T }
+   |                            ^
+
+error: nested Option configuration fields are unsupported
+  --> tests/ui-configuration/fail/unsupported-shape.rs:20:37
+   |
+20 | struct NestedOption { value: Option<Option<String>> }
+   |                                     ^^^^^^
+
+error: Secret requires a supported scalar configuration type
+  --> tests/ui-configuration/fail/unsupported-shape.rs:22:47
+   |
+22 | struct SecretCollection { value: mads::Secret<Vec<String>> }
+   |                                               ^^^

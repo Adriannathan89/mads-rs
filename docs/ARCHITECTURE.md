@@ -1,253 +1,196 @@
-# MADS.rs 0.7.0 Architecture
+# MADS.rs 0.8.0-beta.1 Architecture
 
-MADS.rs separates framework-neutral application semantics from HTTP delivery and
-PostgreSQL persistence. Version 0.7.0 adds a Cargo-native execution and
-inspection boundary around the v0.6 rooted runtime, plus a development
-supervisor and bounded PostgreSQL schema-diff generation. It does not add input
-validation or machine-readable CLI output.
+MADS separates framework-neutral construction and configuration from Axum HTTP
+delivery, optional PostgreSQL/Diesel persistence, and the Cargo-native CLI.
+Version 0.8.0-beta.1 completes the approved validation, REST-error, typed
+configuration, compiler-diagnostic, machine-output, and minimal-scaffolding
+surface. Stable 0.8.0 promotes this same surface after fixes, documentation
+corrections, and verification only; it does not add features.
 
 ~~~text
-Application modules, providers, route traits, and controllers
+application modules, providers, route traits, controllers
                  |
                  v
-        mads macros: metadata + typed registrars
-                 |
-                 v
- mads-core: module graph, config, provider graph, lifecycle, diagnostics
-                 |
-                 v
-mads-common: scoped routes, Passport/JWT, CORS, server, Diesel, Axum adapter
-                 |
-                 v
-      PostgreSQL + Diesel       Axum + Tower + Tokio
+     mads-core macros       mads-common macros
+                 |                 |
+                 v                 v
+ mads-core: graph, Config, Configuration, Secret, lifecycle, diagnostics
+                 ^                 |
+                 |                 v
+ mads-common: Input, validated extractors, HTTP errors, Axum, Diesel, Passport
+                 \                 /
+                  \--- mads facade ---/ ---- mads-cli
 ~~~
 
-## Crate boundary
+## Crate and feature boundaries
 
-mads-core owns generic configuration, module descriptors and graph analysis,
-Rust-namespace ownership, provider graph validation and construction,
-lifecycle, diagnostics, official auto-configuration evaluation, and redacted
-inspection reports. It remains independent of Axum, listener binding, CORS,
-cookies, JWT, and Diesel.
+`mads-core` owns module/provider graphs, lifecycle, diagnostics, the existing
+source-attributed `Config`, `#[derive(Configuration)]`, `Config::parse`,
+configuration issues, and `Secret<T>`. It has no Axum, Diesel, JWT, cookie, or
+Serde dependency. Typed configuration is a view over an already loaded Config;
+it does not replace loading or discover types globally.
 
-mads-common consumes the selected core application scope. It selects scoped
-controllers, routes, guards, and Passport strategies; supplies official Diesel,
-JWT, server, and CORS auto-configurations; builds and finalizes Axum routers;
-and coordinates HTTP serving. DatabaseBootstrap remains the explicit native
-Diesel override, while custom Database providers own their complete lifecycle.
+`mads-common` owns the `http` boundary: route registration, `Input` and
+`#[derive(Input)]`, `ValidatedJson`, `ValidatedQuery`, `ValidatedPath`, standard
+REST errors, and the Axum adapter. It also owns the feature-gated database,
+Passport/JWT, and cookie integrations. The validation/error family requires
+`http`; the database result extension `.into_http()` exists only with `http +
+database`. Database-only and JWT-only builds do not acquire an HTTP dependency.
 
-mads is the public facade. Its standard prelude exposes rooted startup through
-Mads::run::<AppModule>().await, plus the module, route, and HTTP contracts. The
-low-level Mads::builder* APIs remain available through inherent methods and
-mads::core; MadsBuilder is intentionally not part of the standard prelude.
-
-The feature boundary is deliberate:
+`mads` is the stable facade and prelude. It re-exports matching traits and
+derives, so `Input`, `Configuration`, `Secret`, validated extractors, REST
+errors, and `IntoHttpResult` use their documented feature gates. The default
+`common` aggregate remains the compatibility combination for HTTP and database;
+it does not enable Passport automatically.
 
 ~~~text
-jwt                 JWT service/configuration; no Axum or Diesel
-cookies             cookie request/response support; includes HTTP
-http + jwt          Passport strategies and Bearer guards
-http + jwt + cookies
-                    cookie-sourced guards
-common              compatibility aggregate for HTTP + database only
+core                         no HTTP/database/JWT/cookie/Serde
+http                         Axum + validation + standard REST errors
+database                     Diesel infrastructure, no HTTP mapping
+http + database              explicit IntoHttpResult::into_http()
+jwt                          JWT service/configuration, no Axum
+cookies                      HTTP cookie support
+http + jwt (+ cookies)       Passport Bearer (and cookie) guards
 ~~~
 
-## Application scope and module visibility
+## Startup, configuration, and secret boundary
 
-#[module(imports = [...])] selects a root application and its direct-import
-graph. A descriptor belongs to the nearest annotated Rust namespace, so no
-provider, controller, route, guard, or strategy manifest is required. All
-descriptors owned by reachable modules participate in one scoped application;
-official auto-configuration derives requirements from that same scope.
-
-A module may use its own private or restricted Rust items. Across modules, a
-provider or strategy must belong to a directly imported module and use plain,
-unrestricted pub visibility. Imports are not transitive: if A imports B and B
-imports C, A must import C itself to use one of C's public providers. Plain Rust
-pub is therefore the cross-module contract; there is no separate exports
-manifest.
-
-Unowned providers enter a rooted application only when a selected dependency
-requires them. While resolution travels through an unowned dependency chain, it
-retains the requesting module context, so that chain cannot bypass a missing
-direct import. When resolution reaches an owned provider, the owner module
-becomes the context for that provider's own dependencies.
-
-Routes own their HTTP paths. #[routes(prefix = "/users")], not #[module],
-defines /users; modules have no HTTP path attribute. A builder without
-root::<AppModule>() remains compatible with the complete-catalog analysis,
-construction, and routing behavior from v0.5.5.
-
-## Startup sequence
-
-The standard run sequence is fixed:
+`Mads::run::<AppModule>()` retains the conventional process-current-directory
+loading sequence:
 
 ~~~text
-conventional config load (standard run only)
-  -> root module graph
-  -> scoped provider/HTTP/Passport requirements
+optional .env interpolation map
+  -> optional mads.toml document
+  -> final scalar MADS_* environment overrides
+  -> application code explicitly requests typed views
+~~~
+
+Only an entire scalar or string-array element equal to `${NAME}` interpolates.
+Process values win during interpolation; dotenv never changes the process
+environment and is not a configuration source. No parent-directory or
+`CARGO_MANIFEST_DIR` search is added. `MADS_SERVER__HOST` and
+`MADS_SERVER__PORT` continue to map to `server.host` and `server.port`.
+
+The low-level builder remains explicit and performs no source loading. A
+derived type is parsed only when code calls `Config::parse::<T>()`; a selected
+provider commonly makes that call so failures stop construction before
+lifecycle startup or listener binding. Supported fields are scalars,
+source-relative `PathBuf`, `Option`, `Secret`, `Vec<String>`, nested
+`Configuration`, and explicit scalar `parse_with` callbacks. Prefixes, rename,
+defaults, and compatible validation are derive-checked. Issues preserve
+declaration order, full dotted keys, stable codes, and source labels, without
+values.
+
+`Secret<T>` has no implicit reference or serialization access. `.expose()` and
+`.into_exposed()` name the deliberate boundary; `Display` and `Debug` always
+render `[REDACTED]`. This redaction policy also applies to configuration
+reports, diagnostics, JSON output, and database source details.
+
+## Request validation and native escape hatch
+
+`ValidatedJson<T>`, `ValidatedQuery<T>`, and `ValidatedPath<T>` have this
+strict runtime order:
+
+~~~text
+representation read -> Serde deserialize T -> T::validate()
+  -> attach body/query/path source -> invoke handler only on success
+~~~
+
+`#[derive(Input)]` supports named, tuple, and unit structs, enum variants,
+generics with required bounds, nested input, supported arrays/vectors/tuples,
+and string-keyed maps. Its built-ins are email; Unicode code-point length;
+nonempty; inclusive range; positive; negative; nonzero multiple-of; required;
+nested; and synchronous field or whole-value custom callbacks. Manual `Input`
+implementations share the same validated-extractor boundary.
+
+Post-deserialization validation aggregates independent issues in declaration,
+validator, sequence-index, and lexical-key order. Serde itself remains the
+deserialization authority and reports its first conversion failure. Sources,
+wire field names, issue codes, and fixed built-in messages are deliberate public
+contracts; rejected values are never copied into a built-in issue.
+
+Native `Json<T>`, `Query<T>`, and `Path<T>` are still the ordinary Axum
+extractors. A native `Json` handler performs no MADS `Input` validation, which
+is the compatibility escape hatch for application-owned extraction, routing,
+middleware, and validation policies. Native Axum rejections outside MADS
+wrappers remain native.
+
+## HTTP error and delivery-policy boundary
+
+The `http` feature exposes `BadRequest`, `Unauthorized`, `Forbidden`,
+`NotFound`, `Conflict`, `ValidationError`, and `InternalError`. All
+MADS-owned errors serialize as one safe JSON envelope. Validation adds only the
+ordered source-aware issue array and returns 422; unsupported validated JSON
+content type remains 415 and configured payload overflow remains 413. Internal
+failure is fixed to code `internal` and message `internal server error`, while
+its source remains server-side only.
+
+Passport rejection maps to a normalized 401 with `WWW-Authenticate: Bearer`;
+Passport forbidden maps to 403; malformed cookie requests map to 400; and
+MADS-owned internal failures map to redacted 500 responses. User-created
+`Unauthorized` does not claim a Bearer scheme, and ordinary native responses
+are not normalized.
+
+Persistence conversion remains opt in. With both HTTP and database features,
+`DatabaseResult<T>` and native Diesel `QueryResult<T>` acquire `.into_http()`.
+Typed `NotFound` becomes safe 404 and a typed unique violation becomes safe
+409; configuration, pool, migration, foreign-key, check, serialization, and
+all other failures become redacted 500. There is no blanket
+`From<DatabaseError> for HttpError`, so applications can retain native Diesel
+behavior or choose a domain-specific `map_err` mapping.
+
+## Root scope and normal runtime
+
+`#[module(imports = [...])]` selects the root application and direct-import
+graph. A descriptor belongs to its nearest annotated Rust namespace. Across
+modules, dependencies require a directly imported module and ordinary `pub`
+visibility; imports are not transitive. A builder without `root::<AppModule>()`
+retains complete-catalog compatibility behavior.
+
+~~~text
+conventional config (standard run only)
+  -> root module graph and scoped requirements
   -> official auto-configuration evaluation
-  -> virtual graph validation
-  -> provider construction
-  -> selected route/guard/strategy validation
-  -> generated/native router merge
-  -> outer CORS configuration
-  -> lifecycle startup
-  -> address resolution and bind
-  -> serve and reverse-order shutdown
+  -> virtual graph and route/guard validation
+  -> provider construction and router finalization
+  -> lifecycle startup -> bind -> serve -> reverse shutdown
 ~~~
 
-Preflight completes before lifecycle startup, so an invalid dependency, route,
-guard, strategy, server configuration, or CORS configuration never starts a
-hook or binds a listener. Hooks start in registration order and shut down in
-reverse order. A resolution, bind, or serving failure after startup triggers the
-same rollback; when shutdown also fails, the runtime retains both failures.
+Preflight failures never start lifecycle hooks or bind a listener. The raw
+generated router is available through `build_router`; merge native routes first,
+then apply `configure_router` or `serve_router` so CORS is finalised once as the
+outermost layer.
 
-Passport strategy selection is context-local. An owned guard uses its owner
-module; an unowned guard inherits its route or controller context. A custom
-strategy in another module must be both public and directly imported in that
-context. One visible custom jwt strategy overrides the built-in fallback;
-multiple visible custom strategies with the same name are ambiguous, while
-same-named strategies may coexist where no guard can see both.
+## CLI, inspection, and scaffolding boundary
 
-## CLI parent and inspection child
+`mads run` and `mads dev` stream Cargo, rustc, and application output unchanged
+and do not accept JSON wrapping. `mads routes`, `mads graph`, and `mads doctor`
+compile the standard entry point and receive private child inspection metadata
+before normal application construction. The child protocol remains private;
+the CLI converts it to a public human report or schema-version-1 JSON result.
+Invalid route/graph reports preserve safe partial public data with diagnostics.
 
-Normal execution uses the standard parent process directly:
+Finite commands (`new`, `routes`, `graph`, `doctor`, and `db generate`, `db
+migrate`, `db rollback`, `db status`) accept `--format human|json` before or
+after their command path. JSON stdout has exactly one newline-terminated
+document with `schema_version: 1`, a canonical command, `ok`, command-specific
+data or null, and ordered warning/error diagnostics. Schema version 1 permits
+additive fields only; breaking field changes require a new version.
 
-~~~text
-mads run/dev parent
-  -> Cargo resolves and builds one selected package/binary
-  -> application enters Mads::run::<AppModule>()
-  -> normal providers, lifecycle, configuration, and HTTP behavior run
-~~~
+`mads new <name>` bundles the fixed seven-file starter and validates all input
+before private sibling staging. One atomic rename publishes the destination;
+pre-existing paths and failed staging remain untouched. It is offline and does
+not run Cargo, install dependencies, initialise Git, select a template, or
+generate database/JWT/cookie/migration code.
 
-App-aware inspection has a separate side-effect boundary:
+## Deliberate non-goals
 
-~~~text
-mads routes/graph/doctor parent
-  -> Cargo resolves and builds the selected application
-  -> private inspection child enters the standard Mads::run path
-  -> compiled graph/report metadata crosses the private protocol
-  -> child exits; parent renders human-readable output
-~~~
-
-The inspection child reports before normal application startup. It does not
-construct providers, start lifecycle hooks, connect to PostgreSQL, run
-migrations, bind a socket, or serve traffic. Code and build-script effects
-before the standard MADS entry point remain Cargo/application responsibilities.
-Low-level builder-only applications are outside the app-aware inspection
-contract.
-
-## Development supervisor
-
-`mads dev` owns a Cargo build task, a selected application child, and a file
-watcher. The watcher includes reachable local package sources, Cargo manifests
-and lockfiles, migrations, and selected-package `.env`/`mads.toml`; generated
-targets, editor files, `.git`, and unreachable nested packages are excluded.
-Events are debounced for 150 ms. Source/Cargo/migration changes rebuild;
-selected-package configuration changes restart. A batch containing both kinds
-of change is a rebuild. Failed rebuilds keep the last good process and continue
-watching. This is process replacement, not hot module replacement. Ctrl-C
-cancels a build, stops the child, and performs cleanup.
-
-## Configuration, server, and router composition
-
-Only Mads::run loads conventional configuration. It reads, from the process
-current working directory and in order, optional .env interpolation values,
-optional mads.toml, then final MADS_* environment overrides. Process variables
-win over dotenv values during interpolation, dotenv never mutates the process
-environment, and MADS_SERVER__PORT maps to server.port. Both files may be
-absent; a present unreadable or malformed file is a bootstrap error. MADS does
-not search parent directories or CARGO_MANIFEST_DIR.
-
-The low-level builder never loads files or process configuration automatically.
-It accepts an explicit Config, explicit values, lifecycle hooks, migrations,
-and an explicit listener address. server.host defaults to 127.0.0.1 and
-server.port to 3000 for standard execution. serve and serve_router take an
-explicit address instead, ignore those server keys for binding, and permit port
-zero.
-
-build_router(&application) returns the raw generated Axum router. Merge native
-routes into that raw router first, then call configure_router for direct
-in-process use or pass the raw merged router to serve_router. Final router
-configuration applies CORS exactly once as the outermost layer, so generated
-and native routes receive the same CORS policy. Do not pass an already
-configured router to serve_router.
-
-[server.cors] is opt-in and strict. It validates origin, method, header,
-credential, and max-age settings before middleware construction; wildcard
-origins or wildcard headers cannot be combined with credentials. CORS controls
-browser access to responses, not authorization or CSRF protection. A
-cookie-authenticated application needs its own CSRF policy.
-
-## Configuration and persistence
-
-The core configuration model retains deterministic source precedence,
-scalar/string-array replacement, interpolation, and source attribution. TOML
-and programmatic sources support string arrays; EnvSource remains scalar-only.
-Official database configuration is required only when the selected application
-scope needs Database. database.pool_size defaults to 10 and database.migrate
-defaults to false.
-
-Embedded migrations remain an explicit low-level builder registration. When
-database.migrate = true, one embedded source is required; pending migrations run
-after database readiness, while no pending migration is a successful no-op.
-Normal startup does not generate, auto-load, or auto-apply file migrations.
-The explicit v0.7 `mads db generate` command can recursively load split Diesel
-schema sources and produce one automatically named, review-required migration.
-Reports retain stable reasons and source labels, never
-resolved URLs, ports, origins, credentials, tokens, or keys.
-
-Database::run is the boundary for synchronous native Diesel queries. It checks
-out a pool connection and uses deadpool-diesel's blocking interaction,
-preserving configuration, pool, interaction, query, and migration failure
-classification. MADS deliberately does not hide native Diesel imports or map
-database errors automatically into HTTP responses.
-
-## Passport/JWT construction and request flow
-
-The official JWT default activates only when the selected provider or guarded
-route scope requires JwtService. An explicit concrete JwtService backs the
-default off before configuration is parsed. Otherwise passport.secret selects
-simple HS256 mode, and named key rings support HS256/384/512, RS256/384/512,
-and ES256/384 with one algorithm per key and one active signer. Algorithms are
-an application allowlist; an untrusted JWT header never expands it.
-
-~~~text
-effective guard
-  -> extract exactly one Bearer or named-cookie token
-  -> enforce size, configured key/algorithm, signature, claims, token kind
-  -> invoke the visible managed strategy with verified claims + sanitized context
-  -> roles clause AND permissions clause AND all predicates
-  -> install Authenticated<P> and VerifiedToken<C>
-  -> invoke handler
-~~~
-
-UserPrincipal is the application identity, distinct from signed UserClaims. It
-implements PassportPrincipal manually or via the derive's roles/permissions
-fields. Route-trait guards inherit; a method guard replaces only fields it
-supplies, and #[guard(skip)] is the sole inherited policy opt-out.
-Authentication and strategy rejection map to redacted 401 responses,
-authorization failure to 403, and operational failure to 500.
-
-Native Axum PassportGuard<P> uses the same runtime but is not static MADS guard
-metadata. It therefore cannot activate JWT auto-configuration; its built
-application context must already contain JwtService through a selected managed
-dependency or an explicit value.
-
-## Deliberately deferred
-
-Version 0.7.0 remains PostgreSQL-only and does not add trait or interface bindings,
-Inject<dyn Trait>, request-validation derives or schemas, login or credential
-validation, refresh endpoints or persistence/rotation/revocation, password
-hashing, CSRF, remote JWKS, JWE, MySQL/SQLite, generic typed configuration,
-third-party auto-configuration registration, proactive schema validation,
-multiple listeners, TLS, or HTTP/2-specific server configuration. Database
-errors remain application delivery-policy decisions. Request input validation,
-expanded standard HTTP errors, generic typed configuration,
-compiler-diagnostic rewriting, and machine-readable CLI output are deferred to
-v0.8; v0.7 CLI inspection and bounded generation are implemented now.
-
-The v0.6 record's migration-generation and `mads doctor` deferrals were
-superseded by the v0.7 CLI decision record on 2026-09-01; the historical v0.6
-architecture remains otherwise unchanged.
+v0.8 does not add automatic validation to native extractors, asynchronous or
+database-backed derive validation, full-RFC or DNS email validation, automatic
+persistence-to-HTTP conversion, new configuration sources or arbitrary TOML
+shapes, global configuration discovery, generic compiler-diagnostic rewriting,
+JSON wrapping for run/dev streams, additional generators, or starter database,
+JWT, cookie, migration, and Git setup. Trait/interface bindings, login,
+credential validation, password hashing, CSRF, remote JWKS, JWE, MySQL/SQLite,
+multiple listeners, TLS, and HTTP/2-specific configuration remain
+application-owned or later work.

@@ -1,228 +1,317 @@
 # MADS CLI
 
-MADS v0.7.0 provides a Cargo-native command line for running one MADS
-application, supervising it during development, inspecting its compiled
-metadata, and managing PostgreSQL migrations. Output is deterministic and
-human-readable. There is no JSON or other machine-readable output contract in
-v0.7.
+MADS v0.8.0-beta.1 provides Cargo-native execution, inspection, PostgreSQL
+migration commands, a minimal-project generator, and a versioned JSON result
+for finite MADS-owned commands. Human-readable output remains the default.
+
+## Start a minimal HTTP application
+
+Create an application outside an existing Cargo project:
+
+```bash
+mads new my-app
+cd my-app
+mads dev
+```
+
+`mads new <name>` creates `./<name>` relative to the invocation directory. A
+name starts with lowercase ASCII; its remaining characters may be lowercase
+ASCII, digits, `-`, or `_`. Rust 2024 keywords and Cargo-reserved package names
+are rejected. MADS preserves the supplied directory and package spelling.
+
+The generated project contains exactly these seven files:
+
+```text
+<name>/
+├── Cargo.toml
+├── mads.toml
+└── src/
+    ├── main.rs
+    └── app/
+        ├── mod.rs
+        ├── routes.rs
+        ├── controller.rs
+        └── service.rs
+```
+
+The manifest starts the application at version `0.1.0`, uses edition 2024 and
+Rust 1.85, and pins the installed MADS CLI version exactly. Its MADS dependency
+uses `default-features = false` with only `http` and `runtime-tokio`; it has no
+database, JWT, cookie, schema, migration, or authentication dependency. The
+starter's `GET /` response is plain `Hello World!`.
+
+`mads.toml` contains:
+
+```toml
+[server]
+host = "127.0.0.1"
+port = 3000
+```
+
+The normal runtime overrides remain available: `MADS_SERVER__HOST` maps to
+`server.host` and `MADS_SERVER__PORT` maps to `server.port`.
+
+Generation validates arguments before writing, renders all files into a private
+sibling staging directory, and publishes them with one atomic rename. An
+existing destination, including an empty directory, is never changed. The
+command does not download dependencies, run Cargo, initialize Git, select a
+remote template, or ask an interactive question. It offers no template,
+database, JWT, VCS, or target-directory option in v0.8. A successful human
+result identifies the relative path and prints only `cd <name>` and `mads dev`.
 
 ## Project and target selection
 
-The CLI starts from the current working directory and resolves the Cargo
-workspace with Cargo metadata. With one workspace package and one binary,
-`mads run` and `mads dev` need no selectors. Use `--package <package>` or
-`-p <package>` to select a package and `--bin <binary>` to select a binary:
+The CLI starts from the current working directory and resolves Cargo metadata.
+With one eligible package and binary, selectors are unnecessary. Use
+`--package <package>` (or `-p <package>`) and `--bin <binary>` when selection is
+ambiguous:
 
 ```text
 mads run [--package <package>] [--bin <binary>] [-- <app-args>...]
 mads dev [--package <package>] [--bin <binary>] [-- <app-args>...]
-```
-
-The inspection commands accept the same package and binary selectors but do
-not accept application arguments:
-
-```text
 mads routes [--package <package>] [--bin <binary>]
-mads graph  [--package <package>] [--bin <binary>]
+mads graph [--package <package>] [--bin <binary>]
 mads doctor [--package <package>] [--bin <binary>]
 ```
 
-Database commands accept `--package <package>` or `-p <package>`. If a
-selector is omitted, MADS follows the Cargo project model: a single eligible
-package or binary is selected, a declared `default-run` is honored, and an
-ambiguous target reports the Cargo-style choice rather than inventing a new
-default.
+Database commands accept `--package <package>` or `-p <package>`. Cargo's
+ordinary single-package, `default-run`, and ambiguity behavior remains
+authoritative. Arguments after `--` are forwarded only by `run` and `dev`;
+inspection commands reject them.
 
-For `run` and `dev`, every argument after `--` is forwarded unchanged to the
-selected application. For `routes`, `graph`, and `doctor`, `--` is rejected
-because inspection is not an application invocation.
+## Output formats
 
-## mads run
+The following finite commands accept `--format human|json`:
 
-`mads run` builds the selected binary with Cargo and starts it with the
-forwarded arguments. A plain invocation is the standard one-package,
-one-binary workflow:
-
-```bash
-mads run
-mads run -- --seed-data
-mads run -p api --bin server -- --port 4000
+```text
+mads new <name>
+mads routes
+mads graph
+mads doctor
+mads db generate
+mads db migrate
+mads db rollback
+mads db status
 ```
 
-The selected application is responsible for its normal startup and shutdown.
-MADS preserves an ordinary application exit status. A successful application
-therefore returns 0, while an application status such as 3 is returned as 3.
-Cargo resolution, build, process, and other operational failures return 1;
-invalid CLI syntax returns 2.
-
-## mads dev
-
-`mads dev` builds and supervises the selected application, then watches the
-reachable local workspace packages used by that target. Relevant source files,
-`Cargo.toml`, `Cargo.lock`, migrations, and the selected package's
-configuration files participate in the watch set. Generated `target` files,
-`.git` files, editor backups, and unreachable nested package sources are
-ignored.
-
-Events are coalesced with a 150 ms debounce. Rust/source, Cargo, and migration
-changes rebuild the application. A change to the selected package's
-`mads.toml` or `.env` restarts the existing build without treating it as a
-source rebuild. A batch containing both kinds of change is a rebuild.
-
-The supervisor stops the old process before replacing it. A failed rebuild
-keeps the last good process when one is running and continues watching; it
-does not hot-reload Rust code or provide hot module replacement. If the
-application exits, MADS waits for a relevant change. Ctrl-C cancels an active
-build, stops the child process, and exits after cleanup.
-
-Typical usage is:
+The option may appear once, before or after the command path. Both examples
+are equivalent:
 
 ```bash
+mads --format json routes
+mads routes --format json
+mads --format json db status
+mads db status --format json
+```
+
+`human` is the default. `run`, `dev`, help, version, and database help reject
+`--format` because they are human/streaming interfaces. A duplicate, missing,
+or unknown format value is CLI syntax failure `MADS204`.
+
+In JSON mode stdout contains exactly one JSON document followed by one newline;
+MADS writes no rendered warning or error text there. Cargo and rustc output
+required to build inspection targets still passes through stderr. JSON paths use
+`/` and are package-relative when possible.
+
+Every document has this version-1 envelope:
+
+```json
+{
+  "schema_version": 1,
+  "command": "routes",
+  "ok": true,
+  "data": {},
+  "diagnostics": []
+}
+```
+
+`command` is the canonical spelling (`new`, `routes`, `graph`, `doctor`, `db
+generate`, `db migrate`, `db rollback`, or `db status`) and is `null` only when
+syntax cannot identify a command. `ok` is true only for exit-zero MADS-owned
+completion. `data` is the command object, safe partial inspection data, or
+`null`. `diagnostics` is an ordered list of MADS-owned records:
+
+```json
+{
+  "severity": "error",
+  "code": "MADS204",
+  "title": "invalid command",
+  "message": "...",
+  "subject": null,
+  "location": null,
+  "suggestions": []
+}
+```
+
+Severity is always `error` or `warning`; nullable `subject` and `location` are
+intentional. Schema version 1 may add fields, and consumers must ignore unknown
+object fields. Removing, renaming, changing the type of, or changing the
+meaning of an existing field requires a new `schema_version`.
+
+The finite schema owners are `new`, `routes`, `graph`, `doctor`, `db generate`,
+`db migrate`, `db rollback`, and `db status`. A non-null source location has
+one-based line and column numbers:
+
+```json
+{"file":"src/app/routes.rs","line":6,"column":5}
+```
+
+### JSON command data
+
+`new` returns the project name, relative path, and this ordered file list:
+
+```json
+{
+  "project_name": "my-app",
+  "path": "my-app",
+  "files": [
+    "Cargo.toml",
+    "mads.toml",
+    "src/main.rs",
+    "src/app/mod.rs",
+    "src/app/routes.rs",
+    "src/app/controller.rs",
+    "src/app/service.rs"
+  ]
+}
+```
+
+`routes` returns `{ "routes": [...] }`; every route record has `method`,
+`path`, `route_trait`, `handler`, `controller`, `location`, and
+`guard_active`. Route order remains method, path, controller, route trait, and
+handler order. `graph` returns `root_module`, `modules`, `imports`,
+`providers`, `dependencies`, and nullable `construction_order`. Module records
+contain `type_name`, `namespace`, and `location`; import records contain
+`importer` and `imported`; providers retain `type_name`,
+nullable owner and location, origin, visibility, and state; dependencies carry
+`provider` and `dependency` names. `construction_order` is `null` when no valid
+construction plan exists.
+
+```json
+{
+  "routes": [{
+    "method": "GET",
+    "path": "/",
+    "route_trait": "AppRoutes",
+    "handler": "hello",
+    "controller": "AppController",
+    "location": {"file":"src/app/routes.rs","line":6,"column":5},
+    "guard_active": false
+  }]
+}
+```
+
+```json
+{
+  "root_module": "AppModule",
+  "modules": [{
+    "type_name": "AppModule",
+    "namespace": "crate::app",
+    "location": {"file":"src/app/mod.rs","line":8,"column":1}
+  }],
+  "imports": [],
+  "providers": [],
+  "dependencies": [],
+  "construction_order": []
+}
+```
+
+`doctor` returns `{ "checks": [...] }`, where each check contains `group`,
+`status`, and `summary`. Status is `pass`, `skipped`, `overridden`, or `failed`;
+the existing group and summary ordering remains authoritative.
+
+```json
+{
+  "checks": [{
+    "group": "configuration",
+    "status": "pass",
+    "summary": "configuration sources are valid"
+  }]
+}
+```
+
+Database data is deliberately concise:
+
+```json
+{"status":"generated","migration_path":"migrations/20260906120000_schema_diff","review_required":true}
+```
+
+No-diff `db generate` uses `status: "up_to_date"`, a null `migration_path`,
+and `review_required: false`. The remaining schemas are:
+
+```json
+{"applied":["20260906120000_schema_diff"]}
+```
+
+```json
+{"reverted":["20260906120000_schema_diff"]}
+```
+
+```json
+{"applied":["20260906120000_schema_diff"],"pending":["20260907120000_add_index"]}
+```
+
+These represent `db migrate`, `db rollback`, and `db status` respectively.
+Version arrays preserve report order. Migration review warnings occur only as
+top-level warning diagnostics and are not duplicated inside `data`.
+
+Invalid route or graph inspection retains every trustworthy record in `data`,
+adds ordered error diagnostics, sets `ok` false, and exits 1. A failure before a
+report exists, scaffold publication failure, or database operational failure
+uses `data: null`. JSON syntax failure requested through a recognized format
+uses `MADS204`, `ok: false`, `data: null`, and exit 2.
+
+## `mads run` and `mads dev`
+
+`mads run` builds the selected binary and forwards arguments after `--`. It
+preserves an ordinary application exit status. `mads dev` builds, supervises,
+and watches the selected application's reachable workspace inputs. Changes are
+debounced; a failed rebuild keeps the last good process when one is running.
+Neither command wraps Cargo, rustc, or arbitrary application streams in JSON.
+
+```bash
+mads run -- --seed-data
+mads run -p api --bin server -- --port 4000
 mads dev
 mads dev -p api --bin server -- --log=debug
 ```
 
-The status lines `mads dev: watching`, `rebuilding`, `restarting`,
-`build failed; continuing to watch`, and `exiting` describe the supervisor
-state; they are human-readable diagnostics, not a structured output protocol.
+## Inspection commands
 
-## mads routes
+`mads routes`, `mads graph`, and `mads doctor` compile the selected standard
+`Mads::run::<AppModule>()` application and obtain private inspection metadata
+without normal provider construction, lifecycle startup, database connection,
+migration, listener binding, or traffic serving. Human output remains the
+existing table/section/check rendering; JSON exposes only the public schema
+described above, never the private inspection protocol or its tokens.
 
-`mads routes` compiles the selected standard MADS application, asks its private
-inspection child for route metadata, and exits without normal application
-startup. The table columns are:
+## Database commands
 
-```text
-METHOD  PATH  ROUTE  CONTROLLER  GUARD  SOURCE
-```
+`mads db generate` creates one automatic timestamp-named, review-required
+schema diff. It never applies the migration and has no positional migration
+name. `mads db migrate`, `mads db rollback`, and `mads db status` operate on
+the selected package's file-based `migrations/` directory and configured
+PostgreSQL database. Normal application startup does not generate or apply
+file migrations.
 
-`ROUTE` is the route trait and handler, `GUARD` is `yes` or `no`, and `SOURCE`
-is the Rust source location as `file:line:column`. Routes are sorted by method,
-path, controller, route trait, and handler. An empty report prints `(none)`.
-
-## mads graph
-
-`mads graph` reports the selected application graph in four sections:
-
-```text
-Modules
-Providers
-Dependencies
-Construction order
-```
-
-Modules show the rooted import tree. Providers include owner, origin,
-visibility, and state. Dependencies use `provider -> dependency` edges, and a
-known construction order is numbered. Empty sections remain visible as
-`(none)` so a partial report is explainable.
-
-## mads doctor
-
-`mads doctor` runs the same private inspection protocol and presents checks for
-configuration, the module graph, providers, routes, guards/strategies,
-server/CORS, and auto-configuration. Each row is prefixed with one of:
-
-```text
-PASS  SKIPPED  OVERRIDDEN  FAILED
-```
-
-Checks are sorted by those stable groups. `SKIPPED` explains an inactive
-optional feature; `OVERRIDDEN` records an application replacement for an
-official default; `FAILED` is accompanied by a diagnostic. A failed inspection
-prints the available partial report and returns exit code 1.
-
-## mads db generate
-
-`mads db generate` creates one complete current schema-to-database diff with an
-automatic timestamp-based name. It has no positional migration name. The
-supported forms are:
-
-```bash
-mads db generate
-mads db generate -p api
-```
-
-Schema sources may be kept in one `src/schema.rs` file or split into
-`src/schema/**/*.rs`; nested files are discovered recursively in lexical order.
-For example, `src/schema/user.rs` and `src/schema/comment.rs` are loaded
-together. The source must use regular Diesel `table!` declarations supported by
-the v0.7 schema parser.
-
-Generation loads the selected package's conventional configuration using the
-same `.env` interpolation, `mads.toml`, and final `MADS_*` override chain used
-by database operations. It reads the live PostgreSQL schema, compares it to
-the desired Diesel schema, and publishes `up.sql` and `down.sql` atomically in
-the package's `migrations/` directory. No external Diesel CLI is required.
-
-The generated migration is review-required: MADS prints warnings for schema
-changes whose SQL semantics are not fully synthesized, then prints the path
-and `review up.sql and down.sql before applying`. Generation never applies the
-files. When the desired and live schemas match, it prints `schema is up to
-date` and creates no migration.
-
-v0.7 intentionally supports a bounded schema shape. Tables, columns, supported
-PostgreSQL types, primary keys, and the safe diff operations implemented by the
-schema planner are synthesized. Defaults, indexes, checks, triggers, and a
-complete foreign-key policy are not inferred from Diesel declarations; these
-must be reviewed and authored in migration SQL as appropriate. `--diff-schema`
-and positional names are invalid arguments.
-
-## mads db migrate / rollback / status
-
-These commands operate on the selected package's file-based `migrations/`
-directory and configured PostgreSQL database:
-
-```bash
-mads db migrate -p api
-mads db rollback -p api
-mads db status -p api
-```
-
-`migrate` applies pending migrations and prints `applied <version>` or
-`database is up to date`. `rollback` reverts the latest applied migration and
-prints `reverted <version>`. `status` lists applied and pending versions and
-ends with an applied/pending summary. These are explicit operations; normal
-application startup does not discover, generate, or automatically apply
-file-based migrations.
+The bounded schema planner supports the documented Diesel table/column shape;
+defaults, indexes, checks, triggers, and complete foreign-key policy remain
+manual SQL review items. `--diff-schema` is not an accepted argument.
 
 ## Diagnostics and exit codes
-
-Exit codes are:
 
 | Code | Meaning |
 | --- | --- |
 | 0 | Command completed successfully. |
-| 1 | Build, Cargo resolution, inspection, database, watcher, or other operational failure. For `run`, this also represents a non-success application failure when the application does not return an ordinary code. |
-| 2 | Invalid MADS CLI syntax or unsupported command/argument. |
+| 1 | Build, Cargo resolution, inspection, database, scaffold filesystem, watcher, or other operational failure. |
+| 2 | Invalid MADS CLI syntax, output-format selection, project name, or unsupported argument. |
 
-CLI diagnostics use stable `MADS2xx` codes. Common codes include `MADS200`
-for target resolution, `MADS201` for Cargo metadata, `MADS202` for application
-process failures, `MADS210` for schema loading, `MADS211`/`MADS212` for schema
-planning or SQL rendering, `MADS213` for migration publication, and `MADS220`
-for file-watcher failures. Diagnostics identify a subject and source location
-when available and may include `help:` suggestions.
+`MADS204` identifies syntax or output-format failures. `MADS230` identifies
+project-name, template rendering, staging, or publication failures. Existing
+diagnostic families retain their meanings, and migration review diagnostics are
+warnings in top-level JSON `diagnostics`, not duplicated in `data`.
 
-Operational diagnostics redact configuration values, credentials, URLs, local
-paths, and process details that are not part of the public human-readable
-contract. Private inspection tokens and child-process acknowledgement paths do
-not appear in normal command output.
-
-## Platform and standard-entry-point limits
-
-The primary v0.7 release gate runs on Linux. It performs complete workspace,
-PostgreSQL, coverage, MSRV, and packaging verification. macOS and Windows are
-not release-gate platforms in v0.7; users on those systems should run the
-documented CLI commands locally. This keeps the release gate focused on one
-reproducible machine while preserving the runtime's portable code paths.
-
-App-aware `routes`, `graph`, and `doctor` inspection is intentionally limited
-to the standard `Mads::run::<AppModule>()` entry point. MADS builds the
-selected binary, starts a short-lived private child mode, receives the
-compiled report, and terminates that child. The parent does not construct
-providers, start lifecycle hooks, connect to PostgreSQL, run migrations, bind a
-socket, or serve traffic for inspection.
-
-Code and build-script effects that occur before the standard MADS entry point
-remain Cargo/application responsibilities and cannot be hidden by the
-inspection boundary. Low-level builder-only applications and arbitrary custom
-entry points are not app-aware inspection targets in v0.7.
+Operational diagnostics redact configuration values, credentials, URLs, private
+inspection tokens, and arbitrary source error text. Human output is the default
+compatibility surface; JSON is the stable machine-readable surface for the
+finite commands only.

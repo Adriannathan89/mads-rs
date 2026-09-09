@@ -1,5 +1,5 @@
 use crate::database::{
-    diff::{MigrationPlan, MigrationWarning, Operation},
+    diff::{MigrationPlan, MigrationWarning, Operation, review_warnings},
     schema::{ColumnSchema, PgType, QualifiedTableName, TableSchema},
 };
 
@@ -14,16 +14,17 @@ pub(crate) struct RenderedMigration {
     pub(crate) up_sql: String,
     /// Exact typed inverse SQL that transforms the desired shape toward the captured live shape.
     pub(crate) down_sql: String,
-    /// Deterministic manual-review warnings without SQL comment prefixes.
-    pub(crate) warnings: Vec<String>,
+    /// Deterministic manual-review warnings shared with the public CLI outcome.
+    pub(crate) warnings: Vec<MigrationWarning>,
 }
 
 /// Renders a typed schema plan without accepting raw SQL identifiers or types.
 pub(crate) fn render_migration(plan: &MigrationPlan) -> RenderedMigration {
-    let warnings = normalized_warnings(plan.warnings());
+    let warnings = review_warnings(plan.warnings());
+    let warning_lines = warning_lines(&warnings);
     RenderedMigration {
-        up_sql: render_document(&warnings, plan.up()),
-        down_sql: render_document(&warnings, plan.down()),
+        up_sql: render_document(&warning_lines, plan.up()),
+        down_sql: render_document(&warning_lines, plan.down()),
         warnings,
     }
 }
@@ -78,25 +79,14 @@ fn qualified(table: &QualifiedTableName) -> String {
 }
 
 fn normalized_warnings(warnings: &[MigrationWarning]) -> Vec<String> {
-    let mut normalized = warnings
-        .iter()
-        .map(|warning| {
-            (
-                escape_warning_line_breaks(&warning.subject),
-                escape_warning_line_breaks(&warning.message),
-            )
-        })
-        .collect::<Vec<_>>();
-    normalized.sort();
-    normalized.dedup();
-    normalized
-        .into_iter()
-        .map(|(subject, message)| format!("{subject}: {message}"))
-        .collect()
+    warning_lines(&review_warnings(warnings))
 }
 
-fn escape_warning_line_breaks(content: &str) -> String {
-    content.replace('\r', "\\r").replace('\n', "\\n")
+fn warning_lines(warnings: &[MigrationWarning]) -> Vec<String> {
+    warnings
+        .iter()
+        .map(|warning| format!("{}: {}", warning.subject, warning.message))
+        .collect()
 }
 
 fn render_document(warnings: &[String], operations: &[Operation]) -> String {

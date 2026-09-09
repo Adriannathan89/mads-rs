@@ -9,6 +9,7 @@ use std::{
 use assert_cmd::Command;
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
+use serde_json::{Value, json};
 use tempfile::{TempDir, tempdir};
 
 static TEST_LOCK: Mutex<()> = Mutex::new(());
@@ -93,6 +94,26 @@ fn database_migration_commands_are_real_and_redact_overrides() {
         .stdout(contains("pending 202608220201"))
         .stdout(contains("summary: 0 applied, 1 pending"));
 
+    let migrate = database_json(project.path(), ["db", "migrate", "--format", "json"]);
+    assert_eq!(migrate["data"], json!({"applied": ["202608220201"]}));
+    assert_eq!(migrate["diagnostics"], json!([]));
+
+    let status = database_json(project.path(), ["db", "status", "--format", "json"]);
+    assert_eq!(
+        status["data"],
+        json!({"applied": ["202608220201"], "pending": []})
+    );
+
+    let rollback = database_json(project.path(), ["db", "rollback", "--format", "json"]);
+    assert_eq!(rollback["data"], json!({"reverted": ["202608220201"]}));
+    cleanup.disarm();
+
+    let status = database_json(project.path(), ["db", "status", "--format", "json"]);
+    assert_eq!(
+        status["data"],
+        json!({"applied": [], "pending": ["202608220201"]})
+    );
+
     project_command(project.path(), ["db", "rollback"])
         .assert()
         .code(1)
@@ -104,6 +125,27 @@ fn database_migration_commands_are_real_and_redact_overrides() {
         .code(1)
         .stderr(contains("cli-secret").not())
         .stderr(contains(OVERRIDE_URL).not());
+}
+
+fn database_json<I, S>(project: &Path, arguments: I) -> Value
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let output = project_command(project, arguments)
+        .output()
+        .expect("database JSON command should run");
+    assert!(
+        output.status.success(),
+        "database JSON command failed: {output:?}"
+    );
+    assert!(output.stderr.is_empty(), "stderr was not empty: {output:?}");
+    serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+        panic!(
+            "database JSON stdout should be exactly one document: {error}; stdout={:?}",
+            String::from_utf8_lossy(&output.stdout)
+        )
+    })
 }
 
 fn temporary_project() -> TempDir {

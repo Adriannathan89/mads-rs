@@ -1,0 +1,5 @@
+error: numeric literal is outside the configuration field type
+ --> tests/ui-configuration/fail/integer-overflow.rs:3:56
+  |
+3 | struct IntegerOverflow { #[config(validate(range(max = 256)))] value: u8 }
+  |                                                        ^^^

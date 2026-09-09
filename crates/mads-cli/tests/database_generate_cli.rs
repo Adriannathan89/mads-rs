@@ -7,6 +7,7 @@ use predicates::{
     prelude::PredicateBooleanExt,
     str::{contains, is_match},
 };
+use serde_json::{Value, json};
 use tempfile::{TempDir, tempdir};
 
 #[test]
@@ -139,6 +140,26 @@ fn generate_no_diff_reports_up_to_date_without_creating_migrations() {
 
 #[test]
 #[ignore = "requires PostgreSQL through MADS_TEST_DATABASE_URL; Task 7 runs database round-trip coverage"]
+fn generate_json_reports_up_to_date_with_null_path_and_no_review_warning() {
+    let project = project_with_schema_source("// an intentionally empty desired schema\n");
+    write_test_database_toml(project.path());
+
+    let document = generate_json(project.path());
+
+    assert_eq!(
+        document["data"],
+        json!({
+            "status": "up_to_date",
+            "migration_path": null,
+            "review_required": false
+        })
+    );
+    assert_eq!(document["diagnostics"], json!([]));
+    assert!(!project.path().join("migrations").exists());
+}
+
+#[test]
+#[ignore = "requires PostgreSQL through MADS_TEST_DATABASE_URL; Task 7 runs database round-trip coverage"]
 fn generate_with_path_removed_never_needs_an_external_diesel_executable() {
     let project = project_with_schema();
     write_test_database_toml(project.path());
@@ -166,6 +187,34 @@ fn generate_success_only_names_the_migration_and_review_requirement() {
         .stdout(is_match(r"(?m)^generated migrations/[0-9]{20}_schema_diff$").unwrap())
         .stdout(contains("review up.sql and down.sql before applying"))
         .stdout(contains("postgres://").not());
+}
+
+#[test]
+#[ignore = "requires PostgreSQL through MADS_TEST_DATABASE_URL; Task 7 runs database round-trip coverage"]
+fn generate_json_reports_a_relative_migration_path_and_review_requirement() {
+    let project = project_with_schema();
+    write_test_database_toml(project.path());
+
+    let document = generate_json(project.path());
+
+    assert_eq!(document["command"], "db generate");
+    assert_eq!(document["ok"], true);
+    assert_eq!(document["data"]["status"], "generated");
+    assert!(
+        document["data"]["migration_path"]
+            .as_str()
+            .is_some_and(|path| path.starts_with("migrations/") && path.ends_with("_schema_diff")),
+        "migration path was not package-relative: {document}"
+    );
+    assert_eq!(document["data"]["review_required"], true);
+    assert!(
+        document["diagnostics"]
+            .as_array()
+            .expect("diagnostics should be an array")
+            .iter()
+            .all(|diagnostic| diagnostic["code"] != "MADS212"),
+        "a create-table migration should not repeat review warnings in data"
+    );
 }
 
 fn project_with_schema() -> TempDir {
@@ -199,6 +248,25 @@ fn generate_command(root: &Path) -> Command {
         .env_remove("MADS_DATABASE__URL")
         .args(["db", "generate"]);
     command
+}
+
+fn generate_json(root: &Path) -> Value {
+    let output = generate_command(root)
+        .args(["--format", "json"])
+        .env("MADS_TEST_DATABASE_URL", test_database_url())
+        .output()
+        .expect("database generation CLI should run");
+    assert!(
+        output.status.success(),
+        "database generation failed: {output:?}"
+    );
+    assert!(output.stderr.is_empty(), "stderr was not empty: {output:?}");
+    serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+        panic!(
+            "database generation JSON stdout should be exactly one document: {error}; stdout={:?}",
+            String::from_utf8_lossy(&output.stdout)
+        )
+    })
 }
 
 fn write_toml(root: &Path, url: &str) {

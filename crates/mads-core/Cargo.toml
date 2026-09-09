@@ -12,7 +12,7 @@ description = "Framework-neutral dependency injection, configuration, and lifecy
 [dependencies]
 dotenvy.workspace = true
 inventory.workspace = true
-mads-core-macros = { path = "../mads-core-macros", version = "=0.7.0" }
+mads-core-macros = { path = "../mads-core-macros", version = "=0.8.0-beta.1" }
 tokio = { workspace = true, optional = true }
 toml.workspace = true
 toml_edit.workspace = true

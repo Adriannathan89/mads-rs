@@ -1,10 +1,13 @@
 //! `PassportPrincipal` derive expansion.
 
 use proc_macro2::TokenStream;
-use quote::quote;
-use syn::{Data, DeriveInput, Error, Fields, Ident, Result, spanned::Spanned};
+use quote::{quote, quote_spanned};
+use syn::{Data, DeriveInput, Error, Field, Fields, Ident, Result, Type, spanned::Spanned};
 
 use crate::path::common_path;
+
+const POLICY_FIELD_TYPE_ERROR: &str =
+    "Passport principal policy fields must provide `.iter()` items implementing `AsRef<str>`";
 
 pub(crate) fn expand(input: DeriveInput) -> Result<TokenStream> {
     reject_item_markers(&input)?;
@@ -57,20 +60,21 @@ pub(crate) fn expand(input: DeriveInput) -> Result<TokenStream> {
             ));
         }
 
-        let ident = field.ident.as_ref().expect("named fields have identifiers");
         if field_roles == 1 {
-            set_unique(&mut roles, ident, "roles")?;
+            set_unique(&mut roles, field, "roles")?;
+            reject_known_invalid_policy_field(&field.ty)?;
         }
         if field_permissions == 1 {
-            set_unique(&mut permissions, ident, "permissions")?;
+            set_unique(&mut permissions, field, "permissions")?;
+            reject_known_invalid_policy_field(&field.ty)?;
         }
     }
 
     let common = common_path()?;
     let ident = &input.ident;
     let (impl_generics, type_generics, where_clause) = input.generics.split_for_impl();
-    let role_body = membership_body(roles);
-    let permission_body = membership_body(permissions);
+    let role_body = membership_body(roles.as_ref());
+    let permission_body = membership_body(permissions.as_ref());
 
     Ok(quote! {
         impl #impl_generics #common::PassportPrincipal for #ident #type_generics #where_clause {
@@ -98,25 +102,151 @@ fn marker_count<'a>(attributes: impl Iterator<Item = &'a syn::Attribute>, marker
         .count()
 }
 
-fn set_unique(slot: &mut Option<Ident>, ident: &Ident, marker: &str) -> Result<()> {
+fn reject_known_invalid_policy_field(ty: &Type) -> Result<()> {
+    if is_scalar_primitive(ty) || is_known_collection_with_primitive_item(ty) {
+        return Err(Error::new(ty.span(), POLICY_FIELD_TYPE_ERROR));
+    }
+    Ok(())
+}
+
+fn is_scalar_primitive(ty: &Type) -> bool {
+    let Type::Path(type_path) = ty else {
+        return false;
+    };
+    if type_path.qself.is_some() {
+        return false;
+    }
+    let Some(segment) = type_path.path.segments.last() else {
+        return false;
+    };
+    if !matches!(segment.arguments, syn::PathArguments::None) {
+        return false;
+    }
+    matches!(
+        segment.ident.to_string().as_str(),
+        "bool"
+            | "char"
+            | "f32"
+            | "f64"
+            | "i8"
+            | "i16"
+            | "i32"
+            | "i64"
+            | "i128"
+            | "isize"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "u128"
+            | "usize"
+    )
+}
+
+fn is_known_collection_with_primitive_item(ty: &Type) -> bool {
+    let Type::Path(type_path) = ty else {
+        return false;
+    };
+    if type_path.qself.is_some() {
+        return false;
+    }
+    let Some(segment) = type_path.path.segments.last() else {
+        return false;
+    };
+    if !is_known_standard_collection_path(&type_path.path) {
+        return false;
+    }
+    let syn::PathArguments::AngleBracketed(arguments) = &segment.arguments else {
+        return false;
+    };
+    let mut types = arguments.args.iter().filter_map(|argument| match argument {
+        syn::GenericArgument::Type(ty) => Some(ty),
+        _ => None,
+    });
+    let Some(item) = types.next() else {
+        return false;
+    };
+    types.next().is_none() && is_scalar_primitive(item)
+}
+
+fn is_known_standard_collection_path(path: &syn::Path) -> bool {
+    match path
+        .segments
+        .last()
+        .map(|segment| segment.ident.to_string())
+    {
+        Some(name) if name == "Vec" => {
+            path_matches(path, &["std", "vec", "Vec"])
+                || path_matches(path, &["alloc", "vec", "Vec"])
+        }
+        Some(name)
+            if matches!(
+                name.as_str(),
+                "VecDeque" | "LinkedList" | "BinaryHeap" | "BTreeSet"
+            ) =>
+        {
+            path_matches(path, &["std", "collections", &name])
+                || path_matches(path, &["alloc", "collections", &name])
+        }
+        Some(name) if name == "HashSet" => path_matches(path, &["std", "collections", "HashSet"]),
+        _ => false,
+    }
+}
+
+fn path_matches(path: &syn::Path, expected: &[&str]) -> bool {
+    path.segments.len() == expected.len()
+        && path
+            .segments
+            .iter()
+            .zip(expected)
+            .all(|(segment, expected)| segment.ident == *expected)
+}
+
+struct PolicyField {
+    ident: Ident,
+    ty: Type,
+}
+
+fn set_unique(slot: &mut Option<PolicyField>, field: &Field, marker: &str) -> Result<()> {
     if slot.is_some() {
+        let ident = field.ident.as_ref().expect("named fields have identifiers");
         return Err(Error::new(
             ident.span(),
             format!("duplicate `#[{marker}]` Passport principal field"),
         ));
     }
-    *slot = Some(ident.clone());
+    *slot = Some(PolicyField {
+        ident: field.ident.clone().expect("named fields have identifiers"),
+        ty: field.ty.clone(),
+    });
     Ok(())
 }
 
-fn membership_body(field: Option<Ident>) -> TokenStream {
+fn membership_body(field: Option<&PolicyField>) -> TokenStream {
     field.map_or_else(
         || quote!(false),
         |field| {
+            let ident = &field.ident;
+            let ty = &field.ty;
+            let type_span = ty.span();
+            let policy_values = quote_spanned! {type_span=>
+                let __mads_policy_values: &#ty = &self.#ident;
+            };
+            let membership = quote_spanned! {type_span=>
+                __mads_contains_passport_policy_string_item(__mads_policy_values.iter(), requested)
+            };
             quote! {
-                self.#field.iter().any(|value| {
-                    ::core::convert::AsRef::<str>::as_ref(value) == requested
-                })
+                fn __mads_contains_passport_policy_string_item<I>(mut values: I, requested: &str) -> bool
+                where
+                    I: ::core::iter::Iterator<Item: ::core::convert::AsRef<str>>,
+                {
+                    values.any(|value| {
+                        ::core::convert::AsRef::<str>::as_ref(&value) == requested
+                    })
+                }
+
+                #policy_values
+                #membership
             }
         },
     )

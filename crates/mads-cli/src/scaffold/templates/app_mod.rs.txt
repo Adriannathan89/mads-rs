@@ -1,0 +1,9 @@
+// src/app/mod.rs
+mod controller;
+mod routes;
+mod service;
+
+use mads::prelude::*;
+
+#[module]
+pub struct AppModule;

@@ -4,19 +4,12 @@ use std::{
 };
 
 use mads_common::__private::{
-    DiagnosticReport, DoctorStatus, InspectionReport, ModuleImportReport,
+    DependencyReport, DiagnosticReport, DoctorCheck, DoctorStatus, InspectionReport,
+    ModuleImportReport, ModuleReport, ProviderReport, RouteReport,
 };
 
 pub(crate) fn render_routes(report: &InspectionReport) -> String {
-    let mut routes = report.routes.iter().collect::<Vec<_>>();
-    routes.sort_by(|left, right| {
-        left.method
-            .cmp(&right.method)
-            .then_with(|| left.path.cmp(&right.path))
-            .then_with(|| left.controller.cmp(&right.controller))
-            .then_with(|| left.route_trait.cmp(&right.route_trait))
-            .then_with(|| left.handler.cmp(&right.handler))
-    });
+    let routes = ordered_routes(report);
 
     let mut output =
         String::from("METHOD  PATH        ROUTE                    CONTROLLER       GUARD  SOURCE");
@@ -50,8 +43,7 @@ pub(crate) fn render_graph(report: &InspectionReport) -> String {
     render_modules(report, &mut output);
 
     output.push_str("\n\nProviders\n");
-    let mut providers = report.graph.providers.iter().collect::<Vec<_>>();
-    providers.sort_by(|left, right| left.type_name.cmp(&right.type_name));
+    let providers = ordered_providers(report);
     if providers.is_empty() {
         output.push_str("(none)");
     } else {
@@ -75,12 +67,7 @@ pub(crate) fn render_graph(report: &InspectionReport) -> String {
     }
 
     output.push_str("\n\nDependencies\n");
-    let mut dependencies = report.graph.dependencies.iter().collect::<Vec<_>>();
-    dependencies.sort_by(|left, right| {
-        left.provider
-            .cmp(&right.provider)
-            .then_with(|| left.dependency.cmp(&right.dependency))
-    });
+    let dependencies = ordered_dependencies(report);
     if dependencies.is_empty() {
         output.push_str("(none)");
     } else {
@@ -179,12 +166,7 @@ fn render_imports<'a>(
 }
 
 pub(crate) fn render_doctor(report: &InspectionReport) -> String {
-    let mut checks = report.checks.iter().collect::<Vec<_>>();
-    checks.sort_by(|left, right| {
-        doctor_group_rank(&left.group)
-            .cmp(&doctor_group_rank(&right.group))
-            .then_with(|| left.summary.cmp(&right.summary))
-    });
+    let checks = ordered_checks(report);
     if checks.is_empty() {
         return "(none)".into();
     }
@@ -225,6 +207,15 @@ fn doctor_group_rank(group: &str) -> u8 {
     }
 }
 
+const fn doctor_status_rank(status: DoctorStatus) -> u8 {
+    match status {
+        DoctorStatus::Pass => 0,
+        DoctorStatus::Skipped => 1,
+        DoctorStatus::Overridden => 2,
+        DoctorStatus::Failed => 3,
+    }
+}
+
 const fn doctor_status(status: DoctorStatus) -> &'static str {
     match status {
         DoctorStatus::Pass => "PASS",
@@ -235,6 +226,86 @@ const fn doctor_status(status: DoctorStatus) -> &'static str {
 }
 
 pub(crate) fn render_diagnostics(report: &InspectionReport) -> String {
+    let diagnostics = ordered_diagnostics(report);
+    diagnostics
+        .into_iter()
+        .map(render_diagnostic)
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+pub(crate) fn ordered_routes(report: &InspectionReport) -> Vec<&RouteReport> {
+    let mut routes = report.routes.iter().collect::<Vec<_>>();
+    routes.sort_by(|left, right| {
+        left.method
+            .cmp(&right.method)
+            .then_with(|| left.path.cmp(&right.path))
+            .then_with(|| left.controller.cmp(&right.controller))
+            .then_with(|| left.route_trait.cmp(&right.route_trait))
+            .then_with(|| left.handler.cmp(&right.handler))
+    });
+    routes
+}
+
+pub(crate) fn ordered_modules(report: &InspectionReport) -> Vec<&ModuleReport> {
+    let mut modules = report.graph.modules.iter().collect::<Vec<_>>();
+    modules.sort_by(|left, right| {
+        left.type_name
+            .cmp(&right.type_name)
+            .then_with(|| left.namespace.cmp(&right.namespace))
+            .then_with(|| left.location.file.cmp(&right.location.file))
+            .then_with(|| left.location.line.cmp(&right.location.line))
+            .then_with(|| left.location.column.cmp(&right.location.column))
+    });
+    modules
+}
+
+pub(crate) fn ordered_imports(report: &InspectionReport) -> Vec<&ModuleImportReport> {
+    let mut imports = report.graph.imports.iter().collect::<Vec<_>>();
+    imports.sort_by(|left, right| {
+        left.importer
+            .cmp(&right.importer)
+            .then_with(|| left.imported.cmp(&right.imported))
+    });
+    imports
+}
+
+pub(crate) fn ordered_providers(report: &InspectionReport) -> Vec<&ProviderReport> {
+    let mut providers = report.graph.providers.iter().collect::<Vec<_>>();
+    providers.sort_by(|left, right| {
+        left.type_name
+            .cmp(&right.type_name)
+            .then_with(|| left.owner.cmp(&right.owner))
+            .then_with(|| left.origin.cmp(&right.origin))
+            .then_with(|| left.visibility.cmp(&right.visibility))
+            .then_with(|| left.state.cmp(&right.state))
+            .then_with(|| provider_location(left).cmp(&provider_location(right)))
+    });
+    providers
+}
+
+pub(crate) fn ordered_dependencies(report: &InspectionReport) -> Vec<&DependencyReport> {
+    let mut dependencies = report.graph.dependencies.iter().collect::<Vec<_>>();
+    dependencies.sort_by(|left, right| {
+        left.provider
+            .cmp(&right.provider)
+            .then_with(|| left.dependency.cmp(&right.dependency))
+    });
+    dependencies
+}
+
+pub(crate) fn ordered_checks(report: &InspectionReport) -> Vec<&DoctorCheck> {
+    let mut checks = report.checks.iter().collect::<Vec<_>>();
+    checks.sort_by(|left, right| {
+        doctor_group_rank(&left.group)
+            .cmp(&doctor_group_rank(&right.group))
+            .then_with(|| left.summary.cmp(&right.summary))
+            .then_with(|| doctor_status_rank(left.status).cmp(&doctor_status_rank(right.status)))
+    });
+    checks
+}
+
+pub(crate) fn ordered_diagnostics(report: &InspectionReport) -> Vec<&DiagnosticReport> {
     let mut diagnostics = report.diagnostics.iter().collect::<Vec<_>>();
     diagnostics.sort_by(|left, right| {
         left.code
@@ -242,12 +313,17 @@ pub(crate) fn render_diagnostics(report: &InspectionReport) -> String {
             .then_with(|| diagnostic_location(left).cmp(&diagnostic_location(right)))
             .then_with(|| left.subject.cmp(&right.subject))
             .then_with(|| left.title.cmp(&right.title))
+            .then_with(|| left.message.cmp(&right.message))
+            .then_with(|| left.suggestions.cmp(&right.suggestions))
     });
     diagnostics
-        .into_iter()
-        .map(render_diagnostic)
-        .collect::<Vec<_>>()
-        .join("\n\n")
+}
+
+fn provider_location(provider: &ProviderReport) -> Option<(&str, u32, u32)> {
+    provider
+        .location
+        .as_ref()
+        .map(|location| (location.file.as_str(), location.line, location.column))
 }
 
 fn diagnostic_location(diagnostic: &DiagnosticReport) -> Option<(&str, u32, u32)> {

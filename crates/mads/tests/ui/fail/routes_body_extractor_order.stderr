@@ -1,0 +1,5 @@
+error: known body extractors (`Json`, `ValidatedJson`, and `Request`) must be the final route parameter
+ --> tests/ui/fail/routes_body_extractor_order.rs:6:37
+  |
+6 |     async fn create(&self, payload: mads_common::Json<String>, id: mads::common::Path<u64>);
+  |                                     ^^^^^^^^^^^

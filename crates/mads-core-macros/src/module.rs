@@ -1,7 +1,7 @@
 //! Expansion for statically registered application modules.
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{quote, quote_spanned};
 use syn::{
     Error, Fields, Ident, ItemStruct, Path, Token, bracketed,
     parse::{Parse, ParseStream},
@@ -57,8 +57,8 @@ pub(crate) fn expand(arguments: TokenStream, item: TokenStream) -> syn::Result<T
     let core = core_path()?;
     let ident = &item.ident;
     let module_assertions = arguments.imports.iter().map(|module| {
-        quote! {
-            let _ = __mads_assert_module::<#module>;
+        quote_spanned! {module.span()=>
+            let _ = __mads_assert_module_import::<#module>;
         }
     });
     let import_descriptors = arguments.imports.iter().map(|module| {
@@ -76,7 +76,7 @@ pub(crate) fn expand(arguments: TokenStream, item: TokenStream) -> syn::Result<T
         impl #core::Module for #ident {}
 
         const _: () = {
-            fn __mads_assert_module<T: #core::Module>() {}
+            fn __mads_assert_module_import<T: #core::Module>() {}
             #(#module_assertions)*
         };
 

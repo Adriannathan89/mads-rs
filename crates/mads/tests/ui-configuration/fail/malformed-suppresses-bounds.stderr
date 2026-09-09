@@ -1,0 +1,5 @@
+error: expected `=`
+ --> tests/ui-configuration/fail/malformed-suppresses-bounds.rs:7:20
+  |
+7 |     #[config(rename)]
+  |                    ^

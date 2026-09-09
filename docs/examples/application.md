@@ -1,10 +1,11 @@
-# MADS.rs 0.4 PostgreSQL User Slice
+# MADS.rs 0.8 PostgreSQL User Slice
 
-> The first section below preserves the historical v0.4 low-level example.
-> The v0.7 CLI workflow and split-schema layout are shown here so the example
-> remains useful with the current 0.7 release.
+This example keeps a PostgreSQL repository explicit while using the current
+v0.8 CLI, error, validation, and configuration boundaries. The generated
+`mads new` starter is intentionally database-free; add persistence only where
+the application needs it.
 
-## v0.7 CLI workflow and split schema
+## v0.8 CLI workflow and split schema
 
 From the application root, inspect and run the standard entry point directly:
 
@@ -59,12 +60,13 @@ mads db migrate
 
 There is no named generation form. Defaults, indexes, checks, triggers, and a
 complete foreign-key policy remain explicit migration-SQL review items in the
-v0.7 bounded schema planner.
+v0.8 bounded schema planner.
 
-This v0.4 example keeps persistence explicit: the composition root loads
+This persistence example keeps persistence explicit: the composition root loads
 configuration, registers one `DatabaseBootstrap`, and a repository uses native
-Diesel through `Database::run`. Database errors below are deliberately mapped
-by the controller; MADS does not normalize them into HTTP responses.
+Diesel through `Database::run`. Database delivery remains explicit: use a
+domain-specific `map_err`, native Diesel behavior, or the opt-in `.into_http()`
+extension when the approved generic 404/409/500 mapping is appropriate.
 
 ## Configuration
 
@@ -170,3 +172,30 @@ that source is registered. File-based migration management is available through
 Use `mads::diesel` (or the direct `diesel` dependency shown above) for native
 queries, schema macros, and Diesel traits. `Database::run` is the required
 asynchronous boundary for synchronous PostgreSQL work.
+
+## Validated write endpoint
+
+Use a validated extractor for a request DTO. `Json<User>` below remains a
+response wrapper; it is not a renamed request-validation alias.
+
+```rust,ignore
+use mads::prelude::*;
+
+#[derive(serde::Deserialize, Input)]
+struct CreateUser {
+    #[validate(email, length(max = 254))]
+    email: String,
+    #[validate(length(min = 1, max = 120))]
+    name: String,
+}
+
+#[routes(prefix = "/users")]
+trait UserWrites {
+    #[post("/")]
+    async fn create(&self, request: ValidatedJson<CreateUser>) -> HttpResult<Json<User>>;
+}
+```
+
+`ValidatedJson` rejects malformed or invalid input before the handler with the
+source-aware 422 `validation_error` envelope. Native `Json<T>` remains the
+public Axum escape hatch and does not invoke `Input`.

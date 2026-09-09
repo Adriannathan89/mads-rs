@@ -1,0 +1,5 @@
+error: known body extractors (`Json`, `ValidatedJson`, and `Request`) must be the final route parameter
+  --> tests/ui/fail/routes_multiple_body_extractors.rs:15:18
+   |
+15 |         payload: mads_common::ValidatedJson<CreateUser>,
+   |                  ^^^^^^^^^^^

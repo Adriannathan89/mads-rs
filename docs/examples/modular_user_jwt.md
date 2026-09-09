@@ -1,6 +1,6 @@
 # Modular PostgreSQL user API with JWT-protected updates
 
-This v0.6.0 example implements a small user feature with PostgreSQL persistence
+This v0.8.0 example implements a small user feature with PostgreSQL persistence
 and separate Rust modules. It provides:
 
 | Method | Path | Authentication | Purpose |
@@ -55,7 +55,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-mads = { version = "0.6.0-beta.1", default-features = false, features = ["database", "http", "jwt", "runtime-tokio"] }
+mads = { version = "0.8.0-beta.1", default-features = false, features = ["database", "http", "jwt", "runtime-tokio"] }
 argon2 = "0.5"
 rand_core = { version = "0.6", features = ["getrandom"] }
 serde = { version = "1", features = ["derive"] }
@@ -85,7 +85,7 @@ The standard run path loads optional `.env`, `mads.toml`, and `MADS_`
 environment overrides. Keep real database credentials and signing secrets out
 of version control.
 
-`database.migrate` stays `false` because the standard v0.6.0 run path does not
+`database.migrate` stays `false` because the standard v0.8 run path does not
 auto-discover a `migrations/` directory. Apply the file-based migration before
 starting the server:
 
@@ -448,21 +448,27 @@ principal injected into the update handler.
 `src/user/http/input.rs`:
 
 ```rust
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Input)]
 pub struct CreateUserRequest {
+    #[validate(email, length(max = 254))]
     pub email: String,
+    #[validate(length(min = 1, max = 120))]
     pub name: String,
+    #[validate(length(min = 8))]
     pub password: String,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Input)]
 pub struct LoginRequest {
+    #[validate(email)]
     pub email: String,
+    #[validate(length(min = 1))]
     pub password: String,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Input)]
 pub struct UpdateUserRequest {
+    #[validate(length(min = 1, max = 120))]
     pub name: String,
 }
 ```
@@ -512,13 +518,13 @@ pub trait UserRoutes {
     #[post("/")]
     async fn create_user(
         &self,
-        request: Json<CreateUserRequest>,
+        request: ValidatedJson<CreateUserRequest>,
     ) -> HttpResult<Created<Json<UserResponse>>>;
 
     #[post("/login")]
     async fn login(
         &self,
-        request: Json<LoginRequest>,
+        request: ValidatedJson<LoginRequest>,
     ) -> HttpResult<Json<LoginResponse>>;
 
     #[put("/:id")]
@@ -527,15 +533,16 @@ pub trait UserRoutes {
         &self,
         id: Path<i64>,
         principal: Authenticated<UserPrincipal>,
-        request: Json<UpdateUserRequest>,
+        request: ValidatedJson<UpdateUserRequest>,
     ) -> HttpResult<Json<UserResponse>>;
 }
 ```
 
-`Json<T>` is Axum's JSON extractor re-exported by MADS. It deserializes the
-request body directly into `T`; no manual body parsing or binder call is
-needed. Keep this body-consuming extractor after `Path<T>` and
-`Authenticated<T>`.
+`ValidatedJson<T>` is the MADS request boundary: it deserializes with Serde,
+runs `Input`, and returns ordered source-aware 422 issues before the handler.
+Keep this body-consuming extractor after `Path<T>` and `Authenticated<T>`.
+The public native `Json<T>` re-export still deserializes without automatic
+validation; it remains available when a handler deliberately owns that policy.
 
 Create and login are public. The method-level guard requires
 `Authorization: Bearer <token>` only for update.
@@ -559,7 +566,7 @@ pub struct UserController {
 impl UserRoutes for UserController {
     async fn create_user(
         &self,
-        request: Json<CreateUserRequest>,
+        request: ValidatedJson<CreateUserRequest>,
     ) -> HttpResult<Created<Json<UserResponse>>> {
         let request = request.into_inner();
         let user = self
@@ -580,7 +587,7 @@ impl UserRoutes for UserController {
 
     async fn login(
         &self,
-        request: Json<LoginRequest>,
+        request: ValidatedJson<LoginRequest>,
     ) -> HttpResult<Json<LoginResponse>> {
         let request = request.into_inner();
         let access_token = self
@@ -603,7 +610,7 @@ impl UserRoutes for UserController {
         &self,
         id: Path<i64>,
         principal: Authenticated<UserPrincipal>,
-        request: Json<UpdateUserRequest>,
+        request: ValidatedJson<UpdateUserRequest>,
     ) -> HttpResult<Json<UserResponse>> {
         if *id != principal.user_id {
             return Err(HttpError::not_found("user was not found"));
