@@ -10,9 +10,9 @@ readme.workspace = true
 description = "Modular Rust application framework with Axum, Diesel, and Passport integrations"
 
 [dependencies]
-mads-common = { path = "../mads-common", version = "=0.8.0-beta.1", optional = true, default-features = false }
-mads-core = { path = "../mads-core", version = "=0.8.0-beta.1" }
-mads-extra = { path = "../mads-extra", version = "=0.8.0-beta.1", optional = true }
+mads-common = { path = "../mads-common", version = "=0.8.0", optional = true, default-features = false }
+mads-core = { path = "../mads-core", version = "=0.8.0" }
+mads-extra = { path = "../mads-extra", version = "=0.8.0", optional = true }
 
 [dev-dependencies]
 diesel.workspace = true
