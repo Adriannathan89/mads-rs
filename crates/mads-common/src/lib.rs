@@ -32,6 +32,21 @@ mod router;
 mod server;
 #[cfg(feature = "http")]
 mod server_config;
+#[cfg(feature = "http")]
+mod validation;
+
+extern crate self as mads_common;
+
+/// Derives input validation with built-in, nested, and custom checks.
+#[cfg(feature = "http")]
+pub use mads_common_macros::Input;
+
+/// Re-exports transport-independent input validation contracts.
+#[cfg(feature = "http")]
+pub use validation::{
+    Input, SourcedValidationIssue, ValidatedJson, ValidatedPath, ValidatedQuery, ValidationErrors,
+    ValidationIssue, ValidationPathSegment, ValidationResult, ValidationSource,
+};
 
 /// Strict cookie extraction, response composition, and established cookie types.
 #[cfg(feature = "cookies")]
@@ -68,6 +83,10 @@ pub use database::{
     DatabasePoolStatus, DatabaseResult, MADS100, MADS101, MadsBuilderDatabaseExt, MigrationReport,
     MigrationStatus,
 };
+
+/// Explicit HTTP delivery mapping for managed and native Diesel query results.
+#[cfg(all(feature = "http", feature = "database"))]
+pub use database::IntoHttpResult;
 
 /// Typed JWT claims, service, options, errors, and diagnostics.
 #[cfg(feature = "jwt")]
@@ -106,7 +125,10 @@ pub use extract::{Header, Json, Path, Query, Request, headers};
 
 /// Standard Axum-compatible HTTP response types.
 #[cfg(feature = "http")]
-pub use response::{Created, HttpError, HttpResult, NoContent};
+pub use response::{
+    BadRequest, Conflict, Created, Forbidden, HttpError, HttpResult, InternalError, NoContent,
+    NotFound, Unauthorized, ValidationError,
+};
 
 /// Builds a raw Axum router from the application's validated controllers.
 #[cfg(feature = "http")]
@@ -173,6 +195,7 @@ pub use route::{
 #[doc(hidden)]
 #[cfg(feature = "http")]
 pub mod __private {
+    pub use crate::validation::support as input_validation;
     /// Environment variable used by the development supervisor for graceful shutdown.
     #[doc(hidden)]
     pub const DEV_SHUTDOWN_ENV: &str = "MADS_INTERNAL_DEV_SHUTDOWN_PATH";

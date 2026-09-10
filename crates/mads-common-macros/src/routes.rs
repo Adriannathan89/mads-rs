@@ -98,6 +98,7 @@ fn expand_with_common(
             method,
             &mut routes,
             &prefix,
+            common,
             trait_guard.as_ref(),
             method_guard,
         )?);
@@ -248,13 +249,21 @@ fn validate_method(
     routes: &mut BTreeSet<(String, String)>,
     prefix: &LitStr,
 ) -> syn::Result<RouteMetadata> {
-    validate_method_with_guard(method, routes, prefix, None, None)
+    validate_method_with_guard(
+        method,
+        routes,
+        prefix,
+        &parse_quote!(mads_common),
+        None,
+        None,
+    )
 }
 
 fn validate_method_with_guard(
     method: &mut TraitItemFn,
     routes: &mut BTreeSet<(String, String)>,
     prefix: &LitStr,
+    common: &syn::Path,
     trait_guard: Option<&GuardSpec>,
     method_guard: Option<GuardSpec>,
 ) -> syn::Result<RouteMetadata> {
@@ -298,6 +307,7 @@ fn validate_method_with_guard(
             "route contract methods require an immutable `&self` receiver",
         ));
     }
+    validate_body_extractor_order(&method.sig.inputs, common)?;
 
     let mut route_attributes = Vec::new();
     let mut conditional_attributes = Vec::new();
@@ -383,6 +393,116 @@ fn validate_method_with_guard(
         guard,
         guard_ident: None,
     })
+}
+
+/// Identifies body-consuming extractors whose crate path is known to MADS.
+///
+/// This intentionally inspects syntax only. A bare `Json` or an application
+/// extractor with a different path may resolve to any type, so its body
+/// behavior remains the native Axum/rustc contract.
+fn validate_body_extractor_order(
+    inputs: &Punctuated<FnArg, Token![,]>,
+    common: &syn::Path,
+) -> syn::Result<()> {
+    let arguments = inputs.iter().skip(1).collect::<Vec<_>>();
+    for (index, argument) in arguments.iter().enumerate() {
+        let FnArg::Typed(argument) = argument else {
+            continue;
+        };
+        if known_body_consumer(&argument.ty, common) && index + 1 != arguments.len() {
+            return Err(Error::new(
+                argument.ty.span(),
+                "known body extractors (`Json`, `ValidatedJson`, and `Request`) must be the final route parameter",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn known_body_consumer(ty: &Type, common: &syn::Path) -> bool {
+    let Type::Path(type_path) = ty else {
+        return false;
+    };
+    if type_path.qself.is_some() {
+        return false;
+    }
+
+    let path = &type_path.path;
+    if is_mads_type(path, common, "Json") || is_axum_type(path, common, "Json") {
+        return true;
+    }
+    if is_mads_type(path, common, "ValidatedJson") {
+        return true;
+    }
+    if is_mads_type(path, common, "Request") || is_axum_type(path, common, "Request") {
+        return true;
+    }
+    false
+}
+
+fn is_mads_type(path: &syn::Path, common: &syn::Path, name: &str) -> bool {
+    path_with_suffix_is(path, common, &[name]) || facade_path_with_suffix_is(path, common, &[name])
+}
+
+fn is_axum_type(path: &syn::Path, common: &syn::Path, name: &str) -> bool {
+    path_is(path, &["axum", name])
+        || path_is(path, &["axum", "extract", name])
+        || path_with_suffix_is(path, common, &["axum", name])
+        || path_with_suffix_is(path, common, &["axum", "extract", name])
+        || facade_path_with_suffix_is(path, common, &["axum", name])
+        || facade_path_with_suffix_is(path, common, &["axum", "extract", name])
+}
+
+fn facade_path_with_suffix_is(path: &syn::Path, common: &syn::Path, suffix: &[&str]) -> bool {
+    let Some(last) = common.segments.last() else {
+        return false;
+    };
+    if last.ident != "common" {
+        return false;
+    }
+
+    let prefix_len = common.segments.len() - 1;
+    let path_len = path.segments.len();
+    path_len == prefix_len + suffix.len()
+        && path
+            .segments
+            .iter()
+            .take(prefix_len)
+            .zip(common.segments.iter().take(prefix_len))
+            .all(|(actual, expected)| actual.ident == expected.ident)
+        && path
+            .segments
+            .iter()
+            .skip(prefix_len)
+            .zip(suffix)
+            .all(|(segment, expected)| segment.ident == *expected)
+}
+
+fn path_with_suffix_is(path: &syn::Path, prefix: &syn::Path, suffix: &[&str]) -> bool {
+    let prefix_len = prefix.segments.len();
+    let path_len = path.segments.len();
+    path_len == prefix_len + suffix.len()
+        && path
+            .segments
+            .iter()
+            .take(prefix_len)
+            .zip(prefix.segments.iter())
+            .all(|(actual, expected)| actual.ident == expected.ident)
+        && path
+            .segments
+            .iter()
+            .skip(prefix_len)
+            .zip(suffix)
+            .all(|(segment, expected)| segment.ident == *expected)
+}
+
+fn path_is(path: &syn::Path, expected: &[&str]) -> bool {
+    path.segments.len() == expected.len()
+        && path
+            .segments
+            .iter()
+            .zip(expected)
+            .all(|(segment, expected)| segment.ident == *expected)
 }
 
 struct RouteMetadata {

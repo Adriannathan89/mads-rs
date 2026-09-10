@@ -1,0 +1,5 @@
+error: expected `=`
+ --> tests/ui-input/fail/malformed-suppresses-bounds.rs:7:26
+  |
+7 |     #[validate(length(min))]
+  |                          ^

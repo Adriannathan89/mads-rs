@@ -2,7 +2,7 @@
 
 #![deny(missing_docs)]
 
-use mads::common::{Header, Json, Path, Query, Request, headers};
+use mads::common::{Header, Json, Path, Query, Request, ValidatedJson, headers};
 use mads::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -18,6 +18,13 @@ struct User {
 struct SearchQuery {
     /// Requested page number.
     page: u64,
+}
+
+/// A JSON request body validated before dispatch.
+#[derive(Deserialize, mads::Input)]
+struct CreateUser {
+    /// User name received in the request body.
+    name: String,
 }
 
 /// A controller demonstrating extractor forwarding.
@@ -37,6 +44,26 @@ trait ExtractorRoutes {
         extension: mads::common::axum::extract::Extension<String>,
         request: Request,
     ) -> Json<User>;
+
+    /// Creates a user after extracting request parts before the JSON body.
+    #[mads::post("/:id")]
+    async fn create_user(
+        &self,
+        id: Path<u64>,
+        query: Query<SearchQuery>,
+        agent: Header<headers::UserAgent>,
+        request: Json<CreateUser>,
+    ) -> Json<User>;
+
+    /// Creates a validated user after extracting request parts before the JSON body.
+    #[mads::post("/:id/validated")]
+    async fn create_validated_user(
+        &self,
+        id: Path<u64>,
+        query: Query<SearchQuery>,
+        agent: Header<headers::UserAgent>,
+        request: ValidatedJson<CreateUser>,
+    ) -> Json<User>;
 }
 
 impl ExtractorRoutes for ExtractorController {
@@ -51,6 +78,28 @@ impl ExtractorRoutes for ExtractorController {
         request: Request,
     ) -> Json<User> {
         let _ = (query.page, agent, extension, request);
+        Json(User { id })
+    }
+
+    async fn create_user(
+        &self,
+        Path(id): Path<u64>,
+        Query(query): Query<SearchQuery>,
+        Header(agent): Header<headers::UserAgent>,
+        Json(request): Json<CreateUser>,
+    ) -> Json<User> {
+        let _ = (query.page, agent, request.name);
+        Json(User { id })
+    }
+
+    async fn create_validated_user(
+        &self,
+        Path(id): Path<u64>,
+        Query(query): Query<SearchQuery>,
+        Header(agent): Header<headers::UserAgent>,
+        ValidatedJson(request): ValidatedJson<CreateUser>,
+    ) -> Json<User> {
+        let _ = (query.page, agent, request.name);
         Json(User { id })
     }
 }

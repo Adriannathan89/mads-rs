@@ -14,7 +14,8 @@ use axum::{
 };
 use mads_common::{
     JwtClaims, JwtService, JwtSignOptions, JwtTokenKind, PassportContext, PassportError,
-    PassportPrincipal, PassportResult, PassportStrategy, build_router, controller,
+    PassportPrincipal, PassportRejection, PassportResult, PassportStrategy, build_router,
+    controller,
     core::{Config, ConfigBuilder, Mads, MapSource},
     passport_strategy, routes,
 };
@@ -129,9 +130,18 @@ async fn assert_authentication_failure(
             .await
             .unwrap()
             .as_ref(),
-        b"Unauthorized"
+        b"{\"error\":{\"code\":\"unauthorized\",\"message\":\"authentication was rejected\"}}"
     );
     assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), 0);
+}
+
+fn assert_headers_do_not_contain(response: &axum::response::Response, sentinel: &str) {
+    assert!(
+        response
+            .headers()
+            .values()
+            .all(|value| { !String::from_utf8_lossy(value.as_bytes()).contains(sentinel) })
+    );
 }
 
 #[tokio::test]
@@ -186,6 +196,24 @@ async fn invalid_bearer_credentials_and_strategy_rejections_are_generic_401s() {
     assert_authentication_failure(&router, [format!("Bearer {expired}").parse().unwrap()]).await;
     assert_eq!(STRATEGY_CALLS.load(Ordering::SeqCst), 0);
 
+    let credential_sentinel = "bearer-credential-sentinel";
+    let response = request(
+        &router,
+        [format!("Bearer {credential_sentinel}").parse().unwrap()],
+    )
+    .await;
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(response.headers()[WWW_AUTHENTICATE], "Bearer");
+    assert_headers_do_not_contain(&response, credential_sentinel);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = std::str::from_utf8(&body).unwrap();
+    assert_eq!(
+        body,
+        "{\"error\":{\"code\":\"unauthorized\",\"message\":\"authentication was rejected\"}}"
+    );
+    assert!(!body.contains(credential_sentinel));
+    assert_eq!(STRATEGY_CALLS.load(Ordering::SeqCst), 0);
+
     STRATEGY_MODE.store(1, Ordering::SeqCst);
     STRATEGY_CALLS.store(0, Ordering::SeqCst);
     assert_authentication_failure(&router, [format!("Bearer {access}").parse().unwrap()]).await;
@@ -196,12 +224,40 @@ async fn invalid_bearer_credentials_and_strategy_rejections_are_generic_401s() {
     let response = request(&router, [format!("Bearer {access}").parse().unwrap()]).await;
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     assert!(response.headers().get(WWW_AUTHENTICATE).is_none());
+    assert_headers_do_not_contain(&response, "strategy-sensitive-source-sentinel");
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    assert_eq!(body.as_ref(), b"Internal Server Error");
+    assert_eq!(
+        body.as_ref(),
+        b"{\"error\":{\"code\":\"internal\",\"message\":\"internal server error\"}}"
+    );
     assert!(
         !std::str::from_utf8(&body)
             .unwrap()
             .contains("strategy-sensitive-source-sentinel")
     );
     assert_eq!(HANDLER_CALLS.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn passport_rejections_retain_internal_sources_without_leaking_them_through_formatting() {
+    const SENTINEL: &str = "passport-internal-source-sentinel";
+
+    let rejection =
+        PassportRejection::from(PassportError::internal(std::io::Error::other(SENTINEL)));
+    let display = rejection.to_string();
+    let debug = format!("{rejection:?}");
+
+    assert_eq!(display, "Passport operation failed");
+    assert!(!display.contains(SENTINEL));
+    assert!(!debug.contains(SENTINEL));
+
+    let passport_error = std::error::Error::source(&rejection).unwrap();
+    assert_eq!(passport_error.to_string(), "Passport operation failed");
+    assert!(!format!("{passport_error:?}").contains(SENTINEL));
+    assert_eq!(
+        std::error::Error::source(passport_error)
+            .unwrap()
+            .to_string(),
+        SENTINEL
+    );
 }

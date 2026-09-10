@@ -178,6 +178,11 @@ pub use mads_core::module;
 /// Re-exports the general-purpose provider declaration attribute.
 pub use mads_core::provider;
 
+/// Re-exports explicit typed configuration, structured failures, and secret values.
+pub use mads_core::{
+    Configuration, ConfigurationErrors, ConfigurationIssue, ConfigurationResult, Secret,
+};
+
 /// Re-exports auto-configuration inspection records.
 pub use mads_core::{
     AutoConfigurationConfigEvidence, AutoConfigurationReasonCode, AutoConfigurationReport,
@@ -228,6 +233,10 @@ pub use mads_common::{
     MigrationStatus,
 };
 
+/// Re-exports explicit HTTP delivery mapping for managed and native Diesel results.
+#[cfg(all(feature = "http", feature = "database"))]
+pub use mads_common::IntoHttpResult;
+
 /// Re-exports typed JWT claims, service, options, errors, and diagnostics.
 #[cfg(feature = "jwt")]
 pub use mads_common::{
@@ -249,7 +258,17 @@ pub use mads_common::{Header, Json, Path, Query, Request, headers};
 
 /// Re-exports standard HTTP response types.
 #[cfg(feature = "http")]
-pub use mads_common::{Created, HttpError, HttpResult, NoContent};
+pub use mads_common::{
+    BadRequest, Conflict, Created, Forbidden, HttpError, HttpResult, InternalError, NoContent,
+    NotFound, Unauthorized, ValidationError,
+};
+
+/// Re-exports validated extractors, the input derive, and ordered issue contracts.
+#[cfg(feature = "http")]
+pub use mads_common::{
+    Input, SourcedValidationIssue, ValidatedJson, ValidatedPath, ValidatedQuery, ValidationErrors,
+    ValidationIssue, ValidationPathSegment, ValidationResult, ValidationSource,
+};
 
 /// Re-exports HTTP router construction, configuration, and runtime startup functions.
 #[cfg(feature = "http")]
@@ -328,7 +347,18 @@ pub mod prelude {
 
     /// Re-exports standard HTTP response types.
     #[cfg(feature = "http")]
-    pub use mads_common::{Created, HttpError, HttpResult, NoContent};
+    pub use mads_common::{
+        BadRequest, Conflict, Created, Forbidden, HttpError, HttpResult, InternalError, NoContent,
+        NotFound, Unauthorized, ValidationError,
+    };
+
+    /// Re-exports validated extractors, the input derive, and ordered issue contracts.
+    #[cfg(feature = "http")]
+    pub use mads_common::{
+        Input, SourcedValidationIssue, ValidatedJson, ValidatedPath, ValidatedQuery,
+        ValidationErrors, ValidationIssue, ValidationPathSegment, ValidationResult,
+        ValidationSource,
+    };
 
     /// Re-exports HTTP router construction, configuration, and runtime startup functions.
     #[cfg(feature = "http")]
@@ -353,6 +383,10 @@ pub mod prelude {
         MigrationStatus,
     };
 
+    /// Re-exports explicit HTTP delivery mapping for managed and native Diesel results.
+    #[cfg(all(feature = "http", feature = "database"))]
+    pub use mads_common::IntoHttpResult;
+
     /// Re-exports application-facing Passport JWT contracts and services.
     #[cfg(feature = "jwt")]
     pub use mads_common::{
@@ -372,10 +406,11 @@ pub mod prelude {
     pub use mads_core::{
         ApplicationContext, ApplicationGraph, AutoConfigurationConfigEvidence,
         AutoConfigurationReasonCode, AutoConfigurationReport, AutoConfigurationRequirement,
-        AutoConfigurationStatus, Catalog, Config, ConfigBuilder, ConstructionPlan,
+        AutoConfigurationStatus, Catalog, Config, ConfigBuilder, Configuration,
+        ConfigurationErrors, ConfigurationIssue, ConfigurationResult, ConstructionPlan,
         ConstructionStep, DependencyEdge, Diagnostic, Error, GraphAnalysis, LifecycleHook,
         LifecycleState, Mads, Module, ModuleGraph, ModuleImportDescriptor, ModuleImportEdge,
         ModuleNode, ProviderNode, ProviderOrigin, ProviderOwnership, ProviderState,
-        ProviderVisibility, SourceLocation,
+        ProviderVisibility, Secret, SourceLocation,
     };
 }

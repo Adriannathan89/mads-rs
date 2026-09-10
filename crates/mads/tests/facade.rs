@@ -21,13 +21,24 @@ mod declarations {
 #[test]
 fn prelude_exposes_the_http_runtime_surface() {
     use mads::prelude::{
-        Created, Header, HttpError, HttpResult, HttpRuntimeError, Json, Mads, MadsRunExt, Module,
-        ModuleGraph, ModuleImportDescriptor, ModuleImportEdge, ModuleNode, NoContent, Path,
-        ProviderOwnership, Query, Request, build_router, configure_router, serve, serve_router,
+        BadRequest, Conflict, Created, Forbidden, Header, HttpError, HttpResult, HttpRuntimeError,
+        Input, InternalError, Json, Mads, MadsRunExt, Module, ModuleGraph, ModuleImportDescriptor,
+        ModuleImportEdge, ModuleNode, NoContent, NotFound, Path, ProviderOwnership, Query, Request,
+        SourcedValidationIssue, Unauthorized, ValidatedJson, ValidatedPath, ValidatedQuery,
+        ValidationError, ValidationErrors, ValidationIssue, ValidationPathSegment,
+        ValidationResult, ValidationSource, build_router, configure_router, serve, serve_router,
     };
 
     fn assert_module<T: Module>() {}
+    fn assert_input<T: Input>() {}
 
+    let _ = std::any::TypeId::of::<BadRequest>();
+    let _ = std::any::TypeId::of::<Unauthorized>();
+    let _ = std::any::TypeId::of::<Forbidden>();
+    let _ = std::any::TypeId::of::<NotFound>();
+    let _ = std::any::TypeId::of::<Conflict>();
+    let _ = std::any::TypeId::of::<ValidationError>();
+    let _ = std::any::TypeId::of::<InternalError>();
     let _ = std::any::TypeId::of::<Created<NoContent>>();
     let _ = std::any::TypeId::of::<Header<mads::common::headers::ContentType>>();
     let _ = std::any::TypeId::of::<HttpError>();
@@ -36,6 +47,16 @@ fn prelude_exposes_the_http_runtime_surface() {
     let _ = std::any::TypeId::of::<Path<String>>();
     let _ = std::any::TypeId::of::<Query<String>>();
     let _ = std::any::TypeId::of::<Request>();
+    let _ = std::any::TypeId::of::<ValidatedJson<String>>();
+    let _ = std::any::TypeId::of::<ValidatedQuery<String>>();
+    let _ = std::any::TypeId::of::<ValidatedPath<String>>();
+    let _ = std::any::TypeId::of::<SourcedValidationIssue>();
+    let _ = std::any::TypeId::of::<ValidationErrors>();
+    let _ = std::any::TypeId::of::<ValidationIssue>();
+    let _ = std::any::TypeId::of::<ValidationPathSegment>();
+    let _ = std::any::TypeId::of::<ValidationResult>();
+    let _ = std::any::TypeId::of::<ValidationSource>();
+    assert_input::<String>();
     assert_module::<declarations::PreludeModule>();
     let _ = std::any::TypeId::of::<ModuleGraph>();
     let _ = std::any::TypeId::of::<ModuleImportDescriptor>();
@@ -58,6 +79,18 @@ fn prelude_exposes_the_http_runtime_surface() {
     let _ = std::any::TypeId::of::<mads::ModuleImportEdge>();
     let _ = std::any::TypeId::of::<mads::ModuleNode>();
     let _ = std::any::TypeId::of::<mads::ProviderOwnership>();
+    let _ = std::any::TypeId::of::<mads::BadRequest>();
+    let _ = std::any::TypeId::of::<mads::Unauthorized>();
+    let _ = std::any::TypeId::of::<mads::Forbidden>();
+    let _ = std::any::TypeId::of::<mads::NotFound>();
+    let _ = std::any::TypeId::of::<mads::Conflict>();
+    let _ = std::any::TypeId::of::<mads::ValidationError>();
+    let _ = std::any::TypeId::of::<mads::InternalError>();
+    let _ = std::any::TypeId::of::<mads::SourcedValidationIssue>();
+    let _ = std::any::TypeId::of::<mads::ValidationSource>();
+    let _ = std::any::TypeId::of::<mads::ValidatedJson<String>>();
+    let _ = std::any::TypeId::of::<mads::ValidatedQuery<String>>();
+    let _ = std::any::TypeId::of::<mads::ValidatedPath<String>>();
     let _ = mads::build_router;
     let _ = mads::configure_router;
     let _ = |application: mads::core::Mads| mads::serve(application, "127.0.0.1:0");

@@ -1,7 +1,7 @@
 //! Expansion for synchronous and asynchronous provider functions.
 
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, quote_spanned};
 use syn::visit::{self, Visit};
 use syn::{
     Error, Expr, FnArg, GenericArgument, ItemFn, PathArguments, ReturnType, Type, spanned::Spanned,
@@ -105,11 +105,9 @@ fn expand_provider_with_core(item: ItemFn, core: syn::Path) -> syn::Result<Token
             .iter()
             .zip(&dependency_idents)
             .map(|(dependency, dependency_ident)| {
-                quote! {
-                let #dependency_ident = context
-                    .resolve::<#dependency>()?;
-                let #dependency_ident =
-                    ::core::clone::Clone::clone(#dependency_ident.as_ref());
+                quote_spanned! {dependency.span()=>
+                    let #dependency_ident =
+                        __mads_assert_provider_dependency::<#dependency>(context)?;
                 }
             });
     let dependency_descriptors = dependencies.iter().map(|dependency| {
@@ -136,6 +134,18 @@ fn expand_provider_with_core(item: ItemFn, core: syn::Path) -> syn::Result<Token
         #item
 
         const _: () = {
+            fn __mads_assert_provider_dependency<'a, T>(
+                context: &'a #core::ConstructionContext<'a>,
+            ) -> #core::Result<T>
+            where
+                T: ::core::clone::Clone
+                    + ::core::marker::Send
+                    + ::core::marker::Sync
+                    + 'static,
+            {
+                Ok(::core::clone::Clone::clone(context.resolve::<T>()?.as_ref()))
+            }
+
             #[doc(hidden)]
             fn __mads_construct<'a>(
                 context: &'a #core::ConstructionContext<'a>,

@@ -276,6 +276,34 @@ fn rejects_duplicate_verb_and_path() {
 }
 
 #[test]
+fn recognizes_only_qualified_standard_body_extractors() {
+    let common = syn::parse_quote!(framework::common);
+    for source in [
+        "framework::Json<User>",
+        "framework::common::Json<User>",
+        "framework::ValidatedJson<User>",
+        "framework::common::ValidatedJson<User>",
+        "framework::Request",
+        "framework::common::Request",
+        "axum::extract::Request",
+        "framework::axum::Json<User>",
+    ] {
+        let ty = syn::parse_str(source).expect("body extractor type should parse");
+        assert!(known_body_consumer(&ty, &common), "{source}");
+    }
+
+    for source in [
+        "Json<User>",
+        "Request",
+        "application::Json<User>",
+        "mads::Json<User>",
+    ] {
+        let ty = syn::parse_str(source).expect("custom extractor type should parse");
+        assert!(!known_body_consumer(&ty, &common), "{source}");
+    }
+}
+
+#[test]
 fn validates_path_rules_and_prefix_joining() {
     for source in ["\"/\"", "\"/users/:id\"", "\"/users/_id-1\""] {
         validate_path(&literal(source), "route path", false).unwrap();

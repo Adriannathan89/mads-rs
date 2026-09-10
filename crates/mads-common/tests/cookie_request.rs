@@ -4,11 +4,11 @@
 
 use axum::{
     Router,
-    body::Body,
+    body::{Body, to_bytes},
     http::{HeaderMap, HeaderValue, Request, StatusCode, header::COOKIE},
     routing::get,
 };
-use mads_common::{CookieErrorKind, CookieJar};
+use mads_common::{CookieErrorKind, CookieJar, CookieRejection};
 use tower::ServiceExt;
 
 #[test]
@@ -100,12 +100,13 @@ fn invalid_percent_escapes_are_rejected() {
 async fn malformed_cookie_is_bad_request_instead_of_being_skipped() {
     async fn handler(_: CookieJar) {}
 
+    const SENTINEL: &str = "request-cookie-value-sentinel";
     let app = Router::new().route("/", get(handler));
     let response = app
         .oneshot(
             Request::builder()
                 .uri("/")
-                .header(COOKIE, "valid=value; malformed")
+                .header(COOKIE, format!("valid={SENTINEL}; malformed"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -113,6 +114,19 @@ async fn malformed_cookie_is_bad_request_instead_of_being_skipped() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(
+        response
+            .headers()
+            .values()
+            .all(|value| { !String::from_utf8_lossy(value.as_bytes()).contains(SENTINEL) })
+    );
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = std::str::from_utf8(&body).unwrap();
+    assert_eq!(
+        body,
+        "{\"error\":{\"code\":\"bad_request\",\"message\":\"cookie request is malformed\"}}"
+    );
+    assert!(!body.contains(SENTINEL));
 }
 
 #[test]
@@ -136,13 +150,24 @@ fn debug_and_errors_disclose_only_safe_structure() {
     let mut invalid_headers = HeaderMap::new();
     invalid_headers.append(
         COOKIE,
-        HeaderValue::from_static("private_name=private_value; without_equals_sentinel"),
+        HeaderValue::from_bytes(b"private_name=private_value; source-sentinel=\xff").unwrap(),
     );
     let error = CookieJar::from_headers(&invalid_headers).unwrap_err();
     let display = error.to_string();
     let debug = format!("{error:?}");
-    for sentinel in ["private_name", "private_value", "without_equals_sentinel"] {
+    assert!(std::error::Error::source(&error).is_some());
+    for sentinel in ["private_name", "private_value", "source-sentinel"] {
         assert!(!display.contains(sentinel));
         assert!(!debug.contains(sentinel));
     }
+
+    let rejection = CookieRejection::from(error);
+    let display = rejection.to_string();
+    let debug = format!("{rejection:?}");
+    for sentinel in ["private_name", "private_value", "source-sentinel"] {
+        assert!(!display.contains(sentinel));
+        assert!(!debug.contains(sentinel));
+    }
+    let cookie_error = std::error::Error::source(&rejection).unwrap();
+    assert!(std::error::Error::source(cookie_error).is_some());
 }

@@ -1,0 +1,8 @@
+// src/app/routes.rs
+use mads::prelude::*;
+
+#[routes]
+pub trait AppRoutes {
+    #[get("/")]
+    async fn hello(&self) -> &'static str;
+}

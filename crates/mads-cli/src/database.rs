@@ -12,7 +12,17 @@ use mads::{
     diesel_migrations::{FileBasedMigrations, MigrationError},
 };
 
-use crate::command::DatabaseCommand;
+use crate::{
+    command::DatabaseCommand,
+    diagnostic::MADS210,
+    output::{
+        HumanOutput, Outcome,
+        model::{
+            CliDiagnostic, CommandData, DatabaseGenerateData, DatabaseMigrateData,
+            DatabaseRollbackData, DatabaseStatusData, Envelope,
+        },
+    },
+};
 
 #[allow(dead_code)]
 mod catalog;
@@ -83,8 +93,23 @@ impl CliError {
         Self::from_error(error.to_string(), error)
     }
 
-    fn diagnostic(error: crate::diagnostic::CliError) -> Self {
+    pub(crate) fn diagnostic(error: crate::diagnostic::CliError) -> Self {
         Self::from_error(error.to_string(), error)
+    }
+
+    fn public_diagnostic(&self) -> CliDiagnostic {
+        self.source
+            .downcast_ref::<crate::diagnostic::CliError>()
+            .map_or_else(
+                || {
+                    CliDiagnostic::error(
+                        MADS210,
+                        "Database command failed",
+                        "the database command could not be completed",
+                    )
+                },
+                |error| CliDiagnostic::from_error(error, None),
+            )
     }
 }
 
@@ -110,6 +135,61 @@ impl Error for CliError {
     }
 }
 
+/// One completed database command before the outer renderer selects a format.
+pub(crate) struct DatabaseOutcome {
+    data: CommandData,
+    diagnostics: Vec<CliDiagnostic>,
+    human_lines: Vec<String>,
+}
+
+impl DatabaseOutcome {
+    fn new(data: CommandData, diagnostics: Vec<CliDiagnostic>, human_lines: Vec<String>) -> Self {
+        Self {
+            data,
+            diagnostics,
+            human_lines,
+        }
+    }
+}
+
+/// Converts a database execution result into the shared finite-command outcome.
+pub(crate) fn outcome(
+    command: DatabaseCommand,
+    result: Result<DatabaseOutcome, CliError>,
+) -> Outcome {
+    let command = database_command_name(command);
+    match result {
+        Ok(result) => Outcome::new(
+            Envelope::success_with_diagnostics(command, result.data, result.diagnostics),
+            HumanOutput::streams(human_lines(&result.human_lines), String::new()),
+        ),
+        Err(error) => Outcome::new(
+            Envelope::failure(Some(command.into()), None, vec![error.public_diagnostic()]),
+            HumanOutput::stderr(format!("error: {error}\n")),
+        ),
+    }
+}
+
+fn database_command_name(command: DatabaseCommand) -> &'static str {
+    match command {
+        DatabaseCommand::Generate => "db generate",
+        DatabaseCommand::Migrate => "db migrate",
+        DatabaseCommand::Rollback => "db rollback",
+        DatabaseCommand::Status => "db status",
+        DatabaseCommand::Help => {
+            unreachable!("database help is rendered before database execution")
+        }
+    }
+}
+
+fn human_lines(lines: &[String]) -> String {
+    if lines.is_empty() {
+        String::new()
+    } else {
+        format!("{}\n", lines.join("\n"))
+    }
+}
+
 /// Loads database configuration for the selected package root.
 pub(crate) fn load_project(root: &Path) -> Result<LoadedDatabaseProject, CliError> {
     let config = ConfigBuilder::new()
@@ -131,7 +211,7 @@ pub(crate) fn load_project(root: &Path) -> Result<LoadedDatabaseProject, CliErro
 pub(crate) async fn execute(
     command: DatabaseCommand,
     root: &Path,
-) -> Result<Vec<String>, CliError> {
+) -> Result<DatabaseOutcome, CliError> {
     if matches!(command, DatabaseCommand::Generate) {
         return generate(root).await;
     }
@@ -151,49 +231,61 @@ pub(crate) async fn execute(
             .run_pending_migrations(migrations.expect("migrate should load migrations"))
             .await
             .map(|report| {
-                if report.is_empty() {
+                let applied = report.versions().to_vec();
+                let human_lines = if report.is_empty() {
                     vec!["database is up to date".to_owned()]
                 } else {
-                    report
-                        .versions()
+                    applied
                         .iter()
                         .map(|version| format!("applied {version}"))
                         .collect()
-                }
+                };
+                DatabaseOutcome::new(
+                    CommandData::DatabaseMigrate(DatabaseMigrateData::new(applied)),
+                    Vec::new(),
+                    human_lines,
+                )
             }),
         DatabaseCommand::Rollback => database
             .revert_last_migration(migrations.expect("rollback should load migrations"))
             .await
             .map(|report| {
-                report
-                    .versions()
+                let reverted = report.versions().to_vec();
+                let human_lines = reverted
                     .iter()
                     .map(|version| format!("reverted {version}"))
-                    .collect()
+                    .collect();
+                DatabaseOutcome::new(
+                    CommandData::DatabaseRollback(DatabaseRollbackData::new(reverted)),
+                    Vec::new(),
+                    human_lines,
+                )
             }),
         DatabaseCommand::Status => database
             .migration_status(migrations.expect("status should load migrations"))
             .await
             .map(|status| {
-                let mut lines = status
-                    .applied()
+                let applied = status.applied().to_vec();
+                let pending = status.pending().to_vec();
+                let mut human_lines = applied
                     .iter()
                     .map(|version| format!("applied {version}"))
                     .collect::<Vec<_>>();
-                lines.extend(
-                    status
-                        .pending()
-                        .iter()
-                        .map(|version| format!("pending {version}")),
-                );
-                lines.push(format!(
+                human_lines.extend(pending.iter().map(|version| format!("pending {version}")));
+                human_lines.push(format!(
                     "summary: {} applied, {} pending",
-                    status.applied().len(),
-                    status.pending().len()
+                    applied.len(),
+                    pending.len()
                 ));
-                lines
+                DatabaseOutcome::new(
+                    CommandData::DatabaseStatus(DatabaseStatusData::new(applied, pending)),
+                    Vec::new(),
+                    human_lines,
+                )
             }),
-        DatabaseCommand::Generate | DatabaseCommand::Help => Ok(Vec::new()),
+        DatabaseCommand::Generate | DatabaseCommand::Help => unreachable!(
+            "generate returns before database execution and help is rendered by dispatch"
+        ),
     };
     database.close();
 
@@ -201,7 +293,7 @@ pub(crate) async fn execute(
 }
 
 /// Generates one full supported schema-shape migration without applying it.
-pub(crate) async fn generate(root: &Path) -> Result<Vec<String>, CliError> {
+pub(crate) async fn generate(root: &Path) -> Result<DatabaseOutcome, CliError> {
     let desired = DesiredSchema::load(root).map_err(CliError::diagnostic)?;
     let project = load_project(root)?;
     let database = project.connect()?;
@@ -211,20 +303,39 @@ pub(crate) async fn generate(root: &Path) -> Result<Vec<String>, CliError> {
     let live = live_result.map_err(CliError::diagnostic)?;
     let plan = plan_diff(&desired, &live).map_err(CliError::diagnostic)?;
     if plan.is_empty() {
-        return Ok(vec!["schema is up to date".to_owned()]);
+        return Ok(DatabaseOutcome::new(
+            CommandData::DatabaseGenerate(DatabaseGenerateData::new("up_to_date", None, false)),
+            Vec::new(),
+            vec!["schema is up to date".to_owned()],
+        ));
     }
 
     let rendered = render_migration(&plan);
     let path =
         publish_migration(root, &rendered, &SystemMigrationClock).map_err(CliError::diagnostic)?;
-    let mut lines = rendered
+    let diagnostics = rendered
         .warnings
         .iter()
-        .map(|warning| format!("warning: {warning}"))
+        .map(diff::MigrationWarning::diagnostic)
         .collect::<Vec<_>>();
-    lines.push(format!("generated {}", format_generated_path(root, &path)?));
-    lines.push("review up.sql and down.sql before applying".to_owned());
-    Ok(lines)
+    let human_migration_path = format_generated_path(root, &path)?;
+    let migration_path = crate::output::path::normalize_path(root, &path);
+    let mut human_lines = rendered
+        .warnings
+        .iter()
+        .map(|warning| format!("warning: {}: {}", warning.subject, warning.message))
+        .collect::<Vec<_>>();
+    human_lines.push(format!("generated {human_migration_path}"));
+    human_lines.push("review up.sql and down.sql before applying".to_owned());
+    Ok(DatabaseOutcome::new(
+        CommandData::DatabaseGenerate(DatabaseGenerateData::new(
+            "generated",
+            Some(migration_path),
+            true,
+        )),
+        diagnostics,
+        human_lines,
+    ))
 }
 
 fn format_generated_path(root: &Path, path: &Path) -> Result<String, CliError> {

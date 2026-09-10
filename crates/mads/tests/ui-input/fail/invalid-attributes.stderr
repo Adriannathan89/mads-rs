@@ -1,0 +1,47 @@
+error: unknown input validator
+ --> tests/ui-input/fail/invalid-attributes.rs:4:29
+  |
+4 | struct Unknown { #[validate(trim)] value: String }
+  |                             ^^^^
+
+error: duplicate input validator
+ --> tests/ui-input/fail/invalid-attributes.rs:6:50
+  |
+6 | struct Duplicate { #[validate(email)] #[validate(email)] value: String }
+  |                                                  ^^^^^
+
+error: expected at least one input validator
+ --> tests/ui-input/fail/invalid-attributes.rs:8:16
+  |
+8 | struct Empty { #[validate()] value: String }
+  |                ^
+
+error: duplicate input validator bound
+  --> tests/ui-input/fail/invalid-attributes.rs:10:44
+   |
+10 | struct Bounds { #[validate(length(min = 2, min = 3))] value: String }
+   |                                            ^^^
+
+error: unknown input validator bound
+  --> tests/ui-input/fail/invalid-attributes.rs:12:40
+   |
+12 | struct UnknownBound { #[validate(range(low = 1))] value: i32 }
+   |                                        ^^^
+
+error: unexpected end of input, expected parentheses
+  --> tests/ui-input/fail/invalid-attributes.rs:14:41
+   |
+14 | struct MissingBounds { #[validate(length)] value: String }
+   |                                         ^
+
+error: expected `=`
+  --> tests/ui-input/fail/invalid-attributes.rs:16:43
+   |
+16 | struct MissingCallback { #[validate(custom)] value: String }
+   |                                           ^
+
+error: only custom validation is supported on a complete input
+  --> tests/ui-input/fail/invalid-attributes.rs:18:12
+   |
+18 | #[validate(email)]
+   |            ^^^^^

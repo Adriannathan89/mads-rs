@@ -19,10 +19,13 @@
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
+extern crate self as mads_core;
+
 mod auto_configuration;
 mod builder;
 mod catalog;
 mod config;
+mod configuration;
 mod context;
 mod descriptor;
 mod diagnostic;
@@ -41,6 +44,9 @@ pub use catalog::Catalog;
 pub use config::{
     Config, ConfigBuilder, ConfigDocument, ConfigSource, ConfigValue, DotenvSource, EnvSource,
     MapSource, TomlSource,
+};
+pub use configuration::{
+    Configuration, ConfigurationErrors, ConfigurationIssue, ConfigurationResult, Secret,
 };
 pub use context::{ApplicationContext, ConstructionContext};
 pub use descriptor::{
@@ -65,12 +71,15 @@ pub use graph::{
 pub use lifecycle::{LifecycleFuture, LifecycleHook, LifecycleManager, LifecycleState};
 pub use registry::{ErasedProvider, ProviderRegistry};
 
-pub use mads_core_macros::{main, module, provider, repository, service};
+pub use mads_core_macros::{Configuration, main, module, provider, repository, service};
 
 /// Implementation details used by MADS.rs procedural macro expansions.
 #[doc(hidden)]
 pub mod __private {
     use std::any::TypeId;
+
+    pub use crate::configuration::parse as configuration;
+    pub use crate::configuration::validate as configuration_validation;
 
     pub use crate::auto_configuration::{
         AutoConfigurationApplyContext, AutoConfigurationContext, AutoConfigurationContribution,

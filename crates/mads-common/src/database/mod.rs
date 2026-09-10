@@ -3,12 +3,16 @@
 mod auto_configuration;
 mod config;
 mod error;
+#[cfg(all(feature = "http", feature = "database"))]
+mod http;
 mod lifecycle;
 mod migration;
 mod pool;
 
 pub use config::DatabaseConfig;
 pub use error::{DatabaseError, DatabaseErrorKind, DatabaseResult};
+#[cfg(all(feature = "http", feature = "database"))]
+pub use http::IntoHttpResult;
 pub use lifecycle::{DatabaseBootstrap, MadsBuilderDatabaseExt};
 pub use migration::{MigrationReport, MigrationStatus};
 pub use pool::{Database, DatabasePoolStatus};

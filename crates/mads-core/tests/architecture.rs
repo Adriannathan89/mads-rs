@@ -4,11 +4,13 @@ use std::collections::{HashMap, HashSet};
 
 use cargo_metadata::{CargoOpt, DependencyKind, MetadataCommand, PackageId};
 
-const FORBIDDEN_DEPENDENCY_FRAGMENTS: [&str; 7] = [
+const FORBIDDEN_DEPENDENCY_FRAGMENTS: [&str; 9] = [
     "mads-common",
     "mads-extra",
     "axum",
     "diesel",
+    "jsonwebtoken",
+    "cookie",
     "http",
     "hyper",
     "tower",
@@ -27,6 +29,8 @@ fn dependency_name_families_are_forbidden() {
         "mads-common-http",
         "mads-extra-cache",
         "diesel-async",
+        "jsonwebtoken",
+        "cookie",
     ] {
         assert!(
             is_forbidden_dependency(name),
@@ -35,6 +39,34 @@ fn dependency_name_families_are_forbidden() {
     }
 
     assert!(!is_forbidden_dependency("inventory"));
+}
+
+#[test]
+fn core_configuration_has_no_direct_serialization_or_delivery_dependencies() {
+    let workspace_manifest = format!("{}/../../Cargo.toml", env!("CARGO_MANIFEST_DIR"));
+    let metadata = MetadataCommand::new()
+        .manifest_path(workspace_manifest)
+        .features(CargoOpt::AllFeatures)
+        .exec()
+        .expect("workspace metadata should load");
+    let core = metadata
+        .packages
+        .iter()
+        .find(|package| package.name == "mads-core")
+        .expect("workspace should contain mads-core");
+    let normal_dependencies: HashSet<_> = core
+        .dependencies
+        .iter()
+        .filter(|dependency| dependency.kind == DependencyKind::Normal)
+        .map(|dependency| dependency.name.as_str())
+        .collect();
+
+    for forbidden in ["axum", "serde", "diesel", "jsonwebtoken", "cookie"] {
+        assert!(
+            !normal_dependencies.contains(forbidden),
+            "mads-core configuration must not directly depend on {forbidden}"
+        );
+    }
 }
 
 #[test]

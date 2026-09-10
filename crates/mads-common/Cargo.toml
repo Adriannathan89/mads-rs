@@ -18,6 +18,8 @@ http = [
     "dep:rustix",
     "dep:serde",
     "dep:serde_json",
+    "dep:serde_path_to_error",
+    "dep:serde_urlencoded",
     "dep:tokio",
     "dep:tower",
     "dep:tower-http",
@@ -46,10 +48,12 @@ deadpool-diesel = { workspace = true, optional = true }
 diesel = { workspace = true, optional = true }
 diesel_migrations = { workspace = true, optional = true }
 jsonwebtoken = { workspace = true, optional = true }
-mads-common-macros = { path = "../mads-common-macros", version = "=0.7.0", optional = true }
-mads-core = { path = "../mads-core", version = "=0.7.0" }
+mads-common-macros = { path = "../mads-common-macros", version = "=0.8.0-beta.1", optional = true }
+mads-core = { path = "../mads-core", version = "=0.8.0-beta.1" }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
+serde_path_to_error = { workspace = true, optional = true }
+serde_urlencoded = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true }
@@ -58,6 +62,7 @@ tower-http = { workspace = true, optional = true }
 rustix = { workspace = true, optional = true }
 
 [dev-dependencies]
+http-body.workspace = true
 tempfile = "3"
 tokio.workspace = true
 

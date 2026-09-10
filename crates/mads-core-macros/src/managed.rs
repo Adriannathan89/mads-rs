@@ -1,7 +1,7 @@
 //! Shared expansion for service and repository managed providers.
 
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, quote_spanned};
 use syn::visit_mut::{self, VisitMut};
 use syn::{
     Attribute, Error, ExprPath, Fields, Ident, ItemStruct, Type, TypePath, spanned::Spanned,
@@ -128,23 +128,26 @@ fn expand_managed_with_core(
                 .iter()
                 .cloned()
                 .map(|mut field| {
+                    let dependency_span = field.ty.span();
                     normalize_self_type(&mut field.ty, &ident);
-                    field
+                    (field, dependency_span)
                 })
                 .collect();
-            let declarations = normalized_fields.iter().map(|field| {
+            let declarations = normalized_fields.iter().map(|(field, _)| {
                 let attrs = &field.attrs;
                 let vis = &field.vis;
                 let ident = &field.ident;
                 let ty = &field.ty;
                 quote!(#(#attrs)* #vis #ident: #ty)
             });
-            let resolutions = normalized_fields.iter().map(|field| {
+            let resolutions = normalized_fields.iter().map(|(field, dependency_span)| {
                 let ident = field.ident.as_ref().expect("named fields have identifiers");
                 let ty = &field.ty;
-                quote!(#ident: context.resolve::<#ty>()?.as_ref().clone())
+                quote_spanned! {*dependency_span=>
+                    #ident: __mads_assert_managed_dependency::<#ty>(context)?
+                }
             });
-            let descriptors = normalized_fields.iter().map(|field| {
+            let descriptors = normalized_fields.iter().map(|(field, _)| {
                 let ty = &field.ty;
                 quote! {
                     #core::DependencyDescriptor::new(
@@ -190,43 +193,57 @@ fn expand_managed_with_core(
             }
         }
 
-        #[doc(hidden)]
-        #[allow(non_snake_case)]
-        fn #constructor_ident<'a>(
-            context: &'a #core::ConstructionContext<'a>,
-        ) -> #core::ProviderFuture<'a> {
-            ::std::boxed::Box::pin(async move {
-                let value = #ident(::std::sync::Arc::new(#inner_value));
-                let erased: #core::ErasedProvider = ::std::sync::Arc::new(value);
-                Ok(erased)
-            })
-        }
+        const _: () = {
+            fn __mads_assert_managed_dependency<'a, T>(
+                context: &'a #core::ConstructionContext<'a>,
+            ) -> #core::Result<T>
+            where
+                T: ::core::clone::Clone
+                    + ::core::marker::Send
+                    + ::core::marker::Sync
+                    + 'static,
+            {
+                Ok(::core::clone::Clone::clone(context.resolve::<T>()?.as_ref()))
+            }
 
-        #[doc(hidden)]
-        #[allow(non_snake_case)]
-        fn #type_id_ident() -> ::core::any::TypeId {
-            ::core::any::TypeId::of::<#ident>()
-        }
+            #[doc(hidden)]
+            #[allow(non_snake_case)]
+            fn #constructor_ident<'a>(
+                context: &'a #core::ConstructionContext<'a>,
+            ) -> #core::ProviderFuture<'a> {
+                ::std::boxed::Box::pin(async move {
+                    let value = #ident(::std::sync::Arc::new(#inner_value));
+                    let erased: #core::ErasedProvider = ::std::sync::Arc::new(value);
+                    Ok(erased)
+                })
+            }
 
-        #[doc(hidden)]
-        #[allow(non_snake_case)]
-        fn #runtime_type_name_ident() -> &'static str {
-            ::core::any::type_name::<#ident>()
-        }
+            #[doc(hidden)]
+            #[allow(non_snake_case)]
+            fn #type_id_ident() -> ::core::any::TypeId {
+                ::core::any::TypeId::of::<#ident>()
+            }
 
-        #core::__private::inventory::submit! {
-            #core::ProviderDescriptor::new(
-                #provider_kind,
-                concat!(module_path!(), "::", stringify!(#ident)),
-                #type_id_ident,
-                #dependencies,
-                #provider_visibility,
-                #core::SourceLocation::new(file!(), line!(), column!()),
-                #constructor_ident,
-            )
-            .with_runtime_type_name(#runtime_type_name_ident)
-            .with_namespace(module_path!())
-        }
+            #[doc(hidden)]
+            #[allow(non_snake_case)]
+            fn #runtime_type_name_ident() -> &'static str {
+                ::core::any::type_name::<#ident>()
+            }
+
+            #core::__private::inventory::submit! {
+                #core::ProviderDescriptor::new(
+                    #provider_kind,
+                    concat!(module_path!(), "::", stringify!(#ident)),
+                    #type_id_ident,
+                    #dependencies,
+                    #provider_visibility,
+                    #core::SourceLocation::new(file!(), line!(), column!()),
+                    #constructor_ident,
+                )
+                .with_runtime_type_name(#runtime_type_name_ident)
+                .with_namespace(module_path!())
+            }
+        };
     })
 }
 
