@@ -3,7 +3,7 @@
 > **Version scope:** The module declarations, standard
 > `Mads::run::<AppModule>()` startup, CLI workflow, typed configuration,
 > validation extractors, and REST errors shown here are the MADS
-> `0.8.0-beta.1` API. Trait bindings and `Inject<dyn Trait>` remain conceptual
+> `0.8.0` API. Trait bindings and `Inject<dyn Trait>` remain conceptual
 > v1 APIs and are labelled where they appear.
 
 ## v0.8 CLI workflow
@@ -166,7 +166,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-mads = { version = "=0.8.0-beta.1", default-features = false, features = ["database", "http", "runtime-tokio"] }
+mads = { version = "=0.8.0", default-features = false, features = ["database", "http", "runtime-tokio"] }
 serde = { version = "1", features = ["derive"] }
 ```
 

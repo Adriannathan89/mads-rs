@@ -11,7 +11,7 @@ lookup and refresh persistence are intentionally shown as application services.
 ```toml
 # Cargo.toml: HTTP + Passport + cookies, without the default database feature.
 [dependencies]
-mads = { version = "=0.8.0-beta.1", default-features = false,
+mads = { version = "=0.8.0", default-features = false,
   features = ["http", "jwt", "cookies", "runtime-tokio"] }
 serde = { version = "1", features = ["derive"] }
 ```

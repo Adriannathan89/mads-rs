@@ -2,7 +2,7 @@
 
 All notable changes to MADS.rs are documented in this file.
 
-## [0.8.0] - 2026-10-04
+## [0.8.0] - 2026-09-10
 
 Stable release of the MADS.rs CLI, development loop, and framework
 diagnostics.
@@ -155,6 +155,7 @@ First public beta of the MADS.rs HTTP application foundation.
 - TLS, HTTP/2 configuration, multiple listeners, and declarative middleware are application-owned.
 - Public APIs may change in later `0.6.0-beta.*` releases based on adopter feedback.
 
+[0.8.0]: https://github.com/Adriannathan89/mads/releases/tag/v0.8.0
 [0.6.0-beta.1]: https://github.com/Adriannathan89/mads/releases/tag/v0.6.0-beta.1
 [0.7.0]: https://github.com/Adriannathan89/mads/releases/tag/v0.7.0
 [0.7.0-beta.1]: https://github.com/Adriannathan89/mads/releases/tag/v0.7.0-beta.1

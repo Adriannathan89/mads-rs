@@ -379,7 +379,7 @@ fn documentation_describes_the_v080_compatibility_boundaries() {
     let passport = fs::read_to_string(root.join("docs/examples/passport_jwt.md"))
         .expect("Passport example should exist");
     for required in [
-        "0.8.0-beta.1",
+        "0.8.0",
         "ValidatedJson",
         "authentication was rejected",
         "access was denied",
