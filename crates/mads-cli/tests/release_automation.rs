@@ -289,7 +289,7 @@ fn workspace_packages_use_exact_v080_stable_internal_pins() {
             .unwrap_or_else(|error| panic!("{package} manifest should exist: {error}"));
         assert!(
             manifest.contains("version.workspace = true"),
-                "{package} must inherit the workspace stable version"
+            "{package} must inherit the workspace stable version"
         );
 
         for dependency in manifest
@@ -472,9 +472,7 @@ impl ReleaseFixture {
         fs::create_dir_all(nested_lock.parent().unwrap()).unwrap();
         write(
             &nested_lock,
-            &format!(
-                "[[package]]\nname = \"mads\"\nversion = \"{version}\"\n"
-            ),
+            &format!("[[package]]\nname = \"mads\"\nversion = \"{version}\"\n"),
         );
         Self { root }
     }
