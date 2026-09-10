@@ -63,6 +63,19 @@ fn stable_release_sets_the_exact_stable_version() {
 
 #[cfg(unix)]
 #[test]
+fn release_updates_matching_nested_lockfiles() {
+    let fixture = ReleaseFixture::new("0.7.0-beta.1");
+    let nested_lock = fixture.root().join("fixtures/example/Cargo.lock");
+
+    let output = fixture.run("release.sh", "0.7.0");
+
+    assert_success(&output);
+    let lock = fs::read_to_string(nested_lock).unwrap();
+    assert!(lock.contains("name = \"mads\"\nversion = \"0.7.0\""));
+}
+
+#[cfg(unix)]
+#[test]
 fn release_scripts_reject_invalid_versions_without_modifying_the_workspace() {
     let fixture = ReleaseFixture::new("0.7.0-beta.1");
     let before = fixture.version_files();
@@ -455,6 +468,14 @@ impl ReleaseFixture {
             .output()
             .expect("Cargo should generate the fixture lockfile");
         assert_success(&lock);
+        let nested_lock = root.path().join("fixtures/example/Cargo.lock");
+        fs::create_dir_all(nested_lock.parent().unwrap()).unwrap();
+        write(
+            &nested_lock,
+            &format!(
+                "[[package]]\nname = \"mads\"\nversion = \"{version}\"\n"
+            ),
+        );
         Self { root }
     }
 

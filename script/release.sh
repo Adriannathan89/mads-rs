@@ -98,17 +98,20 @@ for manifest in sorted((root / "crates").glob("*/Cargo.toml")):
 if pin_count == 0:
     raise SystemExit("No internal MADS dependency pins were found.")
 
-lockfile = root / "Cargo.lock"
-original_lock = lockfile.read_text(encoding="utf-8")
-updated_lock = original_lock
-for package in packages:
-    pattern = re.compile(
-        rf'(?m)(^\[\[package\]\]\nname = "{re.escape(package)}"\nversion = ")[^"]+("$)'
-    )
-    updated_lock, count = pattern.subn(rf'\g<1>{target}\g<2>', updated_lock)
-    if count != 1:
-        raise SystemExit(f"Cargo.lock must contain exactly one package record for {package}.")
-changes[lockfile] = updated_lock
+root_lockfile = root / "Cargo.lock"
+for lockfile in sorted(root.rglob("Cargo.lock")):
+    original_lock = lockfile.read_text(encoding="utf-8")
+    updated_lock = original_lock
+    for package in packages:
+        pattern = re.compile(
+            rf'(?m)(^\[\[package\]\]\nname = "{re.escape(package)}"\nversion = ")[^"]+("$)'
+        )
+        updated_lock, count = pattern.subn(rf'\g<1>{target}\g<2>', updated_lock)
+        if count > 1 or (lockfile == root_lockfile and count != 1):
+            raise SystemExit(
+                f"{lockfile} must contain exactly one package record for {package}."
+            )
+    changes[lockfile] = updated_lock
 
 for path, contents in changes.items():
     tomllib.loads(contents)
