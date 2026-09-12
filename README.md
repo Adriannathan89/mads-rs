@@ -6,6 +6,20 @@ errors, request validation, and explicit PostgreSQL/Diesel integration. A root
 module selects one application; startup validates its scoped graph and routes
 before it starts lifecycle hooks, checks a database, or binds a socket.
 
+## What is MADS.rs?
+
+MADS stands for **Modular Architecture Design System**. The name began as a
+deliberate, playful misspelling of “mad,” reflecting the feeling developers can
+have when low-level application architecture becomes repetitive and difficult
+to wire together.
+
+The philosophy is to take that frustration out of Rust application
+development. MADS keeps architecture explicit, typed, and inspectable while
+automating the repetitive work around modules, dependency wiring, lifecycle,
+configuration, routing, and infrastructure. Developers can then spend more
+time on domain logic and business systems instead of rebuilding the same
+low-level application structure for every project.
+
 ## CLI quick start
 
 Create a minimal HTTP application, then start its development server:
@@ -62,38 +76,59 @@ async fn main() -> Result<(), HttpRuntimeError> {
 selects its direct imports and the providers, controllers, routes, guards,
 strategies, and official auto-configurations reachable through that graph.
 
-## Crates and boundaries
+## Workspace crates
 
-- `mads-core` owns construction, providers, lifecycle, diagnostics, and
-  generic scalar TOML/dotenv configuration, plus official conditional-default
-  evaluation and redacted inspection reports. It has no database or HTTP
-  dependency.
-- `mads-common` owns route validation, Axum delivery, cookies, JWT/Passport,
-  the official Diesel default, PostgreSQL pools, database infrastructure
-  lifecycle, and migration execution.
-- `mads` is the stable facade. Its default `common` feature exposes the HTTP
-  runtime and persistence; disable default features for the core-only boundary.
+MADS is split into small crates with a deliberate dependency direction. Most
+applications depend only on the public `mads` facade; the implementation details
+are documented beside the crate that owns them.
 
-```toml
+~~~text
+application
+└── mads
+    ├── mads-core
+    │   └── mads-core-macros
+    ├── mads-common (optional)
+    │   ├── mads-core
+    │   └── mads-common-macros
+    └── mads-extra (optional)
+        └── mads-core
+
+mads-cli
+├── mads
+└── mads-common (http-only private inspection contract)
+~~~
+
+| Crate | Responsibility | Contributor guide |
+| --- | --- | --- |
+| `mads` | Public facade, prelude, and feature composition for application authors. | [crates/mads/README.md](crates/mads/README.md) |
+| `mads-core` | Framework-neutral configuration, graph, providers, lifecycle, diagnostics, and module scope. | [crates/mads-core/README.md](crates/mads-core/README.md) |
+| `mads-core-macros` | Procedural macros that generate core metadata and constructors. | [crates/mads-core-macros/README.md](crates/mads-core-macros/README.md) |
+| `mads-common` | Optional HTTP, database, validation, CORS, JWT, cookie, and Passport integrations. | [crates/mads-common/README.md](crates/mads-common/README.md) |
+| `mads-common-macros` | Procedural macros for routes, controllers, validation, and Passport. | [crates/mads-common-macros/README.md](crates/mads-common-macros/README.md) |
+| `mads-cli` | Cargo-native execution, inspection, development loop, migrations, and scaffolding. | [crates/mads-cli/README.md](crates/mads-cli/README.md) |
+| `mads-extra` | Reserved boundary for future optional integrations. | [crates/mads-extra/README.md](crates/mads-extra/README.md) |
+
+The approach is type-driven and metadata-driven: macros emit static
+descriptors, core analyzes a selected module graph before construction, and
+common integrations consume the validated application. See
+[Architecture](docs/ARCHITECTURE.md) for invariants and the individual crate
+guides for dependencies, source layout, and change ownership.
+
+## Installation and feature selection
+
+~~~toml
 [dependencies]
 mads = "0.8.0"
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
-```
+~~~
 
-MADS.rs supports Rust 1.85 and uses Rust edition 2024.
-
-The default `common` feature remains the compatibility aggregate for HTTP and
-PostgreSQL; it does not silently enable authentication. For an HTTP API without
-Diesel, use `default-features = false` with `features = ["http",
-"runtime-tokio"]`. Add `jwt` and `cookies` only when the application needs
-Passport/cookie support. `jwt` alone does not pull in Axum, while `cookies`
-includes HTTP. Passport strategies and Bearer guards require `http + jwt`;
-cookie guards additionally require `cookies`. Input validation and the REST
-error family are `http` APIs; `.into_http()` requires both `http` and
-`database`.
+MADS.rs supports Rust 1.85 and uses Rust edition 2024. The default facade
+enables the HTTP and PostgreSQL/Diesel integrations with the Tokio runtime. For
+feature combinations and the no-Diesel HTTP setup, see the
+[facade README](crates/mads/README.md).
 
 ## Conventional configuration and HTTP
 
