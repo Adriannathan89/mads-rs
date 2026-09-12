@@ -6,7 +6,7 @@ rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 license.workspace = true
-readme.workspace = true
+readme = "README.md"
 description = "HTTP, PostgreSQL, JWT, cookies, and Passport integrations for MADS.rs"
 
 [features]

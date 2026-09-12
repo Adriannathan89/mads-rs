@@ -7,7 +7,7 @@ rust-version.workspace = true
 authors.workspace = true
 repository.workspace = true
 license.workspace = true
-readme.workspace = true
+readme = "README.md"
 description = "Procedural macros for the framework-neutral MADS.rs core"
 
 [dependencies]
