@@ -1,0 +1,82 @@
+:root {
+  --surface: #ffffff;
+  --surface-muted: #f7f8fa;
+  --text: #172033;
+  --text-muted: #5f6c82;
+  --border: #e1e6ee;
+  --accent: #ea6b47;
+  --accent-dark: #c74c2d;
+  --code: #151c2c;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: var(--surface-muted);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--text);
+  background: var(--surface);
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.6;
+}
+
+a {
+  color: inherit;
+}
+
+.landing-shell {
+  display: grid;
+  min-height: 100vh;
+  padding: 2rem;
+  place-items: center;
+}
+
+.landing-card {
+  max-width: 48rem;
+}
+
+.landing-card h1 {
+  max-width: 17ch;
+  margin: 0;
+  font-size: clamp(2.5rem, 7vw, 5rem);
+  line-height: 1.04;
+  letter-spacing: -0.06em;
+}
+
+.landing-card p:not(.eyebrow) {
+  max-width: 44rem;
+  color: var(--text-muted);
+  font-size: 1.15rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.8rem;
+  color: var(--accent-dark);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.primary-link {
+  display: inline-flex;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.45rem;
+  color: #ffffff;
+  background: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.primary-link:hover {
+  background: var(--accent-dark);
+}
