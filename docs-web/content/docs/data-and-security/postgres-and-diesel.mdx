@@ -1,0 +1,25 @@
+---
+title: PostgreSQL and Diesel
+description: Add PostgreSQL and Diesel only when a selected provider needs persistence.
+section: Data and security
+order: 1
+---
+
+The generated MADS starter is database-free. Add PostgreSQL and Diesel deliberately when a selected provider requires `Database`; that dependency activates the linked official database auto-configuration.
+
+```toml
+[database]
+url = "${DATABASE_URL}"
+```
+
+## Keep Diesel inside infrastructure
+
+Use an infrastructure repository implementation for Diesel schema, model, and query types. Application use cases should depend on ports or domain contracts instead of HTTP or Diesel response types.
+
+### Run synchronous queries safely
+
+Diesel queries are synchronous. Execute them through `Database::run` rather than blocking the async request runtime directly.
+
+## Choose HTTP conversion explicitly
+
+For an endpoint, use a domain-specific error mapping, native Diesel behavior, or opt-in `.into_http()` when the framework's safe generic database mapping is appropriate.

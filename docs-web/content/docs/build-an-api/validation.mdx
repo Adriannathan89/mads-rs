@@ -1,0 +1,34 @@
+---
+title: Validation
+description: Validate request data with Input and the validated HTTP extractors.
+section: Build an API
+order: 2
+---
+
+Derive `Input` for a request type and use a validated extractor. Serde deserializes the input first; MADS then runs its validation rules before your handler receives the value.
+
+```rust
+use mads::prelude::*;
+
+#[derive(serde::Deserialize, Input)]
+struct CreateUser {
+    #[input(length(min = 3, max = 40))]
+    name: String,
+}
+
+async fn create_user(ValidatedJson(input): ValidatedJson<CreateUser>) {
+    // input has passed MADS validation
+}
+```
+
+## Select a validated extractor
+
+Use `ValidatedJson<T>`, `ValidatedQuery<T>`, or `ValidatedPath<T>` for the corresponding request location. Native Axum `Json`, `Query`, and `Path` deliberately do not run `Input` validation.
+
+### Validation response
+
+Invalid input returns a safe, ordered HTTP 422 response with the standard MADS error envelope. Do not assume deserialization alone enforces domain rules.
+
+## Custom rules
+
+Use the derive's supported field and whole-value rules, a synchronous custom callback, or implement `Input` manually when the input needs full control.

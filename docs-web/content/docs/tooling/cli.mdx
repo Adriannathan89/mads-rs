@@ -1,0 +1,29 @@
+---
+title: CLI
+description: Use the Cargo-native MADS CLI to create, run, and inspect applications.
+section: Tooling
+order: 1
+---
+
+The MADS CLI is a Cargo-native companion for scaffolding, running, watching, inspecting, and managing PostgreSQL migrations.
+
+```bash
+mads new my-app
+mads run
+mads dev
+mads routes
+mads graph
+mads doctor
+```
+
+## Development supervision
+
+`mads dev` builds, supervises, and restarts the selected application while preserving normal Cargo, rustc, and application output. Arguments after `--` are forwarded by `run` and `dev` only.
+
+### Select a target when necessary
+
+Use `--package <package>` and `--bin <binary>` when Cargo cannot infer one eligible application target. Cargo's normal single-package and `default-run` behavior remains authoritative.
+
+## Machine-readable inspection
+
+Finite commands such as `new`, `routes`, `graph`, `doctor`, and supported database commands accept `--format json`. Streaming commands such as `run` and `dev` do not wrap output as JSON.

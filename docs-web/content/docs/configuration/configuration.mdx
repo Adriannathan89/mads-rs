@@ -1,0 +1,28 @@
+---
+title: Configuration
+description: Use MADS conventional configuration sources and server settings.
+section: Configuration
+order: 1
+---
+
+Only `Mads::run` loads the conventional configuration sources. It reads the process current working directory; it does not search parent directories or use `CARGO_MANIFEST_DIR`.
+
+## Source order
+
+1. Optional `.env` for interpolation only.
+2. Optional `mads.toml` as ordinary configuration.
+3. Final scalar `MADS_*` environment overrides.
+
+```toml
+[server]
+host = "127.0.0.1"
+port = 3000
+```
+
+### Environment overrides
+
+`MADS_SERVER__HOST` maps to `server.host` and `MADS_SERVER__PORT` maps to `server.port`. Process variables win during `${NAME}` interpolation, and dotenv loading never mutates the process environment.
+
+## Bootstrap failures are intentional
+
+Both conventional files may be absent. A present but unreadable or malformed file is a bootstrap failure, so configuration errors stop the selected application before it binds a listener.

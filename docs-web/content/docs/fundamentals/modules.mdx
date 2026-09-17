@@ -1,0 +1,30 @@
+---
+title: Modules
+description: Use modules to make your application graph explicit.
+section: Fundamentals
+order: 1
+---
+
+A MADS module is an explicit composition boundary. The root module imports the modules that should be reachable at startup.
+
+```rust
+use mads::prelude::*;
+
+#[module]
+struct UsersModule;
+
+#[module(imports = [UsersModule])]
+struct AppModule;
+```
+
+## Direct imports define scope
+
+Only direct imports contribute the reachable application graph. Across modules, dependencies require a directly imported module and ordinary `pub` visibility; imports are not transitive shortcuts.
+
+### Keep boundaries useful
+
+Place the controller, providers, and routes for one capability behind the same module. Let the root decide which capabilities run in each binary or environment.
+
+## Start from the root
+
+Pass only the root module to `Mads::run`. MADS then evaluates the selected graph and its eligible official auto-configuration before construction begins.

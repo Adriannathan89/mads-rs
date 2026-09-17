@@ -1,0 +1,25 @@
+---
+title: Features and compatibility
+description: Select only the MADS integrations your application actually needs.
+section: Tooling
+order: 2
+---
+
+MADS separates framework-neutral core behavior from optional delivery and infrastructure integrations. Start with the public `mads` facade and choose Cargo features intentionally.
+
+## Common feature choices
+
+| Feature | Purpose |
+| --- | --- |
+| `http` | Axum routing, validation, CORS, and REST errors without Diesel. |
+| `database` | PostgreSQL and Diesel infrastructure without HTTP mapping. |
+| `jwt` | JWT service, claims, profiles, algorithms, and key handling. |
+| `cookies` | Cookie request and response support; implies HTTP. |
+
+### Passport feature combination
+
+Passport requires `http + jwt`; a cookie-based guard also requires `cookies`. Calling `.into_http()` for database results requires both `http` and `database`.
+
+## Avoid accidental activation
+
+Feature selection changes what code is available, while the selected module/provider graph determines which eligible official defaults are evaluated at startup. Keep both decisions explicit.

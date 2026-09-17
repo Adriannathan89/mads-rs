@@ -1,0 +1,28 @@
+---
+title: CORS
+description: Configure browser cross-origin response access at the outermost router layer.
+section: Build an API
+order: 4
+---
+
+CORS is opt-in. Configure it under `[server.cors]` in `mads.toml`; MADS validates it before lifecycle startup and applies it as the outermost layer to generated and merged native routes.
+
+```toml
+[server.cors]
+origins = ["https://app.example.com"]
+methods = ["GET", "POST"]
+allowed_headers = ["authorization", "content-type"]
+credentials = false
+```
+
+## Wildcards use scalars
+
+Use `origins = "*"` or `allowed_headers = "*"`, not one-element lists. Wildcard origins or headers cannot be combined with credentials.
+
+### CORS is not authorization
+
+CORS controls browser access to responses. It does not authenticate a caller, authorize an action, or protect cookie-based workflows from CSRF. Design those controls separately.
+
+## Native routes
+
+Merge native Axum routes before `configure_router` or `serve_router`; otherwise CORS can be applied inconsistently or more than once.

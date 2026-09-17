@@ -1,0 +1,29 @@
+---
+title: What is MADS?
+description: Learn how MADS composes modular Rust applications.
+section: Getting started
+order: 1
+---
+
+MADS is a Rust framework for building modular services. It keeps application composition explicit: a root module selects the modules, providers, controllers, routes, guards, and official auto-configurations that are reachable by the application.
+
+## Why MADS?
+
+MADS separates framework-neutral construction and configuration from the optional HTTP, database, JWT, and cookie integrations. Most applications use the public `mads` facade and opt into the features they need.
+
+### Composition before startup
+
+`Mads::run::<AppModule>()` evaluates the selected module graph before it starts lifecycle hooks, checks a database, or binds a listener. Invalid configuration and graph problems therefore fail before the process starts serving traffic.
+
+## A small application surface
+
+Start with a root module and import feature modules directly. Imports are deliberate boundaries, not a global registry.
+
+```rust
+use mads::prelude::*;
+
+#[module]
+struct AppModule;
+```
+
+Continue with the installation guide to create a working service.

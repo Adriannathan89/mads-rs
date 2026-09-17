@@ -1,0 +1,26 @@
+---
+title: Migrations
+description: Plan and apply PostgreSQL migrations through the MADS CLI.
+section: Data and security
+order: 2
+---
+
+MADS provides Cargo-native PostgreSQL migration commands for applications that have chosen the database integration. Run them from a directory where Cargo can select the target package.
+
+```bash
+mads db generate create_users
+mads db migrate
+mads db status
+```
+
+## Use the CLI as the operational boundary
+
+The database commands accept `--package` when workspace selection is ambiguous. MADS reports MADS-owned finite commands in human-readable output by default, with an optional versioned JSON format where supported.
+
+### Keep source and deployment separate
+
+Commit migrations and example configuration, but supply the real `DATABASE_URL` through the deployment environment. Run the migration service before the web or API service begins serving traffic.
+
+## Native control remains available
+
+For fully explicit application construction, use the builder and the native Diesel migration APIs that MADS re-exports.

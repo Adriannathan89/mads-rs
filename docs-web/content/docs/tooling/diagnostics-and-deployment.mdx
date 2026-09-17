@@ -1,0 +1,20 @@
+---
+title: Diagnostics and deployment
+description: Inspect a MADS application safely and deploy with explicit configuration.
+section: Tooling
+order: 3
+---
+
+Use `mads doctor`, `mads routes`, and `mads graph` to inspect the selected standard entry point. These commands obtain private child inspection metadata and render a public human or versioned JSON report.
+
+## Treat diagnostics as safe operational output
+
+Configuration values, credentials, URLs, and private values are redacted. Invalid reports preserve safe partial public data with diagnostics rather than starting normal providers or binding a listener.
+
+### Deploy through the environment
+
+Keep a tracked `.env.example` for names and local development shape. Put real secrets and production connection URLs in the deployment environment. `Mads::run` reads conventional files from the process working directory, so make the runtime working directory intentional.
+
+## Readiness and migrations
+
+Let migration and database readiness be explicit deployment steps. Preflight configuration failures should prevent the application from accepting traffic; they are not conditions to recover from by serving a partially configured process.

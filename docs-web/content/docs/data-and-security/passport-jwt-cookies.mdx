@@ -1,0 +1,27 @@
+---
+title: Passport, JWT, and cookies
+description: Add opt-in Passport strategies, JWT profiles, and cookie transport.
+section: Data and security
+order: 3
+---
+
+Passport guards and strategies require the `http` and `jwt` features. Cookie guards add the `cookies` feature. These capabilities are not enabled by the starter and are not activated by a native runtime-only guard alone.
+
+## Configure secrets explicitly
+
+JWT configuration belongs in ordinary configuration with a secret interpolated from the deployment environment.
+
+```toml
+[jwt]
+secret = "${JWT_SECRET}"
+```
+
+### Strategy ownership
+
+A custom Passport strategy is both a managed provider and an annotated `PassportStrategy` implementation. A managed dependency on `JwtService` is what makes the JWT default relevant to the selected graph.
+
+## Cookie transport is not CSRF protection
+
+Use a deliberate cookie policy such as `HttpOnly`, `Secure`, `SameSite`, path, and lifetime. Cookies carry credentials but do not protect unsafe browser requests from CSRF by themselves.
+
+For a cookie guard, select `source = cookie("refresh_token")`; MADS does not silently fall back to a Bearer token for that source.

@@ -1,0 +1,34 @@
+---
+title: Routes and controllers
+description: Define HTTP routes and controllers at the delivery edge.
+section: Build an API
+order: 1
+---
+
+Routes and controllers belong at the HTTP boundary. MADS uses its HTTP integration to collect selected route metadata, validate the graph, and build the router.
+
+```rust
+use mads::prelude::*;
+
+#[controller("/users")]
+struct UsersController;
+
+impl UsersController {
+    #[get("/")]
+    async fn list_users() -> &'static str {
+        "users"
+    }
+}
+```
+
+## Keep request delivery thin
+
+Controllers translate HTTP requests into application calls. Keep domain behavior outside Axum-specific types when possible, then choose application-specific error mapping at this boundary.
+
+### Native Axum routes
+
+Native routes remain available for an escape hatch. Merge them into the raw router before calling `configure_router` or `serve_router`, so application-wide CORS is finalized once.
+
+## Inspect routes
+
+Use `mads routes` to compile the standard application entry point and inspect the selected route report without running the application server.

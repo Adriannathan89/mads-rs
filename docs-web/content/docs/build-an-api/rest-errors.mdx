@@ -1,0 +1,28 @@
+---
+title: REST errors
+description: Return safe, normalized HTTP errors without exposing internals.
+section: Build an API
+order: 3
+---
+
+MADS provides safe HTTP error types for common delivery outcomes. MADS-owned errors serialize to one JSON envelope; the server-side error source remains available for error chaining but is not returned to the client.
+
+```rust
+use mads::prelude::*;
+
+fn find_user(found: bool) -> Result<(), HttpError> {
+    if found { Ok(()) } else { Err(HttpError::not_found("user was not found")) }
+}
+```
+
+## Choose an application policy
+
+Use the appropriate safe category such as `BadRequest`, `Unauthorized`, `Forbidden`, `NotFound`, `Conflict`, `ValidationError`, or `InternalError`. Map domain errors deliberately instead of letting storage or framework details escape.
+
+### Database errors are explicit
+
+`DatabaseResult<T>` and native Diesel `QueryResult<T>` can use `.into_http()` when that generic mapping fits the endpoint. Prefer a domain-specific `map_err` when an application needs a more precise public policy.
+
+## Authentication responses
+
+MADS-owned Passport and cookie failures use the safe envelope. Authentication rejection is a normalized 401, access denial is 403, and malformed cookie requests are 400.

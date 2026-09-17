@@ -1,0 +1,29 @@
+---
+title: Providers
+description: Construct application dependencies through the selected MADS graph.
+section: Fundamentals
+order: 2
+---
+
+Providers are the construction points for application dependencies. They make startup requirements visible to the selected module graph instead of hiding them in global initialization.
+
+```rust
+use mads::prelude::*;
+
+#[provider]
+fn greeting_service() -> GreetingService {
+    GreetingService::default()
+}
+```
+
+## Dependencies activate only when selected
+
+A provider that directly needs an optional service, such as `Database`, makes that infrastructure relevant to the selected application graph. A database is not created merely because the dependency exists in Cargo.toml.
+
+### Typed configuration as a provider
+
+A provider commonly calls `Config::parse::<AppConfig>()`. This turns invalid configuration into a startup error before lifecycle startup and listener binding.
+
+## Keep domain code portable
+
+Prefer framework-neutral domain and application types. Put HTTP extractors, Diesel details, and response conversion at delivery or infrastructure edges.

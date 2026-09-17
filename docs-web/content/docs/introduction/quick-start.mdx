@@ -1,0 +1,36 @@
+---
+title: Quick start
+description: Generate, run, and inspect your first MADS HTTP application.
+section: Getting started
+order: 3
+---
+
+Create the starter, enter the directory, and start the development supervisor.
+
+```bash
+mads new my-app
+cd my-app
+mads dev
+```
+
+## Verify the starter
+
+The generated application listens on `127.0.0.1:3000` and responds to `GET /` with `Hello World!`. Its `mads.toml` contains the server host and port.
+
+```bash
+curl http://127.0.0.1:3000/
+```
+
+## Inspect before you run
+
+MADS can compile the standard entry point and expose safe inspection reports without starting normal providers or binding a listener.
+
+```bash
+mads doctor
+mads routes
+mads graph
+```
+
+### Next steps
+
+Add a module, controller, and validated input rather than turning the starter into a hidden all-in-one application. Database and authentication integrations are opt-in additions.

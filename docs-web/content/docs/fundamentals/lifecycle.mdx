@@ -1,0 +1,24 @@
+---
+title: Lifecycle
+description: Know what MADS verifies and starts before serving requests.
+section: Fundamentals
+order: 3
+---
+
+The standard `Mads::run` startup path is designed to fail early. Conventional configuration, the root module graph, scoped requirements, and official auto-configuration are evaluated before provider construction and listener binding.
+
+## Startup order
+
+1. Load conventional configuration for `Mads::run`.
+2. Evaluate the root module graph and scoped requirements.
+3. Construct providers and finalize the router.
+4. Start lifecycle hooks, bind, and serve.
+5. Shut down in reverse order.
+
+### Preflight failures do not serve
+
+Configuration, graph, route, CORS, and related preflight failures do not start lifecycle hooks or bind a socket. This keeps a partially initialized service from accepting requests.
+
+## Use the builder for explicit control
+
+Use `Mads::builder_with_config` when you need explicit configuration, lifecycle hooks, migrations, router composition, or binding. The low-level builder does not load `.env`, `mads.toml`, or `MADS_*` values by itself.

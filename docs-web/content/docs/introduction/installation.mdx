@@ -1,0 +1,31 @@
+---
+title: Installation
+description: Install the MADS CLI and create a minimal HTTP application.
+section: Getting started
+order: 2
+---
+
+Install the MADS CLI with Cargo, then confirm that it is on your path.
+
+```bash
+cargo install mads-cli
+mads --version
+```
+
+## Prerequisites
+
+Use a current Rust toolchain compatible with your selected MADS release. The generated v0.8 starter uses Rust edition 2024 and starts with the HTTP and Tokio runtime features only.
+
+## Create a project
+
+The generator is intentionally minimal and works offline. It does not add a database, JWT, cookies, migrations, authentication, Git, or a remote template.
+
+```bash
+mads new my-app
+cd my-app
+mads dev
+```
+
+### Existing Cargo workspaces
+
+Run MADS commands from a Cargo workspace or package directory. When Cargo cannot select one package and binary, pass `--package` and `--bin` explicitly.

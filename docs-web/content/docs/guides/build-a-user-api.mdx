@@ -1,0 +1,53 @@
+---
+title: Build a user API
+description: Compose a modular user API with validated delivery and opt-in infrastructure.
+section: Guides
+order: 1
+---
+
+This guide builds a modular shape first. The starter does not need a database, JWT, or cookies; add PostgreSQL, authentication, and cookie transport only when the application requirements call for them.
+
+## Define the feature boundary
+
+Keep the user capability in its own module. The module can own controller, service, repository provider, and optional Passport strategy declarations.
+
+```rust
+use mads::prelude::*;
+
+#[module]
+pub struct UserModule;
+```
+
+### Validate delivery input
+
+Use an `Input` type with `ValidatedJson` at the HTTP edge. Call a service or use case from the controller rather than placing persistence and password policy in the handler.
+
+```rust
+#[derive(serde::Deserialize, Input)]
+struct CreateUser {
+    #[input(length(min = 3, max = 40))]
+    name: String,
+}
+```
+
+## Add opt-in infrastructure
+
+When persistence is needed, put Diesel code in an infrastructure repository and run queries through `Database::run`. When authentication is needed, configure JWT explicitly and register a managed Passport strategy. Cookies are a separate opt-in transport choice, not a starter default.
+
+## Compose the application
+
+The composition root imports the user module and starts only the resulting graph.
+
+```rust
+use mads::prelude::*;
+
+#[module(imports = [UserModule])]
+struct AppModule;
+
+#[mads::main]
+async fn main() -> Result<(), HttpRuntimeError> {
+    Mads::run::<AppModule>().await
+}
+```
+
+This root is runnable once `UserModule` and its selected dependencies are defined.
