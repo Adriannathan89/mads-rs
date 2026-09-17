@@ -1,0 +1,10 @@
+node_modules
+.next
+.env
+.git
+.gitignore
+playwright-report
+test-results
+docs
+AGENTS.md
+CLAUDE.md
