@@ -6,7 +6,7 @@ export default function NotFound() {
       <section className="landing-card">
         <p className="eyebrow">404</p>
         <h1>That documentation page does not exist.</h1>
-        <Link className="primary-link" href="/docs/getting-started/introduction">
+        <Link className="primary-link" href="/docs/introduction/what-is-mads">
           Go to the introduction
         </Link>
       </section>
