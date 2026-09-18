@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 700" fill="none">
+  <defs>
+    <linearGradient id="module-panel" x1="92" y1="70" x2="1332" y2="650" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#18243a"/>
+      <stop offset="1" stop-color="#0D1422"/>
+    </linearGradient>
+    <linearGradient id="module-root" x1="560" y1="120" x2="880" y2="260" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF9A76"/>
+      <stop offset="1" stop-color="#E66543"/>
+    </linearGradient>
+    <filter id="module-shadow" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="18" stdDeviation="16" flood-color="#050A12" flood-opacity=".45"/>
+    </filter>
+    <marker id="module-arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto">
+      <path d="M0 0 10 5 0 10V0Z" fill="#FF8A63"/>
+    </marker>
+    <pattern id="module-grid" width="44" height="44" patternUnits="userSpaceOnUse">
+      <path d="M44 0H0V44" stroke="#8191AC" stroke-opacity=".09"/>
+    </pattern>
+  </defs>
+  <rect width="1440" height="700" rx="36" fill="url(#module-panel)"/>
+  <rect width="1440" height="700" rx="36" fill="url(#module-grid)"/>
+  <circle cx="1210" cy="104" r="160" fill="#FF8A63" fill-opacity=".07"/>
+  <circle cx="170" cy="620" r="220" fill="#7F9FEF" fill-opacity=".06"/>
+  <text x="96" y="108" fill="#FFB199" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" letter-spacing="3">MODULE GRAPH</text>
+  <text x="96" y="148" fill="#DCE6F7" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">The root selects what can run</text>
+  <text x="96" y="184" fill="#9FACBF" font-family="Arial, Helvetica, sans-serif" font-size="20">Direct imports are visible composition boundaries.</text>
+
+  <g filter="url(#module-shadow)">
+    <rect x="510" y="236" width="420" height="150" rx="22" fill="url(#module-root)"/>
+    <rect x="510" y="236" width="420" height="150" rx="22" stroke="#FFD0C1" stroke-opacity=".62" stroke-width="2"/>
+  </g>
+  <rect x="548" y="273" width="84" height="42" rx="21" fill="#7A2C1E" fill-opacity=".22"/>
+  <text x="590" y="301" text-anchor="middle" fill="#FFF8F4" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700">ROOT</text>
+  <text x="548" y="350" fill="#FFF" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">AppModule</text>
+  <text x="748" y="350" fill="#FFF4EF" font-family="Arial, Helvetica, sans-serif" font-size="19">composition root</text>
+
+  <path d="M610 388C610 450 392 447 392 502" stroke="#FF8A63" stroke-width="6" stroke-linecap="round" marker-end="url(#module-arrow)"/>
+  <path d="M830 388C830 450 1048 447 1048 502" stroke="#FF8A63" stroke-width="6" stroke-linecap="round" marker-end="url(#module-arrow)"/>
+  <text x="450" y="445" fill="#FFB199" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">DIRECT IMPORT</text>
+  <text x="862" y="445" fill="#FFB199" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">DIRECT IMPORT</text>
+
+  <g filter="url(#module-shadow)">
+    <rect x="142" y="502" width="500" height="126" rx="20" fill="#202D45" stroke="#4B5E7C" stroke-width="2"/>
+    <rect x="798" y="502" width="500" height="126" rx="20" fill="#202D45" stroke="#4B5E7C" stroke-width="2"/>
+  </g>
+  <circle cx="192" cy="551" r="18" fill="#7F9FEF"/>
+  <path d="M184 551h16M192 543v16" stroke="#EAF0FF" stroke-width="3" stroke-linecap="round"/>
+  <text x="230" y="558" fill="#F1F5FC" font-family="Arial, Helvetica, sans-serif" font-size="29" font-weight="700">UsersModule</text>
+  <text x="230" y="596" fill="#AEBBD0" font-family="Arial, Helvetica, sans-serif" font-size="18">controllers · providers · adapters</text>
+  <circle cx="848" cy="551" r="18" fill="#7F9FEF"/>
+  <path d="M840 551h16M848 543v16" stroke="#EAF0FF" stroke-width="3" stroke-linecap="round"/>
+  <text x="886" y="558" fill="#F1F5FC" font-family="Arial, Helvetica, sans-serif" font-size="29" font-weight="700">PostsModule</text>
+  <text x="886" y="596" fill="#AEBBD0" font-family="Arial, Helvetica, sans-serif" font-size="18">controllers · providers · adapters</text>
+</svg>

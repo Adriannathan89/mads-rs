@@ -7,6 +7,8 @@ order: 3
 
 The standard `Mads::run` startup path is designed to fail early. Conventional configuration, the root module graph, scoped requirements, and official auto-configuration are evaluated before provider construction and listener binding.
 
+![Lifecycle timeline: configuration, graph validation, provider construction, serving, shutdown](/illustrations/fundamentals-lifecycle.svg)
+
 ## Startup order
 
 1. Load conventional configuration for `Mads::run`.

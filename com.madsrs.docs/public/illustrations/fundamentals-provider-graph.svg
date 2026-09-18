@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 700" fill="none">
+  <defs>
+    <linearGradient id="provider-panel" x1="90" y1="90" x2="1328" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#18243A"/>
+      <stop offset="1" stop-color="#0D1422"/>
+    </linearGradient>
+    <filter id="provider-shadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#050A12" flood-opacity=".42"/>
+    </filter>
+    <marker id="provider-arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto">
+      <path d="M0 0 10 5 0 10V0Z" fill="#FF8A63"/>
+    </marker>
+  </defs>
+  <rect width="1440" height="700" rx="36" fill="url(#provider-panel)"/>
+  <path d="M0 583C240 512 370 698 648 620s423-199 792-96" stroke="#7F9FEF" stroke-opacity=".08" stroke-width="120"/>
+  <text x="96" y="108" fill="#FFB199" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" letter-spacing="3">PROVIDER GRAPH</text>
+  <text x="96" y="148" fill="#DCE6F7" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">Follow a request to the infrastructure it needs</text>
+  <text x="96" y="184" fill="#9FACBF" font-family="Arial, Helvetica, sans-serif" font-size="20">Providers bind concrete components to the contracts consumers use.</text>
+
+  <path d="M328 306H404M632 306H708M936 306H1012" stroke="#FF8A63" stroke-width="6" stroke-linecap="round" marker-end="url(#provider-arrow)"/>
+  <g filter="url(#provider-shadow)">
+    <rect x="94" y="238" width="234" height="136" rx="20" fill="#202D45" stroke="#4B5E7C" stroke-width="2"/>
+    <rect x="404" y="238" width="228" height="136" rx="20" fill="#202D45" stroke="#4B5E7C" stroke-width="2"/>
+    <rect x="708" y="238" width="228" height="136" rx="20" fill="#202D45" stroke="#4B5E7C" stroke-width="2"/>
+    <rect x="1012" y="238" width="334" height="136" rx="20" fill="#202D45" stroke="#4B5E7C" stroke-width="2"/>
+  </g>
+  <text x="211" y="292" text-anchor="middle" fill="#FFB199" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5">HTTP EDGE</text>
+  <text x="211" y="330" text-anchor="middle" fill="#F2F6FD" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">UsersController</text>
+  <text x="518" y="292" text-anchor="middle" fill="#FFB199" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5">USE CASE</text>
+  <text x="518" y="330" text-anchor="middle" fill="#F2F6FD" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">UserService</text>
+  <text x="822" y="292" text-anchor="middle" fill="#FFB199" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5">CONTRACT</text>
+  <text x="822" y="330" text-anchor="middle" fill="#F2F6FD" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">UserRepository</text>
+  <text x="1179" y="292" text-anchor="middle" fill="#FFB199" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5">INFRASTRUCTURE</text>
+  <text x="1179" y="330" text-anchor="middle" fill="#F2F6FD" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">Repository + Database</text>
+
+  <path d="M518 394V470M822 394V470" stroke="#8191AC" stroke-width="3" stroke-dasharray="9 10"/>
+  <rect x="374" y="470" width="592" height="126" rx="22" fill="#302239" stroke="#A65A67" stroke-width="2"/>
+  <rect x="404" y="500" width="128" height="38" rx="19" fill="#EA6B47"/>
+  <text x="468" y="526" text-anchor="middle" fill="#FFF" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">PROVIDER</text>
+  <text x="564" y="524" fill="#F4E9EF" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">binds implementations to traits</text>
+  <text x="404" y="566" fill="#D6B9C6" font-family="Arial, Helvetica, sans-serif" font-size="18">UserServiceImpl → Arc&lt;dyn UserService&gt; · UserRepositoryImpl → Arc&lt;dyn UserRepository&gt;</text>
+</svg>

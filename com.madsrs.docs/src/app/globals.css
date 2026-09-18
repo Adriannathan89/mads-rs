@@ -306,6 +306,17 @@ kbd {
   font-weight: 650;
 }
 
+.documentation-page img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 1.75rem 0 2.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: var(--code);
+  box-shadow: 0 1rem 2.5rem color-mix(in srgb, #0a1020 18%, transparent);
+}
+
 .documentation-page code:not(pre code) {
   padding: 0.1rem 0.28rem;
   border: 1px solid var(--border);

@@ -7,6 +7,8 @@ order: 2
 
 Providers are the construction points for application dependencies. They tell MADS how to create or expose a value in the selected graph instead of hiding startup work in global initialization.
 
+![Provider graph: UsersController calls UserService, which uses UserRepository and Database](/illustrations/fundamentals-provider-graph.svg)
+
 ```rust
 use mads::prelude::*;
 

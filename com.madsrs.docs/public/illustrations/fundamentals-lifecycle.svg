@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 700" fill="none">
+  <defs>
+    <linearGradient id="lifecycle-panel" x1="118" y1="72" x2="1324" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#18243A"/>
+      <stop offset="1" stop-color="#0D1422"/>
+    </linearGradient>
+    <linearGradient id="lifecycle-serve" x1="954" y1="352" x2="1194" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF9A76"/>
+      <stop offset="1" stop-color="#E66543"/>
+    </linearGradient>
+    <marker id="lifecycle-arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto">
+      <path d="M0 0 10 5 0 10V0Z" fill="#8191AC"/>
+    </marker>
+  </defs>
+  <rect width="1440" height="700" rx="36" fill="url(#lifecycle-panel)"/>
+  <text x="96" y="108" fill="#FFB199" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" letter-spacing="3">APPLICATION LIFECYCLE</text>
+  <text x="96" y="148" fill="#DCE6F7" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">Validate before the service can accept traffic</text>
+  <text x="96" y="184" fill="#9FACBF" font-family="Arial, Helvetica, sans-serif" font-size="20">The first three stages are preflight: a failure stops startup before binding a listener.</text>
+
+  <path d="M322 390H388M566 390H632M810 390H876M1054 390H1120" stroke="#8191AC" stroke-width="6" stroke-linecap="round" marker-end="url(#lifecycle-arrow)"/>
+  <rect x="78" y="300" width="244" height="180" rx="22" fill="#202D45" stroke="#4B5E7C" stroke-width="2"/>
+  <rect x="322" y="300" width="244" height="180" rx="22" fill="#202D45" stroke="#4B5E7C" stroke-width="2"/>
+  <rect x="566" y="300" width="244" height="180" rx="22" fill="#202D45" stroke="#4B5E7C" stroke-width="2"/>
+  <rect x="810" y="300" width="244" height="180" rx="22" fill="url(#lifecycle-serve)" stroke="#FFD0C1" stroke-opacity=".68" stroke-width="2"/>
+  <rect x="1054" y="300" width="244" height="180" rx="22" fill="#202D45" stroke="#4B5E7C" stroke-width="2"/>
+
+  <text x="108" y="340" fill="#AEBBD0" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5">01</text>
+  <text x="108" y="385" fill="#F2F6FD" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700">Configuration</text>
+  <text x="108" y="421" fill="#AEBBD0" font-family="Arial, Helvetica, sans-serif" font-size="17">.env · mads.toml · env</text>
+  <text x="352" y="340" fill="#AEBBD0" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5">02</text>
+  <text x="352" y="385" fill="#F2F6FD" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700">Graph validation</text>
+  <text x="352" y="421" fill="#AEBBD0" font-family="Arial, Helvetica, sans-serif" font-size="17">modules · routes · scope</text>
+  <text x="596" y="340" fill="#AEBBD0" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5">03</text>
+  <text x="596" y="385" fill="#F2F6FD" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700">Construction</text>
+  <text x="596" y="421" fill="#AEBBD0" font-family="Arial, Helvetica, sans-serif" font-size="17">providers · router · hooks</text>
+  <text x="840" y="340" fill="#FFF3EE" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5">04</text>
+  <text x="840" y="385" fill="#FFF" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700">Serving</text>
+  <text x="840" y="421" fill="#FFF3EE" font-family="Arial, Helvetica, sans-serif" font-size="17">bind · listen · handle</text>
+  <text x="1084" y="340" fill="#AEBBD0" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.5">05</text>
+  <text x="1084" y="385" fill="#F2F6FD" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="700">Shutdown</text>
+  <text x="1084" y="421" fill="#AEBBD0" font-family="Arial, Helvetica, sans-serif" font-size="17">reverse order</text>
+
+  <rect x="78" y="546" width="732" height="62" rx="31" fill="#293750"/>
+  <circle cx="114" cy="577" r="11" fill="#FF8A63"/>
+  <text x="142" y="584" fill="#DDE7F7" font-family="Arial, Helvetica, sans-serif" font-size="19" font-weight="700">Preflight gate — invalid configuration or graph: do not serve</text>
+</svg>

@@ -7,6 +7,8 @@ order: 1
 
 A MADS module is a feature boundary in the application graph. A module says which capability belongs together; the root module decides which capabilities are reachable in this binary.
 
+![Module graph: AppModule directly imports UsersModule and PostsModule](/illustrations/fundamentals-module-graph.svg)
+
 ```rust
 use mads::prelude::*;
 
