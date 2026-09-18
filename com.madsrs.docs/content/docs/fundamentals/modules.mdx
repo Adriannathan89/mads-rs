@@ -5,26 +5,30 @@ section: Fundamentals
 order: 1
 ---
 
-A MADS module is an explicit composition boundary. The root module imports the modules that should be reachable at startup.
+A MADS module is a feature boundary in the application graph. A module says which capability belongs together; the root module decides which capabilities are reachable in this binary.
 
 ```rust
 use mads::prelude::*;
 
 #[module]
-struct UsersModule;
+pub struct UsersModule;
 
 #[module(imports = [UsersModule])]
-struct AppModule;
+pub struct AppModule;
 ```
 
-## Direct imports define scope
+## How the module graph works
 
-Only direct imports contribute the reachable application graph. Across modules, dependencies require a directly imported module and ordinary `pub` visibility; imports are not transitive shortcuts.
+`AppModule` is the composition root. It directly imports `UsersModule`, so MADS can discover the providers, controllers, routes, and eligible auto-configuration that the user feature requires.
 
-### Keep boundaries useful
+Direct imports define scope. A dependency from one module to another needs both a direct import and ordinary Rust `pub` visibility. Imports are not transitive shortcuts: a root that imports `ApiModule` does not automatically receive every capability that `ApiModule` happens to use.
 
-Place the controller, providers, and routes for one capability behind the same module. Let the root decide which capabilities run in each binary or environment.
+## Design modules around capabilities
 
-## Start from the root
+Put the delivery code, providers, and infrastructure adapters for one capability behind the same module. For example, a `UsersModule` can contain a controller, a user service, a repository adapter, and provider bindings. Another binary can omit that module entirely by selecting a different root.
 
-Pass only the root module to `Mads::run`. MADS then evaluates the selected graph and its eligible official auto-configuration before construction begins.
+This is a feature-first boundary, not a demand for a single folder layout. The clean-architecture guide shows one concrete arrangement with controllers, services, repository contracts, and implementations.
+
+## Start only the selected graph
+
+Pass the root module to `Mads::run`. MADS evaluates the selected graph and its eligible official auto-configuration before provider construction begins. A graph or configuration error therefore fails before the application serves requests.

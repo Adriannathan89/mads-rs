@@ -5,7 +5,7 @@ section: Fundamentals
 order: 2
 ---
 
-Providers are the construction points for application dependencies. They make startup requirements visible to the selected module graph instead of hiding them in global initialization.
+Providers are the construction points for application dependencies. They tell MADS how to create or expose a value in the selected graph instead of hiding startup work in global initialization.
 
 ```rust
 use mads::prelude::*;
@@ -16,9 +16,24 @@ fn greeting_service() -> GreetingService {
 }
 ```
 
-## Dependencies activate only when selected
+## Read the dependency rule from left to right
 
-A provider that directly needs an optional service, such as `Database`, makes that infrastructure relevant to the selected application graph. A database is not created merely because the dependency exists in Cargo.toml.
+When MADS constructs a provider, it first resolves that provider's parameters. A provider that needs `Database` makes database infrastructure relevant; a provider that needs `Config` makes parsed configuration relevant. Nothing is activated merely because a dependency exists in `Cargo.toml`.
+
+This makes the application graph explain itself. Start at a controller, follow the service it needs, then follow the repository and database dependencies until you reach configuration or a concrete adapter.
+
+## Bind concrete code to application contracts
+
+In a clean architecture, controllers and services usually depend on traits, while repositories implement those traits. A provider is the outer-layer binding that exposes a concrete implementation through an application contract.
+
+```rust
+#[provider]
+fn user_repository(repository: UserRepositoryImpl) -> Arc<dyn UserRepository + Send + Sync> {
+    Arc::new(repository)
+}
+```
+
+The consumer depends on `UserRepository`, not the database-specific `UserRepositoryImpl`. That makes the repository replaceable in tests or when the infrastructure changes.
 
 ### Typed configuration as a provider
 

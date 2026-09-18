@@ -1,29 +1,29 @@
 ---
 title: What is MADS?
-description: Learn how MADS composes modular Rust applications.
-section: Getting started
+description: Understand MADS before choosing modules, HTTP, or a database.
+section: Overview
 order: 1
 ---
 
-MADS is a Rust framework for building modular services. It keeps application composition explicit: a root module selects the modules, providers, controllers, routes, guards, and official auto-configurations that are reachable by the application.
+MADS is a Rust framework for building modular services. Its central idea is simple: your application declares what it contains, and MADS constructs only that selected graph. You do not need to understand modules, providers, HTTP, or databases before reading this page.
 
-## Why MADS?
+## The MADS approach
 
-MADS separates framework-neutral construction and configuration from the optional HTTP, database, JWT, and cookie integrations. Most applications use the public `mads` facade and opt into the features they need.
+Start with an application root. It selects feature modules; those modules make the routes and dependencies for that application reachable. MADS validates the selected graph before it starts lifecycle hooks or opens a listener.
 
-### Composition before startup
+That keeps composition visible. A service is not created just because a crate is in `Cargo.toml`, and a database is not started just because a database feature is enabled. It becomes part of the running application only when the selected graph needs it.
 
-`Mads::run::<AppModule>()` evaluates the selected module graph before it starts lifecycle hooks, checks a database, or binds a listener. Invalid configuration and graph problems therefore fail before the process starts serving traffic.
+## What MADS gives you
 
-## A small application surface
+- An explicit composition model for modular Rust applications.
+- A provider graph for constructing dependencies without global initialization.
+- Optional HTTP, configuration, database, JWT, cookie, and migration integrations.
+- Startup validation before a partially configured service begins serving requests.
 
-Start with a root module and import feature modules directly. Imports are deliberate boundaries, not a global registry.
+## What stays under your control
 
-```rust
-use mads::prelude::*;
+MADS does not require one architecture or ORM. Use its Diesel database integration when it fits, or provide your own connection and repository implementation. The framework coordinates the graph; your application chooses its boundaries, contracts, and infrastructure.
 
-#[module]
-struct AppModule;
-```
+## Follow the learning path
 
-Continue with the installation guide to create a working service.
+Continue with **Getting started** to run an application, then **Fundamentals** to learn the module and provider rules. Configuration, HTTP delivery, and data integrations build on those concepts in that order.

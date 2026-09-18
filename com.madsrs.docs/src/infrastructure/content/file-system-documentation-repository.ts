@@ -17,6 +17,17 @@ interface ContentFile {
   readonly slug: readonly string[];
 }
 
+const sectionOrder = new Map([
+  "Overview",
+  "Getting started",
+  "Fundamentals",
+  "Configuration",
+  "Build an API",
+  "Data and security",
+  "Guides",
+  "Tooling",
+].map((section, index) => [section, index]));
+
 function slugKey(slug: DocumentationSlug): string {
   return slug.join("/");
 }
@@ -75,6 +86,8 @@ function toPlainText(source: string): string {
 
 function sortByNavigation(left: DocumentationSummary, right: DocumentationSummary): number {
   return (
+    (sectionOrder.get(left.section) ?? Number.MAX_SAFE_INTEGER) -
+      (sectionOrder.get(right.section) ?? Number.MAX_SAFE_INTEGER) ||
     left.section.localeCompare(right.section) ||
     left.order - right.order ||
     left.title.localeCompare(right.title)

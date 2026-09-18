@@ -1,0 +1,52 @@
+---
+title: Clean architecture with MADS
+description: Build feature modules with replaceable infrastructure and an explicit dependency graph.
+section: Guides
+order: 2
+---
+
+MADS works well with a feature-first form of clean architecture. Keep the user capability together, but make the direction of dependencies clear: delivery calls application services, services depend on contracts, and infrastructure implements those contracts.
+
+## The TPRS arrangement
+
+The [MADS clean-architecture example](https://github.com/Adriannathan89/mads-rs-example) uses **Trait, Provider, Repository, Service** (TPRS) inside each feature module.
+
+```text
+UserController
+  → Arc<dyn UserService>
+  → UserServiceImpl
+  → Arc<dyn UserRepository>
+  → UserRepositoryImpl
+  → Database or DatabaseConnection
+```
+
+- **Trait**: the contract a consumer needs, such as `UserRepository`.
+- **Provider**: the boundary binding a concrete component to that trait.
+- **Repository**: the database-specific adapter and query code.
+- **Service**: the use-case layer; it coordinates behavior through traits.
+- **Controller**: the HTTP edge; it validates input and delegates to a service.
+
+The controller is intentionally outside TPRS. It should know about HTTP and the service contract, but not database query details.
+
+## Build the module from the inside out
+
+1. Define the domain model and repository or service traits.
+2. Implement the service against those traits.
+3. Implement the repository with Diesel, SeaORM, or another chosen adapter.
+4. Add providers that expose implementations as `Arc<dyn Trait>` values.
+5. Add the controller and import the feature module from the application root.
+
+This direction keeps the service testable with an in-memory or mock trait implementation. Replacing PostgreSQL or an ORM changes the repository and provider binding, not the controller or use-case contract.
+
+## Choose who owns the database
+
+The example includes two complete versions of the same user and post API:
+
+- [Full MADS](https://github.com/Adriannathan89/mads-rs-example/tree/main/example_full_mads) uses MADS's Diesel `Database` integration. MADS assembles the provider graph and manages the database dependency.
+- [Full control](https://github.com/Adriannathan89/mads-rs-example/tree/main/example_full_control) defines a `DatabaseModule` that creates a SeaORM `DatabaseConnection` from typed configuration. Feature repositories receive that connection through explicit providers.
+
+Choose the first path for a concise convention-driven Diesel setup. Choose the second when the application must control its ORM, connection construction, or database dependency explicitly. Both keep request delivery thin and database operations inside repositories.
+
+## Inspect the resulting application
+
+The root module imports only the feature modules that should run. Use `mads routes` to inspect registered HTTP routes, and start the selected graph with `mads run`. If the graph, configuration, or provider requirements are invalid, MADS fails before the server begins accepting traffic.

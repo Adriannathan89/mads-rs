@@ -1,15 +1,15 @@
 ---
 title: Build a user API
-description: Compose a modular user API with validated delivery and opt-in infrastructure.
+description: Compose a modular user API with a thin HTTP edge and explicit infrastructure.
 section: Guides
 order: 1
 ---
 
-This guide builds a modular shape first. The starter does not need a database, JWT, or cookies; add PostgreSQL, authentication, and cookie transport only when the application requirements call for them.
+Build the feature boundary before choosing infrastructure. The starter does not need a database, JWT, or cookies; add PostgreSQL, authentication, and cookie transport only when the use case requires them.
 
 ## Define the feature boundary
 
-Keep the user capability in its own module. The module can own controller, service, repository provider, and optional Passport strategy declarations.
+Keep the user capability in its own module. The module can own its controller, service, repository provider, and optional Passport strategy declarations.
 
 ```rust
 use mads::prelude::*;
@@ -20,7 +20,7 @@ pub struct UserModule;
 
 ### Validate delivery input
 
-Use an `Input` type with `ValidatedJson` at the HTTP edge. Call a service or use case from the controller rather than placing persistence and password policy in the handler.
+Use an `Input` type with `ValidatedJson` at the HTTP edge. The controller validates and translates the request, then calls a service or use case. Do not put persistence, password policy, or ORM response conversion in the handler.
 
 ```rust
 #[derive(serde::Deserialize, Input)]
@@ -30,9 +30,15 @@ struct CreateUser {
 }
 ```
 
-## Add opt-in infrastructure
+## Add the database behind a contract
 
-When persistence is needed, put Diesel code in an infrastructure repository and run queries through `Database::run`. When authentication is needed, configure JWT explicitly and register a managed Passport strategy. Cookies are a separate opt-in transport choice, not a starter default.
+Define a repository trait that represents what the user service needs, then bind a concrete implementation through a provider. With MADS-managed Diesel, the repository receives `Database` and runs synchronous queries with `Database::run`. With an application-owned ORM, import a database module and receive its connection type instead.
+
+The clean-architecture guide walks through this Trait → Provider → Repository → Service arrangement and links to a complete working example.
+
+## Add optional delivery concerns
+
+When authentication is needed, configure JWT explicitly and register a managed Passport strategy. Cookies are a separate transport choice, not a starter default.
 
 ## Compose the application
 

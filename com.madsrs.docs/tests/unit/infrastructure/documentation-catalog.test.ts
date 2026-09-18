@@ -21,4 +21,31 @@ describe("MADS documentation catalog", () => {
       source: expect.stringContaining("Mads::run::<AppModule>().await"),
     });
   });
+
+  it("orders concepts by the dependencies a new reader needs", async () => {
+    const repository = new FileSystemDocumentationRepository(join(process.cwd(), "content", "docs"));
+    const pages = await repository.list();
+    const sections = pages.reduce<string[]>((ordered, page) => {
+      if (ordered.at(-1) !== page.section) {
+        ordered.push(page.section);
+      }
+      return ordered;
+    }, []);
+
+    expect(sections).toEqual([
+      "Overview",
+      "Getting started",
+      "Fundamentals",
+      "Configuration",
+      "Build an API",
+      "Data and security",
+      "Guides",
+      "Tooling",
+    ]);
+    expect(pages[0]).toMatchObject({
+      title: "What is MADS?",
+      section: "Overview",
+    });
+    expect(pages.map((page) => page.slug.join("/"))).toContain("guides/clean-architecture");
+  });
 });

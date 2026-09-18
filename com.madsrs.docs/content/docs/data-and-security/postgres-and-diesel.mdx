@@ -1,25 +1,39 @@
 ---
-title: PostgreSQL and Diesel
-description: Add PostgreSQL and Diesel only when a selected provider needs persistence.
+title: PostgreSQL, Diesel, and your database boundary
+description: Choose MADS-managed Diesel or a database provider you own.
 section: Data and security
 order: 1
 ---
 
-The generated MADS starter is database-free. Add PostgreSQL and Diesel deliberately when a selected provider requires `Database`; that dependency activates the linked official database auto-configuration.
+The generated MADS starter is database-free. Choose a database boundary deliberately: use MADS's Diesel integration when you want its managed `Database` and migration workflow, or expose your own connection through a provider when you need a different ORM or connection policy.
+
+## How MADS-managed Diesel works
+
+When a selected repository or provider needs `Database`, MADS activates the linked database auto-configuration for that graph. It reads the database settings, constructs the managed Diesel database dependency, and supplies it to the repository. A controller should never issue Diesel queries directly.
 
 ```toml
 [database]
 url = "${DATABASE_URL}"
 ```
 
-## Keep Diesel inside infrastructure
+The resulting request path is:
 
-Use an infrastructure repository implementation for Diesel schema, model, and query types. Application use cases should depend on ports or domain contracts instead of HTTP or Diesel response types.
+```text
+Controller → service → repository contract → Diesel repository → Database → PostgreSQL
+```
+
+Keep Diesel schema, model, and query types inside the repository implementation. Services coordinate use cases through repository contracts; controllers translate HTTP input and output.
 
 ### Run synchronous queries safely
 
-Diesel queries are synchronous. Execute them through `Database::run` rather than blocking the async request runtime directly.
+Diesel queries are synchronous. Execute them through `Database::run` rather than blocking the async request runtime directly. Generate, review, and apply migrations with `mads db generate`, `mads db migrate`, and `mads db status`.
 
-## Choose HTTP conversion explicitly
+## How full-control infrastructure works
 
-For an endpoint, use a domain-specific error mapping, native Diesel behavior, or opt-in `.into_http()` when the framework's safe generic database mapping is appropriate.
+You can keep MADS for module composition and dependency injection while owning database setup. Define a `DatabaseModule` with a provider that parses typed configuration and returns your ORM's connection type. Feature modules import `DatabaseModule`; repository providers then receive that connection explicitly.
+
+This is the approach used by the SeaORM variant of the reference example. It intentionally does not enable MADS's Diesel database feature or `mads db` commands; migrations and connection behavior remain application-owned.
+
+## Choose error conversion explicitly
+
+At the HTTP boundary, map domain or repository errors deliberately. Use a domain-specific mapping, native Diesel behavior, or opt-in `.into_http()` only when the framework's safe generic database mapping is appropriate.
