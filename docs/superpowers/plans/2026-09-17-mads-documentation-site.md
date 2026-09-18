@@ -4,7 +4,7 @@
 
 **Goal:** Build and containerize a learner-first Next.js documentation site for MADS.rs, with a private PostgreSQL-backed, bot-resistant unique-visitor counter.
 
-**Architecture:** `docs-web/` is an isolated Next.js App Router application. React pages and route handlers delegate to application use-cases, which depend only on domain types and ports; filesystem MDX, HMAC proof-of-work, and PostgreSQL/Drizzle live behind infrastructure adapters. The site renders without analytics, while a client tracker progressively adds a qualified anonymous visit after page usability.
+**Architecture:** `com.madsrs.docs/` is an isolated Next.js App Router application. React pages and route handlers delegate to application use-cases, which depend only on domain types and ports; filesystem MDX, HMAC proof-of-work, and PostgreSQL/Drizzle live behind infrastructure adapters. The site renders without analytics, while a client tracker progressively adds a qualified anonymous visit after page usability.
 
 **Tech Stack:** Next.js 16.3.5 App Router, React, TypeScript, local MDX via `next-mdx-remote`, CSS custom-property design system, Drizzle ORM with `pg` and PostgreSQL, Node Web Crypto, Vitest, React Testing Library, Playwright, Docker Compose.
 
@@ -12,10 +12,10 @@
 
 ## Global Constraints
 
-- Create the application in `docs-web/`; do not alter MADS Rust crates or their public APIs.
+- Create the application in `com.madsrs.docs/`; do not alter MADS Rust crates or their public APIs.
 - Support Node.js 20.9 or newer and pin `next` to `16.3.5`; commit `package-lock.json` for reproducible image builds.
 - Treat MADS v0.8.0 repository documentation and examples as the source of truth; never document unimplemented features.
-- Copy `docs/mads.png` to `docs-web/public/mads.png`; preserve the user-provided source asset.
+- Copy `docs/mads.png` to `com.madsrs.docs/public/mads.png`; preserve the user-provided source asset.
 - Apply clean architecture: presentation code must not issue SQL, and domain/application code must not import Next.js, React, `fs`, `pg`, Drizzle, or environment variables.
 - Never store raw IP addresses, user-agent strings, page history, or raw visitor-cookie values in PostgreSQL.
 - The counter is best-effort abuse-resistant; describe its limits plainly and do not claim it proves every visitor is human.
@@ -29,7 +29,7 @@
 ## File Structure
 
 ```text
-docs-web/
+com.madsrs.docs/
 ├── content/docs/
 │   ├── introduction/{what-is-mads,installation,quick-start,project-anatomy}.mdx
 │   ├── fundamentals/{modules,providers,lifecycle}.mdx
@@ -80,10 +80,10 @@ docs-web/
 ### Task 1: Scaffold the isolated Next.js application and executable quality gates
 
 **Files:**
-- Create: `docs-web/package.json`, `docs-web/package-lock.json`, `docs-web/tsconfig.json`, `docs-web/next.config.ts`, `docs-web/eslint.config.mjs`, `docs-web/vitest.config.ts`, `docs-web/src/test/setup.ts`
-- Create: `docs-web/src/app/layout.tsx`, `docs-web/src/app/page.tsx`, `docs-web/src/app/globals.css`, `docs-web/src/app/not-found.tsx`
-- Create: `docs-web/src/presentation/server/runtime-config.ts`, `docs-web/tests/unit/presentation/runtime-config.test.ts`
-- Create: `docs-web/.gitignore`, `docs-web/.env.example`, `docs-web/public/mads.png`
+- Create: `com.madsrs.docs/package.json`, `com.madsrs.docs/package-lock.json`, `com.madsrs.docs/tsconfig.json`, `com.madsrs.docs/next.config.ts`, `com.madsrs.docs/eslint.config.mjs`, `com.madsrs.docs/vitest.config.ts`, `com.madsrs.docs/src/test/setup.ts`
+- Create: `com.madsrs.docs/src/app/layout.tsx`, `com.madsrs.docs/src/app/page.tsx`, `com.madsrs.docs/src/app/globals.css`, `com.madsrs.docs/src/app/not-found.tsx`
+- Create: `com.madsrs.docs/src/presentation/server/runtime-config.ts`, `com.madsrs.docs/tests/unit/presentation/runtime-config.test.ts`
+- Create: `com.madsrs.docs/.gitignore`, `com.madsrs.docs/.env.example`, `com.madsrs.docs/public/mads.png`
 
 **Interfaces:**
 - Produces: `RuntimeConfig` and `getRuntimeConfig(environment: NodeJS.ProcessEnv): RuntimeConfig`, consumed by persistence, security, route-handler composition, and Docker services.
@@ -178,24 +178,24 @@ Expected: all commands exit 0 and the root page builds.
 - [ ] **Step 6: Commit the scaffold**
 
 ```bash
-git add docs-web
+git add com.madsrs.docs
 git commit -m "feat(docs): scaffold Next.js documentation app"
 ```
 
 ### Task 2: Add the filesystem MDX documentation repository and navigation model
 
 **Files:**
-- Create: `docs-web/src/domain/documentation.ts`
-- Create: `docs-web/src/application/ports/documentation-repository.ts`, `docs-web/src/application/use-cases/read-documentation.ts`
-- Create: `docs-web/src/infrastructure/content/file-system-documentation-repository.ts`
-- Create: `docs-web/tests/unit/infrastructure/file-system-documentation-repository.test.ts`
-- Create: `docs-web/content/docs/introduction/{what-is-mads,installation,quick-start,project-anatomy}.mdx`
-- Create: `docs-web/content/docs/fundamentals/{modules,providers,lifecycle}.mdx`
-- Create: `docs-web/content/docs/build-an-api/{routes-and-controllers,validation,rest-errors,cors}.mdx`
-- Create: `docs-web/content/docs/configuration/{configuration,typed-configuration-and-secrets}.mdx`
-- Create: `docs-web/content/docs/data-and-security/{postgres-and-diesel,migrations,passport-jwt-cookies}.mdx`
-- Create: `docs-web/content/docs/tooling/{cli,features-and-compatibility,diagnostics-and-deployment}.mdx`
-- Create: `docs-web/content/docs/guides/build-a-user-api.mdx`
+- Create: `com.madsrs.docs/src/domain/documentation.ts`
+- Create: `com.madsrs.docs/src/application/ports/documentation-repository.ts`, `com.madsrs.docs/src/application/use-cases/read-documentation.ts`
+- Create: `com.madsrs.docs/src/infrastructure/content/file-system-documentation-repository.ts`
+- Create: `com.madsrs.docs/tests/unit/infrastructure/file-system-documentation-repository.test.ts`
+- Create: `com.madsrs.docs/content/docs/introduction/{what-is-mads,installation,quick-start,project-anatomy}.mdx`
+- Create: `com.madsrs.docs/content/docs/fundamentals/{modules,providers,lifecycle}.mdx`
+- Create: `com.madsrs.docs/content/docs/build-an-api/{routes-and-controllers,validation,rest-errors,cors}.mdx`
+- Create: `com.madsrs.docs/content/docs/configuration/{configuration,typed-configuration-and-secrets}.mdx`
+- Create: `com.madsrs.docs/content/docs/data-and-security/{postgres-and-diesel,migrations,passport-jwt-cookies}.mdx`
+- Create: `com.madsrs.docs/content/docs/tooling/{cli,features-and-compatibility,diagnostics-and-deployment}.mdx`
+- Create: `com.madsrs.docs/content/docs/guides/build-a-user-api.mdx`
 
 **Interfaces:**
 - Produces: `DocumentationPage`, `DocumentationSummary`, `Heading`, and `SearchEntry` domain records.
@@ -286,17 +286,17 @@ Expected: PASS; every listed MDX page resolves and a traversal slug is absent.
 - [ ] **Step 6: Commit documentation domain and source**
 
 ```bash
-git add docs-web/src/domain docs-web/src/application docs-web/src/infrastructure/content docs-web/content docs-web/tests/unit/infrastructure
+git add com.madsrs.docs/src/domain com.madsrs.docs/src/application com.madsrs.docs/src/infrastructure/content com.madsrs.docs/content com.madsrs.docs/tests/unit/infrastructure
 git commit -m "feat(docs): add MDX documentation repository"
 ```
 
 ### Task 3: Implement the domain-level self-hosted visitor qualification policy
 
 **Files:**
-- Create: `docs-web/src/domain/visitor.ts`
-- Create: `docs-web/src/application/ports/{challenge-codec,visitor-repository}.ts`
-- Create: `docs-web/src/infrastructure/security/{browser-visit-policy,hmac-challenge-codec,proof-of-work}.ts`
-- Create: `docs-web/tests/unit/infrastructure/{browser-visit-policy,hmac-challenge-codec,proof-of-work}.test.ts`
+- Create: `com.madsrs.docs/src/domain/visitor.ts`
+- Create: `com.madsrs.docs/src/application/ports/{challenge-codec,visitor-repository}.ts`
+- Create: `com.madsrs.docs/src/infrastructure/security/{browser-visit-policy,hmac-challenge-codec,proof-of-work}.ts`
+- Create: `com.madsrs.docs/tests/unit/infrastructure/{browser-visit-policy,hmac-challenge-codec,proof-of-work}.test.ts`
 
 **Interfaces:**
 - Produces: `BrowserEvidence`, `VisitChallenge`, `VisitSolution`, and `VisitorCookie` domain values.
@@ -378,16 +378,16 @@ Expected: PASS; valid evidence and proof pass, each rejection case fails closed.
 - [ ] **Step 5: Commit visitor qualification primitives**
 
 ```bash
-git add docs-web/src/domain/visitor.ts docs-web/src/application/ports docs-web/src/infrastructure/security docs-web/tests/unit/infrastructure
+git add com.madsrs.docs/src/domain/visitor.ts com.madsrs.docs/src/application/ports com.madsrs.docs/src/infrastructure/security com.madsrs.docs/tests/unit/infrastructure
 git commit -m "feat(docs): add private visitor qualification policy"
 ```
 
 ### Task 4: Add Drizzle persistence, SQL migrations, and PostgreSQL integration coverage
 
 **Files:**
-- Create: `docs-web/drizzle.config.ts`, `docs-web/src/infrastructure/persistence/{schema,db,drizzle-visitor-repository,migrate}.ts`
-- Create: `docs-web/drizzle/0000_qualified_visitors.sql` and generated Drizzle metadata
-- Create: `docs-web/tests/integration/drizzle-visitor-repository.test.ts`
+- Create: `com.madsrs.docs/drizzle.config.ts`, `com.madsrs.docs/src/infrastructure/persistence/{schema,db,drizzle-visitor-repository,migrate}.ts`
+- Create: `com.madsrs.docs/drizzle/0000_qualified_visitors.sql` and generated Drizzle metadata
+- Create: `com.madsrs.docs/tests/integration/drizzle-visitor-repository.test.ts`
 
 **Interfaces:**
 - Produces: `VisitorRepository.consumeChallenge(challengeHash, expiresAt)`, `.allowRateAttempt(rateKey, now)`, `.registerUniqueVisitor(visitorHash, now)`, `.getQualifiedVisitorCount()`, and `.pruneExpired(now)`.
@@ -476,18 +476,18 @@ Expected: PASS against the disposable local PostgreSQL database.
 - [ ] **Step 6: Commit persistence**
 
 ```bash
-git add docs-web/drizzle docs-web/drizzle.config.ts docs-web/src/infrastructure/persistence docs-web/tests/integration
+git add com.madsrs.docs/drizzle com.madsrs.docs/drizzle.config.ts com.madsrs.docs/src/infrastructure/persistence com.madsrs.docs/tests/integration
 git commit -m "feat(docs): persist qualified visitor counts"
 ```
 
 ### Task 5: Add visitor application use-cases and private App Router endpoints
 
 **Files:**
-- Create: `docs-web/src/application/use-cases/{get-visitor-count,issue-visitor-challenge,register-qualified-visitor}.ts`
-- Create: `docs-web/src/presentation/server/{container,request-evidence}.ts`
-- Create: `docs-web/src/app/api/visitor-challenge/route.ts`, `docs-web/src/app/api/visitor/route.ts`
-- Create: `docs-web/src/app/api/health/live/route.ts`, `docs-web/src/app/api/health/ready/route.ts`
-- Create: `docs-web/tests/unit/application/register-qualified-visitor.test.ts`, `docs-web/tests/unit/presentation/visitor-routes.test.ts`
+- Create: `com.madsrs.docs/src/application/use-cases/{get-visitor-count,issue-visitor-challenge,register-qualified-visitor}.ts`
+- Create: `com.madsrs.docs/src/presentation/server/{container,request-evidence}.ts`
+- Create: `com.madsrs.docs/src/app/api/visitor-challenge/route.ts`, `com.madsrs.docs/src/app/api/visitor/route.ts`
+- Create: `com.madsrs.docs/src/app/api/health/live/route.ts`, `com.madsrs.docs/src/app/api/health/ready/route.ts`
+- Create: `com.madsrs.docs/tests/unit/application/register-qualified-visitor.test.ts`, `com.madsrs.docs/tests/unit/presentation/visitor-routes.test.ts`
 
 **Interfaces:**
 - Produces: `IssueVisitorChallenge.execute(evidence)`, `RegisterQualifiedVisitor.execute(input)`, and `GetVisitorCount.execute()`.
@@ -574,17 +574,17 @@ have distinct liveness/readiness behavior.
 - [ ] **Step 5: Commit application and route handlers**
 
 ```bash
-git add docs-web/src/application/use-cases docs-web/src/presentation/server docs-web/src/app/api docs-web/tests/unit/application docs-web/tests/unit/presentation
+git add com.madsrs.docs/src/application/use-cases com.madsrs.docs/src/presentation/server com.madsrs.docs/src/app/api com.madsrs.docs/tests/unit/application com.madsrs.docs/tests/unit/presentation
 git commit -m "feat(docs): expose qualified visitor endpoints"
 ```
 
 ### Task 6: Build the responsive documentation shell, MDX renderer, search, and tracker
 
 **Files:**
-- Create: `docs-web/src/app/docs/[...slug]/page.tsx`, `docs-web/src/app/{robots,sitemap}.ts`
-- Create: `docs-web/src/presentation/components/{docs-layout,documentation-page,header,home-hero,mdx-components,mobile-nav,on-page-toc,search-dialog,sidebar,theme-toggle,visitor-counter,visitor-tracker}.tsx`
-- Modify: `docs-web/src/app/{layout,page,globals}.tsx`
-- Create: `docs-web/tests/components/{docs-layout,search-dialog,visitor-counter}.test.tsx`
+- Create: `com.madsrs.docs/src/app/docs/[...slug]/page.tsx`, `com.madsrs.docs/src/app/{robots,sitemap}.ts`
+- Create: `com.madsrs.docs/src/presentation/components/{docs-layout,documentation-page,header,home-hero,mdx-components,mobile-nav,on-page-toc,search-dialog,sidebar,theme-toggle,visitor-counter,visitor-tracker}.tsx`
+- Modify: `com.madsrs.docs/src/app/{layout,page,globals}.tsx`
+- Create: `com.madsrs.docs/tests/components/{docs-layout,search-dialog,visitor-counter}.test.tsx`
 
 **Interfaces:**
 - Consumes: `ReadDocumentation.execute(slug)` from Task 2 and visitor endpoints from Task 5.
@@ -657,17 +657,17 @@ Expected: all MDX routes generate and Next.js exits 0.
 - [ ] **Step 5: Commit documentation experience**
 
 ```bash
-git add docs-web/src/app docs-web/src/presentation/components docs-web/tests/components
+git add com.madsrs.docs/src/app com.madsrs.docs/src/presentation/components com.madsrs.docs/tests/components
 git commit -m "feat(docs): add responsive documentation experience"
 ```
 
 ### Task 7: Validate MADS documentation accuracy and end-to-end reader flows
 
 **Files:**
-- Modify: all `docs-web/content/docs/**/*.mdx` files from Task 2 as needed after rendered review
-- Create: `docs-web/tests/unit/infrastructure/documentation-catalog.test.ts`
-- Create: `docs-web/tests/e2e/documentation-site.spec.ts`
-- Create: `docs-web/playwright.config.ts`
+- Modify: all `com.madsrs.docs/content/docs/**/*.mdx` files from Task 2 as needed after rendered review
+- Create: `com.madsrs.docs/tests/unit/infrastructure/documentation-catalog.test.ts`
+- Create: `com.madsrs.docs/tests/e2e/documentation-site.spec.ts`
+- Create: `com.madsrs.docs/playwright.config.ts`
 
 **Interfaces:**
 - Consumes: documentation repository, static routes, navigation, and home page from Tasks 2 and 6.
@@ -738,16 +738,16 @@ Expected: build exits 0 and the reader journey passes in Chromium.
 - [ ] **Step 5: Commit content audit and browser tests**
 
 ```bash
-git add docs-web/content docs-web/tests/unit/infrastructure/documentation-catalog.test.ts docs-web/tests/e2e docs-web/playwright.config.ts
+git add com.madsrs.docs/content com.madsrs.docs/tests/unit/infrastructure/documentation-catalog.test.ts com.madsrs.docs/tests/e2e com.madsrs.docs/playwright.config.ts
 git commit -m "docs: complete MADS framework guides"
 ```
 
 ### Task 8: Package the production Docker and Compose deployment contract
 
 **Files:**
-- Create: `docs-web/Dockerfile`, `docs-web/docker-compose.yml`, `docs-web/.dockerignore`
-- Modify: `docs-web/.env.example`, `docs-web/package.json`
-- Create: `docs-web/tests/e2e/docker-compose.spec.ts`, `docs-web/tests/e2e/support/compose-harness.ts`
+- Create: `com.madsrs.docs/Dockerfile`, `com.madsrs.docs/docker-compose.yml`, `com.madsrs.docs/.dockerignore`
+- Modify: `com.madsrs.docs/.env.example`, `com.madsrs.docs/package.json`
+- Create: `com.madsrs.docs/tests/e2e/docker-compose.spec.ts`, `com.madsrs.docs/tests/e2e/support/compose-harness.ts`
 
 **Interfaces:**
 - Consumes: `npm run build`, `npm run db:migrate`, liveness/readiness endpoints, and environment contract from Tasks 1, 4, and 5.
@@ -849,7 +849,7 @@ browser tests all exit 0.
 - [ ] **Step 5: Commit delivery configuration**
 
 ```bash
-git add docs-web/Dockerfile docs-web/docker-compose.yml docs-web/.dockerignore docs-web/.env.example docs-web/next.config.ts docs-web/package.json docs-web/tests/e2e/docker-compose.spec.ts docs-web/tests/e2e/support/compose-harness.ts
+git add com.madsrs.docs/Dockerfile com.madsrs.docs/docker-compose.yml com.madsrs.docs/.dockerignore com.madsrs.docs/.env.example com.madsrs.docs/next.config.ts com.madsrs.docs/package.json com.madsrs.docs/tests/e2e/docker-compose.spec.ts com.madsrs.docs/tests/e2e/support/compose-harness.ts
 git commit -m "feat(docs): containerize documentation deployment"
 ```
 
