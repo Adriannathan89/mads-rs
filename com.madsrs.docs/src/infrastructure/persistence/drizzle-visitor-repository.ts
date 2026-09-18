@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { Pool, PoolClient } from "pg";
+import type { Pool, PoolClient } from "../../../node_modules/@types/pg";
 
 import type { VisitorRepository } from "@/application/ports/visitor-repository";
 
