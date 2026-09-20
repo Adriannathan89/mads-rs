@@ -21,6 +21,15 @@ const PACKAGES: &[&str] = &[
     "mads-cli",
 ];
 
+const FRAMEWORK_PACKAGES: &[&str] = &[
+    "mads-core-macros",
+    "mads-common-macros",
+    "mads-core",
+    "mads-extra",
+    "mads-common",
+    "mads",
+];
+
 #[cfg(unix)]
 #[test]
 fn beta_release_increments_a_matching_base_and_only_changes_versions() {
@@ -59,6 +68,50 @@ fn stable_release_sets_the_exact_stable_version() {
 
     assert_success(&output);
     fixture.assert_version("0.7.0");
+}
+
+#[cfg(unix)]
+#[test]
+fn stable_release_preserves_an_explicit_cli_version() {
+    let fixture = ReleaseFixture::new("0.8.0");
+    fixture.pin_cli_version("0.8.0");
+
+    let output = fixture.run("release.sh", "0.8.1");
+
+    assert_success(&output);
+    fixture.assert_framework_version("0.8.1");
+
+    let cli_manifest = fs::read_to_string(fixture.root().join("crates/mads-cli/Cargo.toml"))
+        .expect("mads-cli manifest should exist");
+    assert!(cli_manifest.contains("version = \"0.8.0\""));
+    assert!(cli_manifest.contains("mads = { path = \"../mads\", version = \"=0.8.1\" }"));
+    assert!(
+        cli_manifest.contains("mads-common = { path = \"../mads-common\", version = \"=0.8.1\" }")
+    );
+
+    let lockfile = fs::read_to_string(fixture.root().join("Cargo.lock"))
+        .expect("workspace lockfile should exist");
+    assert!(lockfile.contains("name = \"mads-cli\"\nversion = \"0.8.0\""));
+}
+
+#[cfg(unix)]
+#[test]
+fn stable_release_can_preserve_a_workspace_inherited_cli_version() {
+    let fixture = ReleaseFixture::new("0.8.0");
+
+    let output = fixture.run_with_args("release.sh", &["--keep-cli-version", "0.8.1"]);
+
+    assert_success(&output);
+    fixture.assert_framework_version("0.8.1");
+
+    let cli_manifest = fs::read_to_string(fixture.root().join("crates/mads-cli/Cargo.toml"))
+        .expect("mads-cli manifest should exist");
+    assert!(cli_manifest.contains("version = \"0.8.0\""));
+    assert!(!cli_manifest.contains("version.workspace = true"));
+
+    let lockfile = fs::read_to_string(fixture.root().join("Cargo.lock"))
+        .expect("workspace lockfile should exist");
+    assert!(lockfile.contains("name = \"mads-cli\"\nversion = \"0.8.0\""));
 }
 
 #[cfg(unix)]
@@ -121,7 +174,7 @@ fn stable_workflow_enforces_release_gates_and_dependency_order() {
     assert!(!workflow.contains("--prerelease"));
 
     let mut offset = 0;
-    for package in PACKAGES {
+    for package in FRAMEWORK_PACKAGES {
         let relative = workflow[offset..]
             .find(&format!("            {package}\n"))
             .unwrap_or_else(|| panic!("missing package {package} in publication order"));
@@ -271,8 +324,9 @@ fn package_content_policy_checks_every_workspace_archive() {
 }
 
 #[test]
-fn workspace_packages_use_exact_v080_stable_internal_pins() {
-    const VERSION: &str = "0.8.0";
+fn framework_packages_use_v081_pins_while_cli_remains_v080() {
+    const VERSION: &str = "0.8.1";
+    const CLI_VERSION: &str = "0.8.0";
 
     let root = workspace_root();
     let workspace_manifest =
@@ -284,7 +338,7 @@ fn workspace_packages_use_exact_v080_stable_internal_pins() {
 
     let lockfile =
         fs::read_to_string(root.join("Cargo.lock")).expect("workspace lockfile should exist");
-    for package in PACKAGES {
+    for package in FRAMEWORK_PACKAGES {
         let manifest = fs::read_to_string(root.join("crates").join(package).join("Cargo.toml"))
             .unwrap_or_else(|error| panic!("{package} manifest should exist: {error}"));
         assert!(
@@ -308,6 +362,20 @@ fn workspace_packages_use_exact_v080_stable_internal_pins() {
             "lockfile must contain {package} at {VERSION}"
         );
     }
+
+    let cli_manifest = fs::read_to_string(root.join("crates/mads-cli/Cargo.toml"))
+        .expect("mads-cli manifest should exist");
+    assert!(cli_manifest.contains(&format!("version = \"{CLI_VERSION}\"")));
+    for dependency in cli_manifest
+        .lines()
+        .filter(|line| line.contains("path = \"../"))
+    {
+        assert!(
+            dependency.contains(&format!("version = \"={VERSION}\"")),
+            "mads-cli must pin the updated framework dependency: {dependency}"
+        );
+    }
+    assert!(lockfile.contains(&format!("name = \"mads-cli\"\nversion = \"{CLI_VERSION}\"")));
 }
 
 #[test]
@@ -482,12 +550,36 @@ impl ReleaseFixture {
     }
 
     fn run(&self, script: &str, version: &str) -> Output {
+        self.run_with_args(script, &[version])
+    }
+
+    fn run_with_args(&self, script: &str, args: &[&str]) -> Output {
         Command::new("bash")
             .arg(workspace_root().join("script").join(script))
-            .arg(version)
+            .args(args)
             .current_dir(self.root())
             .output()
             .expect("release script should execute")
+    }
+
+    fn pin_cli_version(&self, version: &str) {
+        let manifest = self.root().join("crates/mads-cli/Cargo.toml");
+        let contents = fs::read_to_string(&manifest).expect("mads-cli manifest should exist");
+        write(
+            &manifest,
+            &contents.replacen(
+                "version.workspace = true",
+                &format!("version = \"{version}\""),
+                1,
+            ),
+        );
+
+        let output = Command::new("cargo")
+            .args(["generate-lockfile", "--offline"])
+            .current_dir(self.root())
+            .output()
+            .expect("Cargo should regenerate the fixture lockfile");
+        assert_success(&output);
     }
 
     fn assert_version(&self, expected: &str) {
@@ -514,6 +606,20 @@ impl ReleaseFixture {
 
         let lock = fs::read_to_string(self.root().join("Cargo.lock")).unwrap();
         for package in PACKAGES {
+            let record = format!("name = \"{package}\"\nversion = \"{expected}\"");
+            assert!(
+                lock.contains(&record),
+                "lockfile missing {package} {expected}"
+            );
+        }
+    }
+
+    fn assert_framework_version(&self, expected: &str) {
+        let root_manifest = fs::read_to_string(self.root().join("Cargo.toml")).unwrap();
+        assert!(root_manifest.contains(&format!("version = \"{expected}\"")));
+
+        let lock = fs::read_to_string(self.root().join("Cargo.lock")).unwrap();
+        for package in FRAMEWORK_PACKAGES {
             let record = format!("name = \"{package}\"\nversion = \"{expected}\"");
             assert!(
                 lock.contains(&record),

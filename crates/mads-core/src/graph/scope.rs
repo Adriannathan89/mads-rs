@@ -94,7 +94,7 @@ pub(crate) fn select_scoped_providers(
                         if can_access(
                             graph,
                             context,
-                            owner.type_id(),
+                            owner,
                             dependency_descriptor.visibility(),
                         ) =>
                     {
@@ -202,11 +202,13 @@ pub(crate) fn select_scoped_providers(
 fn can_access(
     graph: &ModuleGraph,
     context: TypeId,
-    owner: TypeId,
+    owner: &ModuleDescriptor,
     visibility: ProviderVisibility,
 ) -> bool {
-    context == owner
-        || (visibility == ProviderVisibility::Public && graph.directly_imports(context, owner))
+    context == owner.type_id()
+        || (visibility == ProviderVisibility::Public
+            && (graph.directly_imports(context, owner.type_id())
+                || owner.is_global() && graph.is_reachable(owner.type_id())))
 }
 
 fn owner_of(

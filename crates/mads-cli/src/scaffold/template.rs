@@ -32,6 +32,7 @@ const TEMPLATES: [&str; 7] = [
 
 const PROJECT_NAME_TOKEN: &str = "{{project_name}}";
 const MADS_VERSION_TOKEN: &str = "{{mads_version}}";
+const MADS_FRAMEWORK_VERSION: &str = "0.8.1";
 
 /// One rendered starter file that has not yet been published to disk.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -105,7 +106,7 @@ pub fn render_project(name: &ProjectName) -> Result<RenderedProject, TemplateErr
                 contents: template
                     .replace("\r\n", "\n")
                     .replace(PROJECT_NAME_TOKEN, name.as_str())
-                    .replace(MADS_VERSION_TOKEN, env!("CARGO_PKG_VERSION")),
+                    .replace(MADS_VERSION_TOKEN, MADS_FRAMEWORK_VERSION),
             })
         })
         .collect::<Result<Vec<_>, _>>()

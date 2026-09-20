@@ -265,7 +265,7 @@ fn cargo_command(project: &Path) -> Command {
 fn registry_manifest(name: &str) -> String {
     format!(
         "[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2024\"\nrust-version = \"1.85\"\n\n[dependencies]\nmads = {{ version = \"={}\", default-features = false, features = [\"http\", \"runtime-tokio\"] }}\n",
-        env!("CARGO_PKG_VERSION")
+        "0.8.1"
     )
 }
 
@@ -277,11 +277,11 @@ fn substitute_local_mads(manifest_path: &Path, registry_manifest: &str) {
     let local_path = local_mads.to_string_lossy().replace('\\', "\\\\");
     let registry_dependency = format!(
         "mads = {{ version = \"={}\", default-features = false, features = [\"http\", \"runtime-tokio\"] }}",
-        env!("CARGO_PKG_VERSION")
+        "0.8.1"
     );
     let local_dependency = format!(
         "mads = {{ path = \"{local_path}\", version = \"={}\", default-features = false, features = [\"http\", \"runtime-tokio\"] }}",
-        env!("CARGO_PKG_VERSION")
+        "0.8.1"
     );
     let substituted = registry_manifest.replacen(&registry_dependency, &local_dependency, 1);
     assert_ne!(

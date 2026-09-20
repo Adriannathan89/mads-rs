@@ -190,6 +190,7 @@ pub struct ModuleDescriptor {
     type_id: fn() -> TypeId,
     namespace: Option<&'static str>,
     imports: &'static [ModuleImportDescriptor],
+    global: bool,
     location: SourceLocation,
 }
 
@@ -205,6 +206,7 @@ impl ModuleDescriptor {
             type_id,
             namespace: None,
             imports: &[],
+            global: false,
             location,
         }
     }
@@ -221,6 +223,18 @@ impl ModuleDescriptor {
     pub const fn with_imports(mut self, imports: &'static [ModuleImportDescriptor]) -> Self {
         self.imports = imports;
         self
+    }
+
+    /// Marks the module as global, allowing its providers to be accessed from any module.
+    #[must_use]
+    pub const fn with_global(mut self) -> Self {
+        self.global = true;
+        self
+    }
+
+    /// Returns the module's global declaration status.
+    pub const fn is_global(&self) -> bool {
+        self.global
     }
 
     /// Returns the module's stable type name.

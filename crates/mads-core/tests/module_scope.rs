@@ -92,6 +92,43 @@ mod direct_public {
     }
 }
 
+mod global_public {
+    pub mod database {
+        #[mads_core::module(global)]
+        pub struct DatabaseModule;
+
+        #[derive(Clone)]
+        pub struct DatabasePool;
+
+        #[mads_core::provider]
+        pub fn database_pool() -> DatabasePool {
+            DatabasePool
+        }
+    }
+
+    pub mod user {
+        use super::database::DatabasePool;
+
+        #[mads_core::module]
+        pub struct UserModule;
+
+        #[derive(Clone)]
+        pub struct UserService;
+
+        #[mads_core::provider]
+        pub fn user_service(_pool: DatabasePool) -> UserService {
+            UserService
+        }
+    }
+
+    pub mod app {
+        use super::{database::DatabaseModule, user::UserModule};
+
+        #[mads_core::module(imports = [DatabaseModule, UserModule])]
+        pub struct GlobalRoot;
+    }
+}
+
 mod missing_import {
     pub mod target {
         #[mads_core::module]
@@ -481,6 +518,17 @@ fn accessible_dependency_ignores_a_constructor_outside_the_rooted_scope() {
 fn direct_import_allows_an_unrestricted_public_provider() {
     let analysis = rooted_analysis::<direct_public::root::DirectRoot>();
     assert!(analysis.is_valid());
+}
+
+#[test]
+fn global_module_exposes_public_providers_without_a_direct_import() {
+    use global_public::{app::GlobalRoot, database::DatabasePool, user::UserService};
+
+    let analysis = rooted_analysis::<GlobalRoot>();
+
+    assert!(analysis.is_valid(), "{:?}", analysis.diagnostics());
+    assert!(analysis.graph().provider::<DatabasePool>().is_some());
+    assert!(analysis.graph().provider::<UserService>().is_some());
 }
 
 #[test]

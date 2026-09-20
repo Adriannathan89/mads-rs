@@ -222,7 +222,6 @@ jobs:
             mads-extra
             mads-common
             mads
-            mads-cli
           )
 
           publication_status() {
