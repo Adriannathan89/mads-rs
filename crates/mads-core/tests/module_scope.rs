@@ -522,11 +522,7 @@ fn direct_import_allows_an_unrestricted_public_provider() {
 
 #[test]
 fn global_module_exposes_public_providers_without_a_direct_import() {
-    use global_public::{
-        app::GlobalRoot,
-        database::DatabasePool,
-        user::UserService,
-    };
+    use global_public::{app::GlobalRoot, database::DatabasePool, user::UserService};
 
     let analysis = rooted_analysis::<GlobalRoot>();
 

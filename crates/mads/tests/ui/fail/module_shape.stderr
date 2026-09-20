@@ -1,4 +1,4 @@
-error: `#[mads::module]` supports only unit structs with optional `imports = [Module]`
+error: `#[mads::module]` supports only unit structs with optional `imports = [Module]` or `global`
  --> tests/ui/fail/module_shape.rs:4:22
   |
 4 |   struct InvalidModule {

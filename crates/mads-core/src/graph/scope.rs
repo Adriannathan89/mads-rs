@@ -206,12 +206,9 @@ fn can_access(
     visibility: ProviderVisibility,
 ) -> bool {
     context == owner.type_id()
-        || (
-            visibility == ProviderVisibility::Public && (
-            graph.directly_imports(context, owner.type_id())
-                || owner.is_global() && graph.is_reachable(owner.type_id())
-            )
-        )
+        || (visibility == ProviderVisibility::Public
+            && (graph.directly_imports(context, owner.type_id())
+                || owner.is_global() && graph.is_reachable(owner.type_id())))
 }
 
 fn owner_of(

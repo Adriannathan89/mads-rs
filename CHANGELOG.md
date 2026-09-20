@@ -2,6 +2,19 @@
 
 All notable changes to MADS.rs are documented in this file.
 
+## [0.8.1] - 2026-09-20
+
+### Added
+
+- `#[module(global)]` marks an imported module's public providers as available
+  to every module reachable from the application root, without requiring each
+  consumer to declare a direct import.
+
+### Compatibility
+
+- `mads-cli` remains at version `0.8.0` and consumes the `0.8.1` framework
+  crates through exact internal dependencies.
+
 ## [0.8.0] - 2026-09-10
 
 Stable release of the MADS.rs CLI, development loop, and framework
