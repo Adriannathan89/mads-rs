@@ -101,6 +101,18 @@ fn module_descriptor_preserves_identity_and_location() {
 }
 
 #[test]
+fn module_descriptor_tracks_global_status() {
+    let descriptor = ModuleDescriptor::new(
+        "descriptor::Global",
+        output_type_id,
+        SourceLocation::new("module.rs", 1, 1),
+    );
+
+    assert!(!descriptor.is_global());
+    assert!(descriptor.with_global().is_global());
+}
+
+#[test]
 fn module_descriptor_preserves_namespace_and_imports() {
     let location = SourceLocation::new("module.rs", 56, 78);
     let descriptor = ModuleDescriptor::new("descriptor::Root", output_type_id, location)

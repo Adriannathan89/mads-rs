@@ -13,17 +13,30 @@ stable MADS.rs release.
 ## Usage
 
 ```bash
-script/release.sh 0.7.0
+script/release.sh 0.8.0
 ```
 
-The script sets the workspace version to exactly `0.7.0`, updates every exact
-internal MADS crate dependency to `=0.7.0`, updates the seven workspace package
-records in `Cargo.lock`, then runs locked Cargo metadata and workspace checks.
+To advance framework crates while retaining the current `mads-cli` package
+version, use:
+
+```bash
+script/release.sh --keep-cli-version 0.8.1
+```
+
+The script sets the workspace version to exactly `0.8.0`, updates every exact
+internal MADS crate dependency to `=0.8.0`, updates matching MADS package
+records in every `Cargo.lock`, then runs locked Cargo metadata and workspace
+checks.
+
+`--keep-cli-version` preserves the current CLI package version. When the CLI
+inherits the workspace version, the script first records that current version
+as an explicit `mads-cli` package version; its dependencies still pin the new
+framework version.
 
 It does not edit README or changelog content, commit, tag, push, or publish.
 Review the Cargo changes and complete the release documentation manually.
 
 After committing the prepared stable version, push it to `main`. The stable
 publication workflow runs all release gates, publishes missing crate versions
-to crates.io in dependency order, and creates the `v0.7.0` Git tag and stable
+to crates.io in dependency order, and creates the `v0.8.0` Git tag and stable
 GitHub Release. Configure `CRATES_IO_TOKEN` in the GitHub `stable` environment.

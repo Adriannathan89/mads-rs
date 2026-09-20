@@ -1,6 +1,6 @@
 # MADS CLI
 
-MADS v0.8.0-beta.1 provides Cargo-native execution, inspection, PostgreSQL
+MADS v0.8.0 provides Cargo-native execution, inspection, PostgreSQL
 migration commands, a minimal-project generator, and a versioned JSON result
 for finite MADS-owned commands. Human-readable output remains the default.
 

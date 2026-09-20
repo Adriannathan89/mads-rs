@@ -1,8 +1,8 @@
-# MADS.rs 0.8.0-beta.1 Architecture
+# MADS.rs 0.8.0 Architecture
 
 MADS separates framework-neutral construction and configuration from Axum HTTP
 delivery, optional PostgreSQL/Diesel persistence, and the Cargo-native CLI.
-Version 0.8.0-beta.1 completes the approved validation, REST-error, typed
+Version 0.8.0 completes the approved validation, REST-error, typed
 configuration, compiler-diagnostic, machine-output, and minimal-scaffolding
 surface. Stable 0.8.0 promotes this same surface after fixes, documentation
 corrections, and verification only; it does not add features.

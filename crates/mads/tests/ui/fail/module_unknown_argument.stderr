@@ -1,4 +1,4 @@
-error: `#[mads::module]` supports only unit structs with optional `imports = [Module]`
+error: `#[mads::module]` supports only unit structs with optional `imports = [Module]` or `global`
  --> tests/ui/fail/module_unknown_argument.rs:3:10
   |
 3 | #[module(providers = [usize])]

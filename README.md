@@ -1,6 +1,9 @@
 # MADS.rs
 
-MADS.rs 0.8.0-beta.1 is a Rust application framework with a framework-neutral
+[![Latest release](https://img.shields.io/github/v/release/Adriannathan89/mads?display_name=tag&sort=semver)](https://github.com/Adriannathan89/mads/releases/latest)
+[![CI](https://github.com/Adriannathan89/mads/actions/workflows/ci.yml/badge.svg)](https://github.com/Adriannathan89/mads/actions/workflows/ci.yml)
+
+MADS.rs 0.8.1 is a Rust application framework with a framework-neutral
 core, a scoped Axum HTTP runtime, source-aware typed configuration, safe REST
 errors, request validation, and explicit PostgreSQL/Diesel integration. A root
 module selects one application; startup validates its scoped graph and routes
@@ -76,7 +79,7 @@ strategies, and official auto-configurations reachable through that graph.
 
 ```toml
 [dependencies]
-mads = "0.8.0-beta.1"
+mads = "0.8.1"
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
@@ -666,7 +669,7 @@ limitations, resource measurements, and interpretation guidance.
 
 ## Current scope
 
-Version 0.8.0-beta.1 includes rooted module scope, conventional startup, CORS,
+Version 0.8.0 includes rooted module scope, conventional startup, CORS,
 native router composition, typed input validation, the seven REST errors,
 explicit typed configuration and redacted secrets, focused MADS macro
 diagnostics, Cargo-native run/dev, compiled route/graph/doctor inspection,

@@ -55,7 +55,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-mads = { version = "0.8.0-beta.1", default-features = false, features = ["database", "http", "jwt", "runtime-tokio"] }
+mads = { version = "0.8.0", default-features = false, features = ["database", "http", "jwt", "runtime-tokio"] }
 argon2 = "0.5"
 rand_core = { version = "0.6", features = ["getrandom"] }
 serde = { version = "1", features = ["derive"] }

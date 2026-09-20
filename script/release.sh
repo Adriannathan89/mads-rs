@@ -2,16 +2,29 @@
 set -euo pipefail
 
 mode="stable"
-if [[ "${1:-}" == "--beta" ]]; then
-  mode="beta"
-  shift
-fi
+keep_cli_version="false"
+
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --beta)
+      mode="beta"
+      shift
+      ;;
+    --keep-cli-version)
+      keep_cli_version="true"
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
 if [[ "$#" -ne 1 || ! "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   if [[ "$mode" == "beta" ]]; then
-    echo "Usage: script/release-beta.sh X.Y.Z" >&2
+    echo "Usage: script/release-beta.sh [--keep-cli-version] X.Y.Z" >&2
   else
-    echo "Usage: script/release.sh X.Y.Z" >&2
+    echo "Usage: script/release.sh [--keep-cli-version] X.Y.Z" >&2
   fi
   exit 2
 fi
@@ -34,7 +47,7 @@ fi
 
 target_version="$1"
 new_version="$({
-  python3 - "$repository_root" "$mode" "$target_version" <<'PY'
+  python3 - "$repository_root" "$mode" "$target_version" "$keep_cli_version" <<'PY'
 import os
 import re
 import sys
@@ -44,6 +57,7 @@ from pathlib import Path
 root = Path(sys.argv[1])
 mode = sys.argv[2]
 base = sys.argv[3]
+keep_cli_version = sys.argv[4] == "true"
 packages = (
     "mads-core-macros",
     "mads-common-macros",
@@ -84,6 +98,20 @@ pin_pattern = re.compile(r'(\bversion\s*=\s*")=[^"]+("\s*[,}])')
 pin_count = 0
 for manifest in sorted((root / "crates").glob("*/Cargo.toml")):
     original = manifest.read_text(encoding="utf-8")
+    if keep_cli_version and manifest.parent.name == "mads-cli":
+        cli_version_pattern = re.compile(r'(?m)^version\.workspace\s*=\s*true\s*$')
+        original, count = cli_version_pattern.subn(f'version = "{current}"', original, count=1)
+        if count == 0:
+            cli_manifest = tomllib.loads(original)
+            cli_version = cli_manifest.get("package", {}).get("version")
+            if not isinstance(cli_version, str):
+                raise SystemExit(
+                    "mads-cli must declare a literal version or version.workspace = true."
+                )
+        elif count != 1:
+            raise SystemExit(
+                "mads-cli must use version.workspace = true when --keep-cli-version is set."
+            )
     output_lines = []
     for line in original.splitlines(keepends=True):
         if re.match(r"\s*mads(?:-[a-z0-9-]+)?\s*=", line) and "path" in line:
@@ -98,17 +126,27 @@ for manifest in sorted((root / "crates").glob("*/Cargo.toml")):
 if pin_count == 0:
     raise SystemExit("No internal MADS dependency pins were found.")
 
-lockfile = root / "Cargo.lock"
-original_lock = lockfile.read_text(encoding="utf-8")
-updated_lock = original_lock
-for package in packages:
-    pattern = re.compile(
-        rf'(?m)(^\[\[package\]\]\nname = "{re.escape(package)}"\nversion = ")[^"]+("$)'
-    )
-    updated_lock, count = pattern.subn(rf'\g<1>{target}\g<2>', updated_lock)
-    if count != 1:
-        raise SystemExit(f"Cargo.lock must contain exactly one package record for {package}.")
-changes[lockfile] = updated_lock
+root_lockfile = root / "Cargo.lock"
+for lockfile in sorted(root.rglob("Cargo.lock")):
+    original_lock = lockfile.read_text(encoding="utf-8")
+    updated_lock = original_lock
+    for package in packages:
+        manifest = root / "crates" / package / "Cargo.toml"
+        package_manifest = tomllib.loads(changes[manifest])
+        package_version = package_manifest["package"]["version"]
+        if isinstance(package_version, dict) and package_version.get("workspace") is True:
+            package_version = target
+        if not isinstance(package_version, str):
+            raise SystemExit(f"{manifest} must declare a literal version or version.workspace = true.")
+        pattern = re.compile(
+            rf'(?m)(^\[\[package\]\]\nname = "{re.escape(package)}"\nversion = ")[^"]+("$)'
+        )
+        updated_lock, count = pattern.subn(rf'\g<1>{package_version}\g<2>', updated_lock)
+        if count > 1 or (lockfile == root_lockfile and count != 1):
+            raise SystemExit(
+                f"{lockfile} must contain exactly one package record for {package}."
+            )
+    changes[lockfile] = updated_lock
 
 for path, contents in changes.items():
     tomllib.loads(contents)
