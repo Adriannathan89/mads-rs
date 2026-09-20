@@ -9,7 +9,6 @@ mod configuration;
 #[path = "main.rs"]
 mod main_attribute;
 mod managed;
-mod module;
 mod module_v2;
 mod path;
 mod provider;
@@ -45,17 +44,6 @@ pub fn main(arguments: TokenStream, item: TokenStream) -> TokenStream {
 /// Use `imports = [Module, ...]` to declare direct module dependencies.
 #[proc_macro_attribute]
 pub fn module(arguments: TokenStream, item: TokenStream) -> TokenStream {
-    module::expand(arguments.into(), item.into())
-        .unwrap_or_else(syn::Error::into_compile_error)
-        .into()
-}
-
-/// Declares a non-generic unit struct as an application module (version 2).
-/// 
-/// Use `imports = [Module, ...]` to declare direct module dependencies.
-/// Use `global` to mark the module as a global module.
-#[proc_macro_attribute]
-pub fn module_v2(arguments: TokenStream, item: TokenStream) -> TokenStream {
     module_v2::expand(arguments.into(), item.into())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
