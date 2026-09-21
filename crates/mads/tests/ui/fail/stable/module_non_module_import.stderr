@@ -9,11 +9,16 @@ help: the trait `Module` is not implemented for `NotAModule`
   |
 3 | struct NotAModule;
   | ^^^^^^^^^^^^^^^^^
-help: the trait `Module` is implemented for `AppModule`
+help: the following other types implement trait `Module`
  --> tests/ui/fail/stable/module_non_module_import.rs:5:1
   |
 5 | #[module(imports = [NotAModule])]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `AppModule`
+  |
+ ::: $WORKSPACE/crates/mads-common/src/logger/mod.rs
+  |
+  | #[crate::core::module(global)]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `LoggerModule`
 note: required by a bound in `__mads_assert_module_import`
  --> tests/ui/fail/stable/module_non_module_import.rs:5:1
   |
