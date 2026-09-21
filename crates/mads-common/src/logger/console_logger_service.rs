@@ -4,7 +4,7 @@ use super::{LogLevel, LoggerService};
 
 /// Default logger that writes timestamped messages to standard error.
 pub struct ConsoleLoggerService;
-/// TODO: Match Logger Level to decide the color of the message. For example, errors could be red, warnings yellow, etc. This would require using a crate like `colored` or `ansi_term` to add color to the output.
+
 impl LoggerService for ConsoleLoggerService {
     fn log(&self, level: LogLevel, message: &str) {
         let level_str = match level {
