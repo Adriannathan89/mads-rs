@@ -25,11 +25,12 @@ trybuild.workspace = true
 
 [features]
 default = ["common", "runtime-tokio"]
-common = ["http", "database"]
+common = ["http", "database", "logger"]
 http = ["dep:mads-common", "mads-common/http"]
 database = ["dep:mads-common", "mads-common/database"]
 jwt = ["dep:mads-common", "mads-common/jwt"]
 cookies = ["http", "mads-common/cookies"]
+logger = ["dep:mads-common", "mads-common/logger"]
 runtime-tokio = ["mads-core/runtime-tokio"]
 extra = ["dep:mads-extra"]
 
