@@ -221,6 +221,10 @@ pub use mads_common::diesel;
 #[cfg(feature = "database")]
 pub use mads_common::diesel_migrations;
 
+/// Re-exports the standard logger façade, backend contract, and global module.
+#[cfg(feature = "logger")]
+pub use mads_common::{ConsoleLoggerService, LogLevel, Logger, LoggerModule, LoggerService};
+
 /// Re-exports strict cookie integration and the established cookie time types.
 #[cfg(feature = "cookies")]
 pub use mads_common::cookie;
@@ -382,6 +386,10 @@ pub mod prelude {
         DatabasePoolStatus, DatabaseResult, MadsBuilderDatabaseExt, MigrationReport,
         MigrationStatus,
     };
+
+    /// Re-exports the standard logger façade, backend contract, and global module.
+    #[cfg(feature = "logger")]
+    pub use mads_common::{ConsoleLoggerService, LogLevel, Logger, LoggerModule, LoggerService};
 
     /// Re-exports explicit HTTP delivery mapping for managed and native Diesel results.
     #[cfg(all(feature = "http", feature = "database"))]
