@@ -1,6 +1,6 @@
 //! Standard integration contracts for MADS.rs.
 //!
-//! Enable the `http`, `database`, `jwt`, or `cookies` feature to select only
+//! Enable the `http`, `database`, `jwt`, `cookies`, or `logger` feature to select only
 //! the integration contracts an application needs. The framework-neutral core
 //! boundary is always available through [`core`].
 #![cfg_attr(
@@ -34,6 +34,10 @@ mod server;
 mod server_config;
 #[cfg(feature = "http")]
 mod validation;
+
+/// Application logging contracts and the default console logger.
+#[cfg(feature = "logger")]
+pub mod logger;
 
 extern crate self as mads_common;
 
@@ -143,6 +147,10 @@ pub use server::{HttpRuntimeError, MADS031, MadsRunExt, serve, serve_router};
 
 /// Exposes the framework-neutral core boundary to future integrations.
 pub use mads_core as core;
+
+/// Logging levels, contracts, and the default console logger.
+#[cfg(feature = "logger")]
+pub use logger::{ConsoleLoggerService, LogLevel, Logger, LoggerModule, LoggerService};
 
 /// Declares a managed controller and its route-trait contracts.
 #[cfg(feature = "http")]
