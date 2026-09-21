@@ -15,6 +15,8 @@ pub enum LogLevel {
     Trace,
     /// A fatal error that requires immediate attention.
     Fatal,
+    /// Informational messages that highlight the progress of the application.
+    Info,
 }
 
 /// Contract implemented by concrete logging backends.
@@ -33,6 +35,11 @@ pub trait LoggerService: Send + Sync {
     /// Records an error message.
     fn error(&self, message: &str) {
         self.log(LogLevel::Error, message);
+    }
+
+    /// Records an info message.
+    fn info(&self, message: &str) {
+        self.log(LogLevel::Info, message);
     }
 
     /// Records a debug message.
@@ -76,6 +83,11 @@ impl Logger {
         self.inner.warn(message);
     }
 
+    /// Records an info message.
+    pub fn info(&self, message: &str) {
+        self.inner.info(message);
+    }
+
     /// Records an error message.
     pub fn error(&self, message: &str) {
         self.inner.error(message);
@@ -88,12 +100,24 @@ impl Logger {
 
     /// Records a trace message with optional trace and context details.
     pub fn trace(&self, message: &str, trace: Option<&str>, context: Option<&str>) {
-        self.inner.trace(message, trace, context);
+        let mut full_message = message.to_string();
+        if let Some(trace) = trace {
+            full_message.push_str(&format!("\nTrace: {trace}"));
+        }
+        if let Some(context) = context {
+            full_message.push_str(&format!("\nContext: {context}"));
+        }
+
+        self.inner.trace(&full_message, None, None);
     }
 
     /// Records a fatal message with optional context details.
     pub fn fatal(&self, message: &str, context: Option<&str>) {
-        self.inner.fatal(message, context);
+        let mut full_message = message.to_string();
+        if let Some(context) = context {
+            full_message.push_str(&format!("\nContext: {context}"));
+        }
+        self.inner.fatal(&full_message, None);
     }
 }
 
