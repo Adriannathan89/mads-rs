@@ -35,6 +35,58 @@ fn logger_delegates_messages_to_the_configured_inner_logger() {
     assert_eq!(entries[0].1, "database is unavailable");
 }
 
+#[test]
+fn logger_delegates_info_messages_to_the_configured_inner_logger() {
+    let inner = RecordingLogger::default();
+    let entries = Arc::clone(&inner.entries);
+    let logger = Logger::new(inner);
+
+    logger.info("server started");
+
+    let entries = entries.lock().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert!(matches!(entries[0].0, LogLevel::Info));
+    assert_eq!(entries[0].1, "server started");
+}
+
+#[test]
+fn logger_includes_trace_and_context_details_in_trace_messages() {
+    let inner = RecordingLogger::default();
+    let entries = Arc::clone(&inner.entries);
+    let logger = Logger::new(inner);
+
+    logger.trace(
+        "request failed",
+        Some("database::connect"),
+        Some("request_id=req-42"),
+    );
+
+    let entries = entries.lock().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert!(matches!(entries[0].0, LogLevel::Trace));
+    assert_eq!(
+        entries[0].1,
+        "request failed\nTrace: database::connect\nContext: request_id=req-42"
+    );
+}
+
+#[test]
+fn logger_includes_context_details_in_fatal_messages() {
+    let inner = RecordingLogger::default();
+    let entries = Arc::clone(&inner.entries);
+    let logger = Logger::new(inner);
+
+    logger.fatal("application cannot continue", Some("migration=20260922"));
+
+    let entries = entries.lock().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert!(matches!(entries[0].0, LogLevel::Fatal));
+    assert_eq!(
+        entries[0].1,
+        "application cannot continue\nContext: migration=20260922"
+    );
+}
+
 mod consumer {
     use mads_common::Logger;
 
