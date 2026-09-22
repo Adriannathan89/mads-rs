@@ -1072,32 +1072,31 @@ fn validate_guard(guard: &GuardDescriptor) -> Result<()> {
         ));
     }
     #[cfg(feature = "cookies")]
-    if let TokenSource::Cookie(name) = guard.source() {
-        if !valid_cookie_name(name) {
-            return Err(metadata_error(
-                subject,
-                "guard cookie token source must use a non-empty RFC cookie name",
-                guard.location(),
-            ));
-        }
+    if let TokenSource::Cookie(name) = guard.source()
+        && !valid_cookie_name(name)
+    {
+        return Err(metadata_error(
+            subject,
+            "guard cookie token source must use a non-empty RFC cookie name",
+            guard.location(),
+        ));
     }
     for (label, clause) in [
         ("roles", guard.roles()),
         ("permissions", guard.permissions()),
     ] {
-        if let Some(clause) = clause {
-            if clause.values().is_empty()
+        if let Some(clause) = clause
+            && (clause.values().is_empty()
                 || clause
                     .values()
                     .iter()
-                    .any(|value| value.is_empty() || value.chars().any(char::is_control))
-            {
-                return Err(metadata_error(
-                    subject,
-                    format!("guard {label} policy must contain non-empty values"),
-                    guard.location(),
-                ));
-            }
+                    .any(|value| value.is_empty() || value.chars().any(char::is_control)))
+        {
+            return Err(metadata_error(
+                subject,
+                format!("guard {label} policy must contain non-empty values"),
+                guard.location(),
+            ));
         }
     }
     if guard

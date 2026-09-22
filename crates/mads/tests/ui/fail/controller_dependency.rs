@@ -1,6 +1,6 @@
 //! Confirms controller dependency constraints point at the declared field type.
 
-// Keep the Clone suggestion on a two-digit line so stable and Rust 1.85
+// Keep the Clone suggestion on a two-digit line so stable and Rust 1.94
 // render its help gutter identically.
 //
 //

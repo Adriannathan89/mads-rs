@@ -182,16 +182,13 @@ fn type_name(ty: &Type) -> syn::Result<String> {
 }
 
 fn inner_type(ty: &Type) -> syn::Result<&Type> {
-    if let Type::Path(path) = ty {
-        if let PathArguments::AngleBracketed(arguments) =
+    if let Type::Path(path) = ty
+        && let PathArguments::AngleBracketed(arguments) =
             &path.path.segments.last().unwrap().arguments
-        {
-            if arguments.args.len() == 1 {
-                if let Some(GenericArgument::Type(inner)) = arguments.args.first() {
-                    return Ok(inner);
-                }
-            }
-        }
+        && arguments.args.len() == 1
+        && let Some(GenericArgument::Type(inner)) = arguments.args.first()
+    {
+        return Ok(inner);
     }
     Err(Error::new(
         ty.span(),

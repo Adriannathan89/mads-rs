@@ -2,7 +2,7 @@
 name = "{{project_name}}"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.94"
 
 [dependencies]
 mads = { version = "={{mads_version}}", default-features = false, features = ["http", "runtime-tokio"] }

@@ -182,21 +182,21 @@ impl JwtService {
         if claims.expires_at <= now.saturating_sub(self.inner.policy.clock_skew_seconds) {
             return Err(JwtError::new(JwtErrorKind::Expired));
         }
-        if let Some(not_before) = claims.not_before {
-            if not_before > now.saturating_add(self.inner.policy.clock_skew_seconds) {
-                return Err(JwtError::new(JwtErrorKind::InvalidNotBefore));
-            }
+        if let Some(not_before) = claims.not_before
+            && not_before > now.saturating_add(self.inner.policy.clock_skew_seconds)
+        {
+            return Err(JwtError::new(JwtErrorKind::InvalidNotBefore));
         }
 
-        if let Some(expected) = self.inner.policy.issuer.as_deref() {
-            if claims.issuer.as_deref() != Some(expected) {
-                return Err(JwtError::new(JwtErrorKind::IssuerMismatch));
-            }
+        if let Some(expected) = self.inner.policy.issuer.as_deref()
+            && claims.issuer.as_deref() != Some(expected)
+        {
+            return Err(JwtError::new(JwtErrorKind::IssuerMismatch));
         }
-        if let Some(expected) = validation.issuer_value() {
-            if claims.issuer.as_deref() != Some(expected) {
-                return Err(JwtError::new(JwtErrorKind::IssuerMismatch));
-            }
+        if let Some(expected) = validation.issuer_value()
+            && claims.issuer.as_deref() != Some(expected)
+        {
+            return Err(JwtError::new(JwtErrorKind::IssuerMismatch));
         }
 
         if !self.inner.policy.audiences.is_empty()
@@ -210,27 +210,27 @@ impl JwtService {
         {
             return Err(JwtError::new(JwtErrorKind::AudienceMismatch));
         }
-        if let Some(expected) = validation.audience_value() {
-            if !claims.audiences.iter().any(|audience| audience == expected) {
-                return Err(JwtError::new(JwtErrorKind::AudienceMismatch));
-            }
+        if let Some(expected) = validation.audience_value()
+            && !claims.audiences.iter().any(|audience| audience == expected)
+        {
+            return Err(JwtError::new(JwtErrorKind::AudienceMismatch));
         }
 
         if validation.subject_required() && claims.subject.is_none() {
             return Err(JwtError::new(JwtErrorKind::SubjectMismatch));
         }
-        if let Some(expected) = validation.subject_value() {
-            if claims.subject.as_deref() != Some(expected) {
-                return Err(JwtError::new(JwtErrorKind::SubjectMismatch));
-            }
+        if let Some(expected) = validation.subject_value()
+            && claims.subject.as_deref() != Some(expected)
+        {
+            return Err(JwtError::new(JwtErrorKind::SubjectMismatch));
         }
         if validation.jwt_id_required() && claims.jwt_id.is_none() {
             return Err(JwtError::new(JwtErrorKind::JwtIdMismatch));
         }
-        if let Some(expected) = validation.jwt_id_value() {
-            if claims.jwt_id.as_deref() != Some(expected) {
-                return Err(JwtError::new(JwtErrorKind::JwtIdMismatch));
-            }
+        if let Some(expected) = validation.jwt_id_value()
+            && claims.jwt_id.as_deref() != Some(expected)
+        {
+            return Err(JwtError::new(JwtErrorKind::JwtIdMismatch));
         }
         Ok(())
     }

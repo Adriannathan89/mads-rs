@@ -172,10 +172,10 @@ fn parse_plain_missing_field(message: &str) -> Option<String> {
 }
 
 fn apply_fallback_field(issue: ValidationIssue, field: Option<String>) -> ValidationIssue {
-    if issue.path().is_empty() {
-        if let Some(field) = field {
-            return issue.at_field(field);
-        }
+    if issue.path().is_empty()
+        && let Some(field) = field
+    {
+        return issue.at_field(field);
     }
     issue
 }

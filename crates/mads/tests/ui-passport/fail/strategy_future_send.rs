@@ -4,7 +4,7 @@ use mads::common::*;
 
 struct NonSendingStrategy;
 
-// Keep this diagnostic on a two-digit line so rustc 1.85 and current stable
+// Keep this diagnostic on a two-digit line so rustc 1.94 and current stable
 // render the trybuild gutter identically.
 //
 #[passport_strategy(name = "jwt")]

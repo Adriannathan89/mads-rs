@@ -1,6 +1,6 @@
 //! Confirms managed dependency constraints point at the declared field type.
 
-// Keep both Clone suggestions on two-digit lines so stable and Rust 1.85
+// Keep both Clone suggestions on two-digit lines so stable and Rust 1.94
 // render their help gutters identically.
 //
 //

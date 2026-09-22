@@ -164,7 +164,7 @@ fn generated_project_compiles_and_exposes_the_minimal_application_offline() {
 
 fn registry_manifest() -> String {
     format!(
-        "[package]\nname = \"generated-app\"\nversion = \"0.1.0\"\nedition = \"2024\"\nrust-version = \"1.85\"\n\n[dependencies]\nmads = {{ version = \"={}\", default-features = false, features = [\"http\", \"runtime-tokio\"] }}\n",
+        "[package]\nname = \"generated-app\"\nversion = \"0.1.0\"\nedition = \"2024\"\nrust-version = \"1.94\"\n\n[dependencies]\nmads = {{ version = \"={}\", default-features = false, features = [\"http\", \"runtime-tokio\"] }}\n",
         "0.8.1"
     )
 }
