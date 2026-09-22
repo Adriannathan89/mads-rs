@@ -128,7 +128,7 @@ serde = { version = "1", features = ["derive"] }
 tower = { version = "0.5", features = ["util"] }
 ~~~
 
-MADS.rs supports Rust 1.85 and uses Rust edition 2024. The default facade
+MADS.rs supports Rust 1.94 and uses Rust edition 2024. The default facade
 enables the HTTP and PostgreSQL/Diesel integrations with the Tokio runtime. For
 feature combinations and the no-Diesel HTTP setup, see the
 [facade README](crates/mads/README.md).
@@ -733,7 +733,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 cargo test --workspace --all-features --doc
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps
-cargo +1.85.0 test --locked --workspace --all-features
+cargo +1.94.0 test --locked --workspace --all-features
 ```
 
 CI also provisions PostgreSQL 16 and runs the ignored database suites plus the

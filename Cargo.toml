@@ -13,7 +13,7 @@ members = [
 [workspace.package]
 version = "0.8.1"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.94"
 authors = ["MADS.rs contributors"]
 repository = "https://github.com/Adriannathan89/mads"
 license = "MIT OR Apache-2.0"

@@ -15,7 +15,7 @@ fn input_rejects_helper_grammar_shapes_literals_and_callback_contracts() {
         .arg("--version")
         .output()
         .unwrap();
-    if String::from_utf8_lossy(&output.stdout).starts_with("rustc 1.85.") {
+    if String::from_utf8_lossy(&output.stdout).starts_with("rustc 1.94.") {
         cases.compile_fail("tests/ui-input/fail/msrv/*.rs");
     } else {
         cases.compile_fail("tests/ui-input/fail/stable/*.rs");

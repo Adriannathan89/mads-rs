@@ -35,7 +35,7 @@ The generated project contains exactly these seven files:
 ```
 
 The manifest starts the application at version `0.1.0`, uses edition 2024 and
-Rust 1.85, and pins the installed MADS CLI version exactly. Its MADS dependency
+Rust 1.94, and pins the installed MADS CLI version exactly. Its MADS dependency
 uses `default-features = false` with only `http` and `runtime-tokio`; it has no
 database, JWT, cookie, schema, migration, or authentication dependency. The
 starter's `GET /` response is plain `Hello World!`.

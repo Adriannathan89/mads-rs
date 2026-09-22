@@ -101,10 +101,10 @@ impl CargoBuild {
                 .with_source(error)
             })?;
 
-            if let Message::CompilerMessage(message) = &message {
-                if let Some(rendered) = &message.message.rendered {
-                    eprint!("{rendered}");
-                }
+            if let Message::CompilerMessage(message) = &message
+                && let Some(rendered) = &message.message.rendered
+            {
+                eprint!("{rendered}");
             }
 
             self.collector.process(&self.target, message);

@@ -2,7 +2,7 @@
 name = "mads-macro-core-consumer"
 version = "0.0.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.94"
 
 [dependencies]
 mads-core = { path = "../../../../mads-core", default-features = false }

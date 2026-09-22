@@ -2,6 +2,13 @@
 
 All notable changes to MADS.rs are documented in this file.
 
+## [Unreleased]
+
+### Compatibility
+
+- Raise the minimum supported Rust version from 1.85 to 1.94. MADS continues
+  to use Rust edition 2024.
+
 ## [0.8.1] - 2026-09-20
 
 ### Added

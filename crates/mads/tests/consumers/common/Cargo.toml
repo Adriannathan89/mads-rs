@@ -2,7 +2,7 @@
 name = "mads-macro-common-consumer"
 version = "0.0.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.94"
 
 [dependencies]
 mads-common = { path = "../../../../mads-common" }

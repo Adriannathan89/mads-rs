@@ -795,17 +795,17 @@ fn resolve_custom_strategy<'a>(
 }
 
 fn resolve_builtin_or_missing(guard: &GuardDescriptor) -> Result<PassportStrategyBinding<'_>> {
-    if guard.strategy() == "jwt" {
-        if let Some(adapter) = guard.builtin_adapter() {
-            return Ok(PassportStrategyBinding {
-                guard,
-                context_module: None,
-                strategy: "jwt",
-                adapter,
-                token_kind: JwtTokenKind::Access,
-                builtin: true,
-            });
-        }
+    if guard.strategy() == "jwt"
+        && let Some(adapter) = guard.builtin_adapter()
+    {
+        return Ok(PassportStrategyBinding {
+            guard,
+            context_module: None,
+            strategy: "jwt",
+            adapter,
+            token_kind: JwtTokenKind::Access,
+            builtin: true,
+        });
     }
 
     Err(strategy_error(

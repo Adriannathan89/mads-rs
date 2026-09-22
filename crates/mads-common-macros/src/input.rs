@@ -162,22 +162,21 @@ fn type_name(ty: &Type) -> String {
 }
 
 fn arguments(ty: &Type) -> Vec<&Type> {
-    if let Type::Path(path) = ungroup(ty) {
-        if let Some(segment) = path.path.segments.last() {
-            if let syn::PathArguments::AngleBracketed(arguments) = &segment.arguments {
-                return arguments
-                    .args
-                    .iter()
-                    .filter_map(|arg| {
-                        if let syn::GenericArgument::Type(ty) = arg {
-                            Some(ty)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-            }
-        }
+    if let Type::Path(path) = ungroup(ty)
+        && let Some(segment) = path.path.segments.last()
+        && let syn::PathArguments::AngleBracketed(arguments) = &segment.arguments
+    {
+        return arguments
+            .args
+            .iter()
+            .filter_map(|arg| {
+                if let syn::GenericArgument::Type(ty) = arg {
+                    Some(ty)
+                } else {
+                    None
+                }
+            })
+            .collect();
     }
     Vec::new()
 }

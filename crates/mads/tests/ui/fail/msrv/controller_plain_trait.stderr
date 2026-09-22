@@ -5,10 +5,13 @@ error[E0576]: cannot find method or associated constant `__MADS_ROUTE_CONTRACT` 
   |     ---------------- associated function `index` defined here
 ...
 5 | #[mads::controller(routes = [PlainRoute])]
-  |                              ^^^^^^^^^^
-  |                              |
-  |                              not found in `PlainRoute`
-  |                              help: maybe you meant this associated function: `index`
+  |                              ^^^^^^^^^^ not found in `PlainRoute`
+  |
+help: maybe you meant this associated function
+  |
+5 - #[mads::controller(routes = [PlainRoute])]
+5 + #[mads::controller(routes = [index])]
+  |
 
 error[E0576]: cannot find method or associated constant `__mads_register` in trait `PlainRoute`
  --> tests/ui/fail/msrv/controller_plain_trait.rs:5:1
@@ -17,12 +20,14 @@ error[E0576]: cannot find method or associated constant `__mads_register` in tra
   |     ---------------- associated function `index` defined here
 ...
 5 | #[mads::controller(routes = [PlainRoute])]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  | |
-  | not found in `PlainRoute`
-  | help: maybe you meant this associated function: `index`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in `PlainRoute`
   |
   = note: this error originates in the attribute macro `mads::controller` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: maybe you meant this associated function
+  |
+5 - #[mads::controller(routes = [PlainRoute])]
+5 + index
+  |
 
 error[E0576]: cannot find method or associated constant `__MADS_ROUTE_METADATA` in trait `PlainRoute`
  --> tests/ui/fail/msrv/controller_plain_trait.rs:5:1
@@ -31,9 +36,11 @@ error[E0576]: cannot find method or associated constant `__MADS_ROUTE_METADATA` 
   |     ---------------- associated function `index` defined here
 ...
 5 | #[mads::controller(routes = [PlainRoute])]
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  | |
-  | not found in `PlainRoute`
-  | help: maybe you meant this associated function: `index`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not found in `PlainRoute`
   |
   = note: this error originates in the attribute macro `mads::controller` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: maybe you meant this associated function
+  |
+5 - #[mads::controller(routes = [PlainRoute])]
+5 + index
+  |

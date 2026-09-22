@@ -102,11 +102,11 @@ jobs:
           cargo test -p mads-cli --test dev_cli real_dev_loop -- --test-threads=1
 
   msrv:
-    name: Verify Rust 1.85.0
+    name: Verify Rust 1.94.0
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.85.0
+      - uses: dtolnay/rust-toolchain@1.94.0
       - uses: Swatinem/rust-cache@v2
       - name: Install PostgreSQL client headers
         run: sudo apt-get update && sudo apt-get install --yes libpq-dev

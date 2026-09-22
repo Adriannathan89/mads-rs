@@ -165,10 +165,10 @@ impl LifecycleManager {
 
         for registration in self.hooks.iter().rev() {
             let hook = registration.hook.as_ref();
-            if let Err(error) = hook.stop(context).await {
-                if failure.is_none() {
-                    failure = Some(hook_failure(hook.name(), "shutdown", error));
-                }
+            if let Err(error) = hook.stop(context).await
+                && failure.is_none()
+            {
+                failure = Some(hook_failure(hook.name(), "shutdown", error));
             }
         }
 

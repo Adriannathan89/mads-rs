@@ -16,6 +16,6 @@ fn rustc_is_msrv() -> bool {
     std::process::Command::new("rustc")
         .arg("--version")
         .output()
-        .map(|output| String::from_utf8_lossy(&output.stdout).starts_with("rustc 1.85."))
+        .map(|output| String::from_utf8_lossy(&output.stdout).starts_with("rustc 1.94."))
         .unwrap_or(false)
 }

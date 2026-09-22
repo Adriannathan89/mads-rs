@@ -69,7 +69,7 @@ Use a descriptive prefix such as `feature/`, `fix/`, `docs/`, `test/`, or
 ## Make the change
 
 MADS.rs is a Rust 2024 workspace with a minimum supported Rust version of
-1.85. Follow standard `rustfmt` output and these repository conventions:
+1.94. Follow standard `rustfmt` output and these repository conventions:
 
 - use four-space indentation;
 - use `snake_case` for modules and functions, `UpperCamelCase` for types and
@@ -112,7 +112,7 @@ Also check the minimum supported toolchain when your change may affect
 compatibility:
 
 ```sh
-rustup run 1.85.0 cargo test --locked --workspace --all-features
+rustup run 1.94.0 cargo test --locked --workspace --all-features
 ```
 
 Coverage contributors can run:
