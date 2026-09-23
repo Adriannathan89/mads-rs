@@ -418,6 +418,31 @@ fn active_090_docs_describe_native_persistence() {
 }
 
 #[test]
+fn legacy_database_examples_are_marked_as_superseded() {
+    let root = workspace_root();
+    for path in [
+        "docs/final_ideav1.md",
+        "docs/examples/application.md",
+        "docs/examples/application_clean_architecture.md",
+        "docs/examples/final_application_clean_architecture.md",
+        "docs/examples/modular_user_jwt.md",
+        "docs/examples/passport_jwt.md",
+    ] {
+        let document = fs::read_to_string(root.join(path)).unwrap();
+        let introduction = document.lines().take(8).collect::<Vec<_>>().join(" ");
+        assert!(
+            introduction.contains("Superseded")
+                && introduction.contains("docs/mads-persistence.md"),
+            "{path} must direct readers to the current 0.9 persistence guide"
+        );
+    }
+    let contributing = fs::read_to_string(root.join("CONTRIBUTING.md")).unwrap();
+    let common = fs::read_to_string(root.join("crates/mads-common/README.md")).unwrap();
+    assert!(!contributing.contains("CORS, Diesel"));
+    assert!(!common.contains("PostgreSQL suites are ignored"));
+}
+
+#[test]
 fn documentation_describes_the_v080_compatibility_boundaries() {
     let root = workspace_root();
     let readme = fs::read_to_string(root.join("README.md")).expect("README should exist");

@@ -112,9 +112,9 @@ Run the focused integration tests with:
 cargo test -p mads-common --all-features
 ~~~
 
-Most HTTP, validation, auth, and lifecycle tests can run without external
-services. PostgreSQL suites are ignored by default and require PostgreSQL 16
-through `MADS_TEST_DATABASE_URL`. Route and macro consumer behavior may also
+HTTP, validation, auth, and lifecycle tests can run without external services.
+The `mads-persistence` PostgreSQL acceptance suite is ignored by default and
+requires PostgreSQL 16 through `MADS_TEST_DATABASE_URL`. Route and macro consumer behavior may also
 require the fixtures under `crates/mads/tests/ui`.
 
 See the [architecture reference](../../docs/ARCHITECTURE.md), the

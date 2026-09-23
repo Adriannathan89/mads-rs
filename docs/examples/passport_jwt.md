@@ -1,5 +1,11 @@
 # Passport/JWT example
 
+> **Superseded for MADS 0.9 feature/version guidance.** This is a historical
+> 0.8 example; its Passport concepts remain useful, but the package and
+> database guidance are not current. See
+> [docs/mads-persistence.md](../mads-persistence.md) and
+> [docs/CLI.md](../CLI.md).
+
 This example shows the current v0.8 shape: explicit configuration, access
 and refresh signing, managed strategies, typed principals, inherited/method
 guard policies, validated login input, normalized rejection responses, cookie
