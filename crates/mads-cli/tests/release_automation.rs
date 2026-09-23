@@ -237,7 +237,15 @@ fn beta_and_stable_workflows_require_the_complete_v090_gate_set() {
             "{name} publish must keep its protection"
         );
         assert_publish_order(workflow);
-        for retired in ["libpq", "database_postgres", "database_http_postgres", "database_migration_failure", "database_cli", "database_generate_postgres", "postgres_crud"] {
+        for retired in [
+            "libpq",
+            "database_postgres",
+            "database_http_postgres",
+            "database_migration_failure",
+            "database_cli",
+            "database_generate_postgres",
+            "postgres_crud",
+        ] {
             assert!(!workflow.contains(retired), "{name} retains {retired}");
         }
     }
@@ -388,6 +396,28 @@ fn all_packages_use_v090_pins_and_workspace_version() {
 }
 
 #[test]
+fn active_090_docs_describe_native_persistence() {
+    let root = workspace_root();
+    let cli = fs::read_to_string(root.join("docs/CLI.md")).unwrap();
+    let readme = fs::read_to_string(root.join("README.md")).unwrap();
+    assert!(!cli.contains("mads db"));
+    assert!(readme.contains("mads-persistence"));
+    assert!(readme.contains("sea-orm-postgres"));
+    for path in [
+        "docs/superpowers/specs/2026-09-23-mads-persistence-design.md",
+        "docs/superpowers/plans/2026-09-23-mads-persistence.md",
+    ] {
+        let document = fs::read_to_string(root.join(path)).unwrap();
+        assert!(
+            document
+                .lines()
+                .take(6)
+                .any(|line| line.contains("Superseded"))
+        );
+    }
+}
+
+#[test]
 fn documentation_describes_the_v080_compatibility_boundaries() {
     let root = workspace_root();
     let readme = fs::read_to_string(root.join("README.md")).expect("README should exist");
@@ -395,13 +425,7 @@ fn documentation_describes_the_v080_compatibility_boundaries() {
         .expect("architecture guide should exist");
 
     for (name, source) in [("README", &readme), ("architecture", &architecture)] {
-        for required in [
-            "ValidatedJson",
-            "native `Json`",
-            "Config::parse",
-            "Secret",
-            ".into_http()",
-        ] {
+        for required in ["ValidatedJson", "native `Json`", "Config::parse", "Secret"] {
             assert!(
                 source.contains(required),
                 "{name} must document the v0.8 compatibility contract: {required}",

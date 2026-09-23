@@ -4,10 +4,10 @@
 most application authors should depend on. The facade composes the
 framework-neutral [`mads-core`](../mads-core/README.md) with optional
 [mads-common integrations](../mads-common/README.md) and re-exports the
-macros, types, native Axum/Diesel APIs, and prelude used by application code.
+macros, types, native Axum APIs, and prelude used by application code.
 
 The facade is intentionally thin: it owns public naming, feature composition,
-and re-exports, while graph, HTTP, database, and authentication behavior stays
+and re-exports, while graph, HTTP, and authentication behavior stays
 in the crate that implements it.
 
 ## Dependency structure
@@ -43,24 +43,24 @@ its own manifest.
 
 | Feature | Expands to | Use |
 | --- | --- | --- |
-| `default` | `common` + `runtime-tokio` | Conventional HTTP + PostgreSQL/Diesel application with the Tokio entry point. |
-| `common` | `http` + `database` | Compatibility aggregate; authentication remains opt-in. |
-| `http` | `mads-common/http` | Axum routing/server, validation, CORS, and REST errors without Diesel. |
-| `database` | `mads-common/database` | PostgreSQL/Diesel infrastructure without HTTP mapping. |
+| `default` | `common` + `runtime-tokio` | Conventional HTTP application with the Tokio entry point. |
+| `common` | `http` + `logger` | HTTP and logger aggregate; authentication remains opt-in. |
+| `http` | `mads-common/http` | Axum routing/server, validation, CORS, and REST errors. |
+| `logger` | `mads-common/logger` | Tracing-based application logging. |
 | `jwt` | `mads-common/jwt` | JWT service, claims, profiles, algorithms, and key handling without Axum. |
 | `cookies` | `http` + `mads-common/cookies` | Cookie extraction/response support; cookies imply HTTP. |
 | `runtime-tokio` | `mads-core/runtime-tokio` | Tokio support for `#[mads::main]`. |
 | `extra` | `mads-extra` | Reserved extension boundary. |
 
 Passport guards and strategies require `http + jwt`. Cookie guards add
-`cookies`. `.into_http()` requires `http + database` and is an explicit
-delivery policy rather than a blanket database error conversion.
+`cookies`. Database access is a separate opt-in through the
+[`mads-persistence`](../mads-persistence/README.md) crate.
 
 For an HTTP-only application, use:
 
 ~~~toml
 [dependencies]
-mads = { version = "0.8.0", default-features = false, features = ["http", "runtime-tokio"] }
+mads = { version = "0.9.0", default-features = false, features = ["http", "runtime-tokio"] }
 ~~~
 
 The workspace crates use exact internal version pins. External dependency
@@ -78,12 +78,9 @@ The facade re-exports:
   are enabled.
 - HTTP types: native Axum extractors/responses, validated extractors,
   `HttpResult`, standard REST errors, router builders, and serving functions.
-- Database types: `Database`, Diesel/Diesel migration re-exports,
-  configuration, bootstrap, migration, and explicit HTTP mapping APIs.
 - Authentication/cookies: `JwtService`, claims/options, Passport types,
   `CookieJar`, and cookie response composition.
-- Native escape hatches: `mads::axum`, `mads::diesel`,
-  `mads::diesel_migrations`, and Tower-compatible router composition.
+- Native escape hatches: `mads::axum` and Tower-compatible router composition.
 
 Use `mads::prelude` for the normal application surface. Reach into `mads::core`
 when the application needs framework-neutral configuration, graph, or lifecycle
@@ -101,13 +98,13 @@ Mads::run::<AppModule>()
         ├── analyzes auto-configuration and the provider graph
         ├── constructs providers
         ├── validates routes and finalizes the Axum router
-        ├── starts lifecycle and database readiness
+        ├── starts lifecycle and registered resource readiness
         ├── binds and serves
         └── shuts down in reverse order
 ~~~
 
 The low-level builder and `serve_router` APIs remain available for explicit
-configuration, migrations, lifecycle hooks, native router merging, or listener
+configuration, lifecycle hooks, native router merging, or listener
 addresses. A rootless builder retains complete-catalog compatibility. The
 inspection commands use a separate private path and stop before construction or
 runtime infrastructure.
@@ -118,7 +115,7 @@ runtime infrastructure.
 
 - public re-exports and feature gates;
 - the application prelude;
-- Axum, Diesel, migration, JWT, cookie, and Passport export wiring;
+- Axum, logger, JWT, cookie, and Passport export wiring;
 - documentation examples that must remain valid for external consumers.
 
 Behavior changes belong in `mads-core` or `mads-common`, not in the facade.

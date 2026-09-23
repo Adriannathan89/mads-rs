@@ -3,7 +3,7 @@
 `mads-cli` builds the Cargo-native `mads` developer executable. It is the
 project/tooling boundary of MADS.rs: it selects Cargo packages and binaries,
 runs applications, inspects application graphs, supervises development loops,
-manages file migrations, and renders offline project scaffolds.
+and renders offline project scaffolds.
 
 Application code does not depend on this library crate directly. Install or
 run the produced `mads` binary; contributors work in `crates/mads-cli/src`.
@@ -17,9 +17,7 @@ run the produced `mads` binary; contributors work in `crates/mads-cli/src`.
 | `mads dev` | Watch relevant files, debounce changes, rebuild when needed, restart safely, and keep the last successful process alive across compile failures. |
 | `mads routes` | Inspect selected route metadata without normal provider construction or server startup. |
 | `mads graph` | Inspect rooted modules, providers, dependencies, and construction order. |
-| `mads doctor` | Render grouped health/diagnostic evidence for server, database, graph, routes, and auto-configuration. |
-| `mads db migrate/rollback/status` | Apply, revert, and inspect file-based PostgreSQL migrations. |
-| `mads db generate` | Parse supported Diesel schema declarations, compute a bounded reversible diff, and write a review-required migration without applying it. |
+| `mads doctor` | Render grouped health/diagnostic evidence for server, graph, routes, and auto-configuration. |
 
 Finite commands default to human output and can request schema-version-1 JSON.
 `run` and `dev` intentionally keep streamed Cargo/compiler/application output
@@ -59,11 +57,8 @@ changes can restart the process without a rebuild; compile failures preserve
 the last good process. Shutdown and replacement use the standard MADS private
 protocol so the behavior remains cross-platform.
 
-Database commands reuse the selected package root. File migrations and
-`mads db generate` use the existing MADS database boundary and
-`diesel_table_macro_syntax`; unsupported schema objects are surfaced for manual
-review rather than guessed. The scaffold renderer validates and renders in
-memory, stages beside the destination, and publishes a complete project
+The scaffold renderer validates and renders in memory, stages beside the
+destination, and publishes a complete project
 atomically.
 
 ## Dependencies and consumers
@@ -78,9 +73,8 @@ Important external dependencies:
 
 - `cargo_metadata` and `semver` for Cargo package/binary resolution.
 - `notify` for cross-platform file watching.
-- `diesel_table_macro_syntax` for supported schema parsing.
 - `serde` and `serde_json` for reports and schema-version-1 JSON output.
-- `syn` for scaffold/schema syntax handling.
+- `syn` for scaffold syntax handling.
 - `tokio` for process supervision and async orchestration.
 - `rustix` for platform-sensitive filesystem/process support.
 - `tempfile` for isolated staging and test projects.
@@ -100,8 +94,6 @@ on application internals.
 - `src/inspection.rs` — private child protocol and report acquisition.
 - `src/output/` and `src/render.rs` — human output, JSON v1 records, paths,
   routes, graph, and doctor rendering.
-- `src/database/` — migration commands, schema loading, diffing, SQL rendering,
-  and atomic publication.
 - `src/scaffold/` — names, templates, validation, staging, and publication.
 - `src/diagnostic.rs` — CLI-owned diagnostics and redaction.
 

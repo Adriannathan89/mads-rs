@@ -258,27 +258,17 @@ fn cli_documentation_lists_the_exact_surface() {
         "mads routes",
         "mads graph",
         "mads doctor",
-        "mads db generate",
-        "mads db migrate",
-        "mads db rollback",
-        "mads db status",
     ] {
         assert!(documentation.contains(command), "missing {command}");
     }
     for documented_contract in [
         "mads --format json routes",
         "mads routes --format json",
-        "mads --format json db status",
-        "mads db status --format json",
         "schema_version\": 1",
         "`new`",
         "`routes`",
         "`graph`",
         "`doctor`",
-        "`db generate`",
-        "`db migrate`",
-        "`db rollback`",
-        "`db status`",
         "Cargo.toml",
         "mads.toml",
         "src/main.rs",
@@ -297,7 +287,7 @@ fn cli_documentation_lists_the_exact_surface() {
             "missing CLI documentation contract: {documented_contract}",
         );
     }
-    assert!(!documentation.contains("mads db generate <name>"));
+    assert!(!documentation.contains("mads db"));
     assert!(!documentation.contains("mads foundation"));
     for unsupported_form in [
         "mads new <name> [--template",

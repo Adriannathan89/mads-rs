@@ -1,11 +1,10 @@
-# MADS.rs 0.8.0 Architecture
+# MADS.rs 0.9.0 Architecture
 
 MADS separates framework-neutral construction and configuration from Axum HTTP
-delivery, optional PostgreSQL/Diesel persistence, and the Cargo-native CLI.
-Version 0.8.0 completes the approved validation, REST-error, typed
-configuration, compiler-diagnostic, machine-output, and minimal-scaffolding
-surface. Stable 0.8.0 promotes this same surface after fixes, documentation
-corrections, and verification only; it does not add features.
+delivery, explicit native SeaORM persistence, and the Cargo-native CLI.
+Version 0.9.0 retains the validation, REST-error, typed configuration,
+compiler-diagnostic, machine-output, and minimal-scaffolding surface while
+removing the former Diesel and CLI migration integrations.
 
 ~~~text
 application modules, providers, route traits, controllers
@@ -17,40 +16,45 @@ application modules, providers, route traits, controllers
  mads-core: graph, Config, Configuration, Secret, lifecycle, diagnostics
                  ^                 |
                  |                 v
- mads-common: Input, validated extractors, HTTP errors, Axum, Diesel, Passport
+ mads-common: Input, validated extractors, HTTP errors, Axum, Passport
                  \                 /
                   \--- mads facade ---/ ---- mads-cli
+
+ mads-persistence: explicit SeaORM PostgreSQL connector -> mads-core
 ~~~
 
 ## Crate and feature boundaries
 
 `mads-core` owns module/provider graphs, lifecycle, diagnostics, the existing
 source-attributed `Config`, `#[derive(Configuration)]`, `Config::parse`,
-configuration issues, and `Secret<T>`. It has no Axum, Diesel, JWT, cookie, or
+configuration issues, and `Secret<T>`. It has no Axum, SeaORM, JWT, cookie, or
 Serde dependency. Typed configuration is a view over an already loaded Config;
 it does not replace loading or discover types globally.
 
 `mads-common` owns the `http` boundary: route registration, `Input` and
 `#[derive(Input)]`, `ValidatedJson`, `ValidatedQuery`, `ValidatedPath`, standard
-REST errors, and the Axum adapter. It also owns the feature-gated database,
-Passport/JWT, and cookie integrations. The validation/error family requires
-`http`; the database result extension `.into_http()` exists only with `http +
-database`. Database-only and JWT-only builds do not acquire an HTTP dependency.
+REST errors, and the Axum adapter. It also owns Passport/JWT, logger, and
+cookie integrations. The validation/error family requires `http`. JWT-only
+builds do not acquire an HTTP dependency.
 
 `mads` is the stable facade and prelude. It re-exports matching traits and
 derives, so `Input`, `Configuration`, `Secret`, validated extractors, REST
-errors, and `IntoHttpResult` use their documented feature gates. The default
-`common` aggregate remains the compatibility combination for HTTP and database;
-it does not enable Passport automatically.
+errors use their documented feature gates. The default `common` aggregate is
+HTTP plus logger; it does not enable Passport or persistence automatically.
+
+`mads-persistence` is a separate opt-in crate. Its `sea-orm-postgres` feature
+exposes a global `DatabaseModule` providing native `DatabaseConnection`; the
+connector retains typed `PersistenceError` causes while redacting public
+formatting. It checks readiness before serving and closes on graceful shutdown.
 
 ~~~text
 core                         no HTTP/database/JWT/cookie/Serde
 http                         Axum + validation + standard REST errors
-database                     Diesel infrastructure, no HTTP mapping
-http + database              explicit IntoHttpResult::into_http()
+logger                       tracing-based logging
 jwt                          JWT service/configuration, no Axum
 cookies                      HTTP cookie support
 http + jwt (+ cookies)       Passport Bearer (and cookie) guards
+mads-persistence/sea-orm-postgres  native SeaORM PostgreSQL connector
 ~~~
 
 ## Startup, configuration, and secret boundary
@@ -131,13 +135,10 @@ MADS-owned internal failures map to redacted 500 responses. User-created
 `Unauthorized` does not claim a Bearer scheme, and ordinary native responses
 are not normalized.
 
-Persistence conversion remains opt in. With both HTTP and database features,
-`DatabaseResult<T>` and native Diesel `QueryResult<T>` acquire `.into_http()`.
-Typed `NotFound` becomes safe 404 and a typed unique violation becomes safe
-409; configuration, pool, migration, foreign-key, check, serialization, and
-all other failures become redacted 500. There is no blanket
-`From<DatabaseError> for HttpError`, so applications can retain native Diesel
-behavior or choose a domain-specific `map_err` mapping.
+Persistence-to-HTTP conversion is application-owned. The SeaORM connector
+returns the native database value or a typed `PersistenceError`; there is no
+automatic database-to-HTTP mapping. Applications choose a domain-specific
+`map_err` policy without exposing connection details to clients.
 
 ## Root scope and normal runtime
 
@@ -170,8 +171,8 @@ before normal application construction. The child protocol remains private;
 the CLI converts it to a public human report or schema-version-1 JSON result.
 Invalid route/graph reports preserve safe partial public data with diagnostics.
 
-Finite commands (`new`, `routes`, `graph`, `doctor`, and `db generate`, `db
-migrate`, `db rollback`, `db status`) accept `--format human|json` before or
+Finite commands (`new`, `routes`, `graph`, and `doctor`) accept
+`--format human|json` before or
 after their command path. JSON stdout has exactly one newline-terminated
 document with `schema_version: 1`, a canonical command, `ok`, command-specific
 data or null, and ordered warning/error diagnostics. Schema version 1 permits
@@ -185,7 +186,7 @@ generate database/JWT/cookie/migration code.
 
 ## Deliberate non-goals
 
-v0.8 does not add automatic validation to native extractors, asynchronous or
+v0.9 does not add automatic validation to native extractors, asynchronous or
 database-backed derive validation, full-RFC or DNS email validation, automatic
 persistence-to-HTTP conversion, new configuration sources or arbitrary TOML
 shapes, global configuration discovery, generic compiler-diagnostic rewriting,

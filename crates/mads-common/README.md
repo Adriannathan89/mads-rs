@@ -1,8 +1,8 @@
 # mads-common
 
 `mads-common` is the integration boundary between the framework-neutral
-[mads-core](../mads-core/README.md) and the web/database/authentication
-ecosystem. It owns optional Axum, PostgreSQL/Diesel, JWT, cookie, Passport,
+[mads-core](../mads-core/README.md) and the web/authentication
+ecosystem. It owns optional Axum, JWT, cookie, Passport,
 validation, REST-error, and CORS behavior.
 
 Application authors normally use the
@@ -12,20 +12,20 @@ HTTP inspection contract used by `mads-cli`.
 
 ## Feature model
 
-The crate itself has default features `http + database`. The public `mads`
+The crate itself has default feature `http`. The public `mads`
 facade disables those defaults and maps its own features explicitly.
 
 | Feature | Adds | Requires |
 | --- | --- | --- |
 | `http` | Axum 0.8 routing/server delivery, route/controller contracts, extractors, validation, REST errors, CORS, and native Axum/Tower re-exports. | `mads-core` and the HTTP dependency set. |
-| `database` | PostgreSQL/Diesel pool, blocking query boundary, migration lifecycle, database configuration, and the official Database auto-configuration. | `mads-core` and Tokio. |
+| `logger` | Tracing-based application logging. | Tracing dependencies. |
 | `jwt` | `JwtService`, claims, validation profiles, algorithms, keyrings, and JWT auto-configuration. | No Axum or database dependency. |
 | `cookies` | Strict cookie extraction and checked response-cookie composition. | Implies `http` and enables the cookie/Passport macro support. |
 
 Passport route guards and managed strategies are available when `http + jwt`
 are selected. Cookie-backed guards additionally need `cookies`. The
-`database` feature does not itself add HTTP error conversion; `IntoHttpResult`
-is compiled only for `http + database` and is opt-in at the call site.
+Persistence is supplied separately by `mads-persistence`; this crate has no
+database feature or automatic database-to-HTTP error conversion.
 
 ## How this crate fits the runtime
 
@@ -42,7 +42,7 @@ HttpApplicationScope
         ├── guard and Passport preflight
         ├── generated + native Axum router composition
         ├── application-wide CORS configuration
-        └── Database/JWT/cookie integration lifecycle
+        └── JWT/cookie integration lifecycle
 ~~~
 
 Route metadata is validated before generated registrars install routes.
@@ -50,12 +50,6 @@ Controllers are resolved once while the router is built; request handling uses
 the captured application-scoped handles. The standard server path configures
 the final router, starts lifecycle hooks, waits for infrastructure readiness,
 binds the listener, serves, and then shuts down in reverse order.
-
-The database default is conditional: a selected provider must directly require
-`Database`, the database integration must be linked, and valid configuration
-must be available. An explicit `DatabaseBootstrap` or application-provided
-`Database` backs the default off. Database migrations are a separately
-registered embedded source; normal startup never generates migrations.
 
 The JWT service can be used without HTTP. Passport adds a typed strategy and
 principal layer on top of verified JWT claims, with guard policy resolved
@@ -69,10 +63,9 @@ not silently become MADS-managed routes.
 | Routing | `routes`, `controller`, `get`/`post`/`put`/`patch`/`delete`, `build_router`, `configure_router`, `serve_router` |
 | Requests | Native Axum extractors plus `ValidatedJson`, `ValidatedQuery`, and `ValidatedPath` |
 | Errors | `BadRequest`, `Unauthorized`, `Forbidden`, `NotFound`, `Conflict`, `ValidationError`, `InternalError` |
-| Database | `Database`, `DatabaseConfig`, `DatabaseBootstrap`, `Database::run`, embedded migrations, `IntoHttpResult` |
 | Authentication | `JwtService`, `PassportStrategy`, `PassportPrincipal`, `Authenticated`, `PassportGuard` |
 | Cookies | `CookieJar` and checked response-cookie composition |
-| Configuration | Core `Config`/`Configuration` values consumed by HTTP, database, CORS, and Passport integration |
+| Configuration | Core `Config`/`Configuration` values consumed by HTTP, CORS, and Passport integration |
 
 ## Dependencies
 
@@ -88,14 +81,12 @@ Important external dependencies are grouped by responsibility:
   platform-specific `rustix`.
 - Serialization and extraction: `serde`, `serde_json`,
   `serde_path_to_error`, and `serde_urlencoded`.
-- Database: `diesel`, `deadpool-diesel`, and `diesel_migrations`.
 - JWT and keys: `jsonwebtoken` and `base64`.
 - Cookies: `cookie`.
 
 `mads` depends on this crate for application integrations. `mads-cli` also
 depends on it directly with `http` and default features disabled for private
-application inspection; its normal database access arrives through the
-facade's selected features.
+application inspection.
 
 ## Source layout
 
@@ -108,8 +99,6 @@ facade's selected features.
 - `src/extract/` and `src/validation/` — native/validated request extraction and
   ordered input issues.
 - `src/response.rs` — safe REST response envelopes and error mapping.
-- `src/database/` — PostgreSQL pool, Diesel execution, migrations, auto-config,
-  lifecycle, and explicit HTTP mapping.
 - `src/jwt/`, `src/passport/`, and `src/cookie.rs` — authentication, guard
   policy, principals, strategies, and cookie handling.
 - `src/lib.rs` — feature gates, public exports, and hidden contracts consumed by

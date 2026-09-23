@@ -1,7 +1,15 @@
 # MADS Persistence Connector Design
 
-Status: proposed design for MADS 0.9 and the first `mads-persistence`
-release.
+Status: original connector design record. The 0.9 database/CLI boundary is
+superseded by the [approved removal design](superpowers/specs/2026-09-23-mads-0.9-database-surface-removal-design.md).
+
+In 0.9, applications add `mads-persistence = { version = "0.9.0", features =
+["sea-orm-postgres"] }` explicitly and import
+`mads_persistence::sea_orm::DatabaseModule`. `DatabaseFactory::provide` returns
+the native `DatabaseConnection` or typed `PersistenceError`; database support
+is not a `mads`/`mads-common` feature, and the CLI has no database commands.
+SeaORM owns migrations. The original proposal below is retained for context;
+its statements about retaining Diesel do not describe the shipped 0.9 API.
 
 ## Summary
 
@@ -136,10 +144,9 @@ mads-core has no dependency on SeaORM or mads-persistence.
 configuration, providers, modules, diagnostics, and lifecycle. It must not
 depend on Axum or the HTTP layer.
 
-The existing Diesel integration remains in `mads-common` for compatibility.
-It and SeaORM use different native provider types, so an advanced application
-may use both deliberately. Neither connector is treated as a universal
-`Database` provider, and importing one does not activate the other.
+The original proposal retained the Diesel integration in `mads-common`, but
+that integration was removed for 0.9. SeaORM remains an explicit, native
+provider, not a universal `Database` wrapper.
 
 The connector module re-exports the supported ORM surface so applications can
 use one coherent type identity while the same module also owns MADS-specific
@@ -304,9 +311,8 @@ The public connector module is namespaced by ORM:
 use mads_persistence::sea_orm::DatabaseModule;
 ```
 
-This leaves room for future paths such as
-`mads_persistence::diesel::DatabaseModule` without creating one runtime enum
-that attempts to represent incompatible native database types.
+The namespaced path leaves room for other connectors in future releases
+without creating one runtime enum for incompatible native database types.
 
 `DatabaseModule` is global:
 

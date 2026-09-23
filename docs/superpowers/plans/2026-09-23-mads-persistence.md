@@ -1,5 +1,9 @@
 # MADS.rs v0.9.0 Native SeaORM Persistence Implementation Plan
 
+**Superseded for the 0.9 database/CLI boundary by**
+[`2026-09-23-mads-0.9-database-surface-removal.md`](2026-09-23-mads-0.9-database-surface-removal.md).
+This document remains the historical connector implementation record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add an explicitly imported `mads-persistence` crate that injects one native SeaORM PostgreSQL connection, verifies it before serving, closes it during graceful shutdown, and preserves existing provider APIs.

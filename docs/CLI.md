@@ -1,7 +1,7 @@
 # MADS CLI
 
-MADS v0.8.0 provides Cargo-native execution, inspection, PostgreSQL
-migration commands, a minimal-project generator, and a versioned JSON result
+MADS v0.9.0 provides Cargo-native execution, inspection, a minimal-project
+generator, and a versioned JSON result
 for finite MADS-owned commands. Human-readable output remains the default.
 
 ## Start a minimal HTTP application
@@ -56,7 +56,7 @@ sibling staging directory, and publishes them with one atomic rename. An
 existing destination, including an empty directory, is never changed. The
 command does not download dependencies, run Cargo, initialize Git, select a
 remote template, or ask an interactive question. It offers no template,
-database, JWT, VCS, or target-directory option in v0.8. A successful human
+database, JWT, VCS, or target-directory option in v0.9. A successful human
 result identifies the relative path and prints only `cd <name>` and `mads dev`.
 
 ## Project and target selection
@@ -74,8 +74,7 @@ mads graph [--package <package>] [--bin <binary>]
 mads doctor [--package <package>] [--bin <binary>]
 ```
 
-Database commands accept `--package <package>` or `-p <package>`. Cargo's
-ordinary single-package, `default-run`, and ambiguity behavior remains
+Cargo's ordinary single-package, `default-run`, and ambiguity behavior remains
 authoritative. Arguments after `--` are forwarded only by `run` and `dev`;
 inspection commands reject them.
 
@@ -88,10 +87,6 @@ mads new <name>
 mads routes
 mads graph
 mads doctor
-mads db generate
-mads db migrate
-mads db rollback
-mads db status
 ```
 
 The option may appear once, before or after the command path. Both examples
@@ -100,11 +95,9 @@ are equivalent:
 ```bash
 mads --format json routes
 mads routes --format json
-mads --format json db status
-mads db status --format json
 ```
 
-`human` is the default. `run`, `dev`, help, version, and database help reject
+`human` is the default. `run`, `dev`, help, and version reject
 `--format` because they are human/streaming interfaces. A duplicate, missing,
 or unknown format value is CLI syntax failure `MADS204`.
 
@@ -230,34 +223,9 @@ the existing group and summary ordering remains authoritative.
 }
 ```
 
-Database data is deliberately concise:
-
-```json
-{"status":"generated","migration_path":"migrations/20260906120000_schema_diff","review_required":true}
-```
-
-No-diff `db generate` uses `status: "up_to_date"`, a null `migration_path`,
-and `review_required: false`. The remaining schemas are:
-
-```json
-{"applied":["20260906120000_schema_diff"]}
-```
-
-```json
-{"reverted":["20260906120000_schema_diff"]}
-```
-
-```json
-{"applied":["20260906120000_schema_diff"],"pending":["20260907120000_add_index"]}
-```
-
-These represent `db migrate`, `db rollback`, and `db status` respectively.
-Version arrays preserve report order. Migration review warnings occur only as
-top-level warning diagnostics and are not duplicated inside `data`.
-
 Invalid route or graph inspection retains every trustworthy record in `data`,
 adds ordered error diagnostics, sets `ok` false, and exits 1. A failure before a
-report exists, scaffold publication failure, or database operational failure
+report exists or scaffold publication failure
 uses `data: null`. JSON syntax failure requested through a recognized format
 uses `MADS204`, `ok: false`, `data: null`, and exit 2.
 
@@ -285,31 +253,23 @@ migration, listener binding, or traffic serving. Human output remains the
 existing table/section/check rendering; JSON exposes only the public schema
 described above, never the private inspection protocol or its tokens.
 
-## Database commands
+## Persistence
 
-`mads db generate` creates one automatic timestamp-named, review-required
-schema diff. It never applies the migration and has no positional migration
-name. `mads db migrate`, `mads db rollback`, and `mads db status` operate on
-the selected package's file-based `migrations/` directory and configured
-PostgreSQL database. Normal application startup does not generate or apply
-file migrations.
-
-The bounded schema planner supports the documented Diesel table/column shape;
-defaults, indexes, checks, triggers, and complete foreign-key policy remain
-manual SQL review items. `--diff-schema` is not an accepted argument.
+The CLI does not manage database migrations. Applications can import
+`mads_persistence::sea_orm::DatabaseModule` explicitly and use SeaORM's native
+query and migration tools. See [persistence](mads-persistence.md).
 
 ## Diagnostics and exit codes
 
 | Code | Meaning |
 | --- | --- |
 | 0 | Command completed successfully. |
-| 1 | Build, Cargo resolution, inspection, database, scaffold filesystem, watcher, or other operational failure. |
+| 1 | Build, Cargo resolution, inspection, scaffold filesystem, watcher, or other operational failure. |
 | 2 | Invalid MADS CLI syntax, output-format selection, project name, or unsupported argument. |
 
 `MADS204` identifies syntax or output-format failures. `MADS230` identifies
 project-name, template rendering, staging, or publication failures. Existing
-diagnostic families retain their meanings, and migration review diagnostics are
-warnings in top-level JSON `diagnostics`, not duplicated in `data`.
+diagnostic families retain their meanings.
 
 Operational diagnostics redact configuration values, credentials, URLs, private
 inspection tokens, and arbitrary source error text. Human output is the default
