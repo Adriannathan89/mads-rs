@@ -1,4 +1,0 @@
-CREATE TABLE IF NOT EXISTS mads_cli_v040_items (
-    id BIGSERIAL PRIMARY KEY,
-    value VARCHAR NOT NULL
-);

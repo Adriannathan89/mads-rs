@@ -2,12 +2,12 @@
 name = "mads-macro-renamed-facade-consumer"
 version = "0.0.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.94"
 
 [dependencies]
 framework = { package = "mads", path = "../../..", default-features = false, features = ["common", "jwt"] }
 serde = { version = "1", features = ["derive"] }
-# Pin the transitive JWT time floor so this standalone MSRV fixture resolves on Rust 1.85.
+# Pin the transitive JWT time floor so this standalone MSRV fixture is reproducible.
 time = "=0.3.36"
 
 [workspace]

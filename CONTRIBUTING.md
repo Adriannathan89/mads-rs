@@ -16,6 +16,8 @@ Start with:
 - [`README.md`](README.md) for the public API, supported features, and usage;
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for crate boundaries and
   framework design;
+- [`docs/mads-persistence.md`](docs/mads-persistence.md) and
+  [`docs/CLI.md`](docs/CLI.md) for current persistence and CLI guidance;
 - the relevant files under [`docs/`](docs/) for examples, release decisions,
   historical context, and acceptance requirements;
 
@@ -69,7 +71,7 @@ Use a descriptive prefix such as `feature/`, `fix/`, `docs/`, `test/`, or
 ## Make the change
 
 MADS.rs is a Rust 2024 workspace with a minimum supported Rust version of
-1.85. Follow standard `rustfmt` output and these repository conventions:
+1.94. Follow standard `rustfmt` output and these repository conventions:
 
 - use four-space indentation;
 - use `snake_case` for modules and functions, `UpperCamelCase` for types and
@@ -88,8 +90,8 @@ The main workspace responsibilities are:
 - `crates/mads-core`: framework-neutral construction, configuration, provider
   graph, lifecycle, diagnostics, and auto-configuration decisions;
 - `crates/mads-core-macros`: core procedural macros;
-- `crates/mads-common`: HTTP, routes, Passport/JWT, cookies, CORS, Diesel, and
-  PostgreSQL integration;
+- `crates/mads-common`: HTTP, routes, Passport/JWT, cookies, CORS, and logging;
+- `crates/mads-persistence`: opt-in native SeaORM PostgreSQL integration;
 - `crates/mads-common-macros`: shared route-related procedural macros;
 - `crates/mads`: stable public facade;
 - `crates/mads-cli`: command-line interface;
@@ -112,7 +114,7 @@ Also check the minimum supported toolchain when your change may affect
 compatibility:
 
 ```sh
-rustup run 1.85.0 cargo test --locked --workspace --all-features
+rustup run 1.94.0 cargo test --locked --workspace --all-features
 ```
 
 Coverage contributors can run:

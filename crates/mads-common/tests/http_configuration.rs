@@ -15,6 +15,15 @@ use mads_common::core::{
 const CORS_ID: &str = "mads.common.http.cors";
 const SERVER_ID: &str = "mads.common.http.server";
 
+#[test]
+fn common_manifest_has_no_database_feature() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let manifest = std::fs::read_to_string(root.join("Cargo.toml")).unwrap();
+    assert!(!manifest.lines().any(|line| line.starts_with("database =")));
+    assert!(!manifest.contains("deadpool-diesel"));
+    assert!(!manifest.contains("diesel_migrations"));
+}
+
 #[derive(Clone, Copy)]
 enum CorsValue {
     Scalar(&'static str, &'static str),

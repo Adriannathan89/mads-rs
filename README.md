@@ -3,9 +3,9 @@
 [![Latest release](https://img.shields.io/github/v/release/Adriannathan89/mads?display_name=tag&sort=semver)](https://github.com/Adriannathan89/mads/releases/latest)
 [![CI](https://github.com/Adriannathan89/mads/actions/workflows/ci.yml/badge.svg)](https://github.com/Adriannathan89/mads/actions/workflows/ci.yml)
 
-MADS.rs 0.8.1 is a Rust application framework with a framework-neutral
+MADS.rs 0.9.0 is a Rust application framework with a framework-neutral
 core, a scoped Axum HTTP runtime, source-aware typed configuration, safe REST
-errors, request validation, and explicit PostgreSQL/Diesel integration. A root
+errors, request validation, and opt-in native SeaORM persistence. A root
 module selects one application; startup validates its scoped graph and routes
 before it starts lifecycle hooks, checks a database, or binds a socket.
 
@@ -51,7 +51,7 @@ mads run
 
 See the [authoritative CLI reference](docs/CLI.md) for target selectors,
 forwarded application arguments, diagnostics, watcher behavior, inspection
-limits, and database commands.
+limits.
 
 ## Standard application
 
@@ -106,9 +106,10 @@ mads-cli
 | `mads` | Public facade, prelude, and feature composition for application authors. | [crates/mads/README.md](crates/mads/README.md) |
 | `mads-core` | Framework-neutral configuration, graph, providers, lifecycle, diagnostics, and module scope. | [crates/mads-core/README.md](crates/mads-core/README.md) |
 | `mads-core-macros` | Procedural macros that generate core metadata and constructors. | [crates/mads-core-macros/README.md](crates/mads-core-macros/README.md) |
-| `mads-common` | Optional HTTP, database, validation, CORS, JWT, cookie, and Passport integrations. | [crates/mads-common/README.md](crates/mads-common/README.md) |
+| `mads-common` | Optional HTTP, validation, CORS, JWT, cookie, and Passport integrations. | [crates/mads-common/README.md](crates/mads-common/README.md) |
+| `mads-persistence` | Explicit native SeaORM PostgreSQL connector and lifecycle integration. | [crates/mads-persistence/README.md](crates/mads-persistence/README.md) |
 | `mads-common-macros` | Procedural macros for routes, controllers, validation, and Passport. | [crates/mads-common-macros/README.md](crates/mads-common-macros/README.md) |
-| `mads-cli` | Cargo-native execution, inspection, development loop, migrations, and scaffolding. | [crates/mads-cli/README.md](crates/mads-cli/README.md) |
+| `mads-cli` | Cargo-native execution, inspection, development loop, and scaffolding. | [crates/mads-cli/README.md](crates/mads-cli/README.md) |
 | `mads-extra` | Reserved boundary for future optional integrations. | [crates/mads-extra/README.md](crates/mads-extra/README.md) |
 
 The approach is type-driven and metadata-driven: macros emit static
@@ -121,16 +122,15 @@ guides for dependencies, source layout, and change ownership.
 
 ~~~toml
 [dependencies]
-mads = "0.8.1"
+mads = "0.9.0"
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
 ~~~
 
-MADS.rs supports Rust 1.85 and uses Rust edition 2024. The default facade
-enables the HTTP and PostgreSQL/Diesel integrations with the Tokio runtime. For
-feature combinations and the no-Diesel HTTP setup, see the
+MADS.rs supports Rust 1.94 and uses Rust edition 2024. The default facade
+enables HTTP and logging with the Tokio runtime. For feature combinations, see the
 [facade README](crates/mads/README.md).
 
 ## Conventional configuration and HTTP
@@ -297,17 +297,9 @@ unsupported validated JSON content types to
 `request body could not be read`, and all server-class failures to
 `internal server error`.
 
-When both `http` and `database` are selected, conversion is still a deliberate
-delivery-policy decision:
-
-```rust,ignore
-let user = database.run(move |connection| query.first(connection)).await.into_http()?;
-```
-
-`.into_http()` maps only typed Diesel not-found to 404 and typed unique
-violations to 409; every other database error is a redacted 500. There is no
-automatic `From<DatabaseError>` mapping, so applications can keep native
-Diesel results or use a domain-specific `map_err` policy.
+Database-to-HTTP error conversion remains an application delivery-policy
+decision. The persistence connector returns a native SeaORM connection and
+retains typed connector errors; it does not map them automatically to HTTP.
 
 ## Typed configuration and secrets
 
@@ -360,7 +352,7 @@ always print `[REDACTED]`.
 
 ## Low-level builder
 
-Use the builder when configuration, migrations, hooks, binding, or router
+Use the builder when configuration, hooks, binding, or router
 composition must be explicit. It never loads `.env`, `mads.toml`, or `MADS_*`
 on its own. The explicit address overrides `[server]` binding and may use port
 zero; merge native Axum routes before passing the raw router to `serve_router`.
@@ -368,7 +360,6 @@ zero; merge native Axum routes before passing the raw router to `serve_router`.
 ```rust,ignore
 let mut builder = Mads::builder_with_config(config);
 builder.root::<AppModule>()?;
-builder.database_migrations(MIGRATIONS)?;
 // builder.lifecycle_hook(MyHook);
 let application = builder.build().await?;
 let router = build_router(&application)?.merge(native_router);
@@ -379,58 +370,43 @@ For direct in-process router use, call `configure_router(&application, router)`
 after the merge. A builder without `root::<AppModule>()` intentionally retains
 the complete-catalog compatibility behavior.
 
-## Database provisioning
+## Native database provisioning
 
-This is zero **database** bootstrap, not zero application configuration. A
-provider in the selected application scope that directly requires `Database`
-activates the linked default only after configuration and virtual graph
-validation. `database_migrations` separately registers one embedded source; it
-does not create a pool, connect, or run migrations. It is required only when
-`database.migrate = true`; existing pending embedded migrations then run after
-readiness, and no pending migrations are a successful no-op. Normal startup
-never generates or auto-applies migrations. The explicit `mads db generate`
-command can create one review-required schema-diff migration from `src/schema.rs`
-or recursively loaded `src/schema/**/*.rs`; inspect the generated `up.sql` and
-`down.sql` before applying it with `mads db migrate`.
+Database support is not a `mads` or `mads-common` feature. Add the connector
+explicitly and import its global module in your application root:
 
-Inspect the retained, redacted decision records without exposing configuration
-values:
+```toml
+mads-persistence = { version = "0.9.0", features = ["sea-orm-postgres"] }
+```
 
 ```rust,ignore
-for report in application.auto_configurations() {
-    println!(
-        "{} {:?} {}",
-        report.identifier(),
-        report.status(),
-        report.reason_code().as_str(),
-    );
+use mads_persistence::sea_orm::{DatabaseConnection, DatabaseModule};
+
+#[mads::module(imports = [DatabaseModule])]
+struct AppModule;
+
+#[mads::provider]
+fn repository(database: DatabaseConnection) -> UserRepository {
+    UserRepository::new(database)
 }
 ```
 
-`DatabaseBootstrap` remains the explicit native Diesel override. It backs off
-the conditional default completely and contributes its database lifecycle as
-framework infrastructure. An application-provided `Database` instead owns its
-complete readiness, migration, and shutdown lifecycle:
+For an explicit connection, `DatabaseFactory::provide` returns the native
+`DatabaseConnection` on success or a typed `PersistenceError` on failure:
 
 ```rust,ignore
-use mads::{core::{ConfigBuilder, MapSource}, prelude::*};
+use mads_persistence::{DatabaseFactory, PersistenceResult};
+use mads_persistence::sea_orm::{DatabaseConnection, SeaOrmPostgres};
 
-let config = ConfigBuilder::new()
-    .source(MapSource::new(
-        "application",
-        [("database.url", "postgres://localhost/mads")],
-    ))
-    .build()?;
-let database = DatabaseConfig::from_config(&config)?;
-let mut builder = Mads::builder_with_config(config);
-builder.database(DatabaseBootstrap::new(database))?;
-let application = builder.build().await?;
-# Ok::<(), Box<dyn std::error::Error>>(())
+async fn connect(url: String) -> PersistenceResult<DatabaseConnection> {
+    DatabaseFactory.provide(SeaOrmPostgres::new(url)).await
+}
 ```
 
-Use the direct `mads::diesel` and
-`mads::diesel_migrations` re-exports when native Diesel APIs are the right
-tool.
+The imported module checks the connection before serving and closes it on
+graceful shutdown. SeaORM owns entities, queries, transactions, and migrations;
+MADS does not run or generate migrations. See the
+[persistence guide](docs/mads-persistence.md).
 
 `serve(application, "127.0.0.1:3000")` remains the explicit generated-router
 escape hatch. Its address overrides automatic server binding; use
@@ -606,25 +582,6 @@ concrete `JwtService`; otherwise construction fails with `MADS131`.
 See the complete [Passport/JWT example](docs/examples/passport_jwt.md) and the
 [v0.5.5 security and release notes](docs/importance/version_0.5.5/passport-jwt-and-cookies.md).
 
-## CLI migrations
-
-From a project root containing `mads.toml` and `migrations/`:
-
-```text
-mads db migrate   # apply pending file migrations
-mads db rollback  # revert the latest migration from this source
-mads db status    # report applied and pending versions
-mads db generate  # create one automatically named, review-required diff
-```
-
-`mads db generate` never applies its output and has no positional name. It
-loads split Diesel schema files recursively and warns when a change needs
-manual SQL review. `mads db migrate` prints `applied <version>` for work
-performed or `database is up to date`; `rollback` prints `reverted <version>`;
-`status` prints individual versions plus an applied/pending summary. Invalid
-command syntax exits with 2; configuration, pool, or migration failures exit
-with 1.
-
 ## A typed HTTP route
 
 `#[mads::routes]` records immutable metadata and emits a typed registration
@@ -704,11 +661,11 @@ limitations, resource measurements, and interpretation guidance.
 
 ## Current scope
 
-Version 0.8.0 includes rooted module scope, conventional startup, CORS,
+Version 0.9.0 includes rooted module scope, conventional startup, CORS,
 native router composition, typed input validation, the seven REST errors,
 explicit typed configuration and redacted secrets, focused MADS macro
 diagnostics, Cargo-native run/dev, compiled route/graph/doctor inspection,
-version-1 finite-command JSON, bounded PostgreSQL migration work, and the
+version-1 finite-command JSON, opt-in native SeaORM persistence, and the
 offline atomic minimal-project generator. It preserves the low-level builder,
 the complete-catalog rootless compatibility path, native Axum extractors and
 responses, ordinary human CLI output, and application-owned database policy.
@@ -720,8 +677,8 @@ validation, refresh endpoints or persistence/rotation/revocation, password
 hashing, CSRF, remote JWKS, JWE, third-party auto-configuration, arbitrary
 configuration sources/shapes, multiple-listener/TLS/HTTP2 server configuration,
 JSON-wrapped run/dev streams, or scaffold database/JWT/cookie/migration/Git
-setup. Database errors never map automatically: applications opt in with
-`.into_http()` or retain a custom/native delivery policy.
+setup. Database errors never map automatically; applications own their
+delivery policy.
 
 ## Development
 
@@ -733,7 +690,7 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
 cargo test --workspace --all-features --doc
 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --all-features --no-deps
-cargo +1.85.0 test --locked --workspace --all-features
+cargo +1.94.0 test --locked --workspace --all-features
 ```
 
 CI also provisions PostgreSQL 16 and runs the ignored database suites plus the

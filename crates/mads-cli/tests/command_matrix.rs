@@ -1,4 +1,4 @@
-//! Black-box coverage for the complete v0.8 command surface.
+//! Black-box coverage for the supported v0.9 command surface.
 
 use std::{
     fs,
@@ -46,13 +46,13 @@ const USAGE_CASES: &[CommandCase] = &[
         arguments: &["db", "generate", "named"],
         expected_code: 2,
         stdout_contains: &[],
-        stderr_contains: &["unknown argument"],
+        stderr_contains: &["unknown command: db"],
     },
     CommandCase {
         arguments: &["db", "generate", "--diff-schema"],
         expected_code: 2,
         stdout_contains: &[],
-        stderr_contains: &["unknown argument"],
+        stderr_contains: &["unknown command: db"],
     },
     CommandCase {
         arguments: &["routes", "--", "extra"],
@@ -86,7 +86,12 @@ fn complete_command_matrix_has_stable_usage_and_exit_classes() {
     ];
     for arguments in success_cases {
         let output = cli_command(&single_fixture(), arguments).output().unwrap();
-        assert_eq!(output.status.code(), Some(0), "{arguments:?}");
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{arguments:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     let new_invocation = tempdir().unwrap();
@@ -121,49 +126,6 @@ fn complete_command_matrix_has_stable_usage_and_exit_classes() {
 }
 
 #[test]
-fn operational_database_failures_are_redacted_and_exit_one() {
-    for (arguments, command) in [
-        (["db", "generate"].as_slice(), "db generate"),
-        (["db", "migrate"].as_slice(), "db migrate"),
-        (["db", "rollback"].as_slice(), "db rollback"),
-        (["db", "status"].as_slice(), "db status"),
-    ] {
-        let output = cli_command(&single_fixture(), arguments)
-            .env_remove("DATABASE_URL")
-            .env_remove("MADS_DATABASE__URL")
-            .env(
-                "MADS_DATABASE__URL",
-                "postgres://matrix-env-secret@127.0.0.1:1/matrix",
-            )
-            .output()
-            .unwrap();
-        assert_eq!(output.status.code(), Some(1), "{arguments:?}");
-        assert_contains_all(&output, &[], &[]);
-        assert_redacted(&output);
-
-        let mut json_arguments = arguments.to_vec();
-        json_arguments.extend(["--format", "json"]);
-        let output = cli_command(&single_fixture(), &json_arguments)
-            .env_remove("DATABASE_URL")
-            .env_remove("MADS_DATABASE__URL")
-            .env(
-                "MADS_DATABASE__URL",
-                "postgres://matrix-env-secret@127.0.0.1:1/matrix",
-            )
-            .output()
-            .unwrap();
-        assert_eq!(output.status.code(), Some(1), "{json_arguments:?}");
-        assert!(output.stderr.is_empty(), "stderr was not empty: {output:?}");
-        let document = one_json_document(&output);
-        assert_eq!(document["command"], command);
-        assert_eq!(document["ok"], false);
-        assert_eq!(document["data"], Value::Null);
-        assert_eq!(document["diagnostics"][0]["severity"], "error");
-        assert_redacted(&output);
-    }
-}
-
-#[test]
 fn finite_json_syntax_matrix_has_one_document_and_canonical_commands() {
     let cases: &[(&[&str], &str)] = &[
         (
@@ -178,22 +140,6 @@ fn finite_json_syntax_matrix_has_one_document_and_canonical_commands() {
         (
             &["doctor", "--format", "json", "--matrix-unknown"],
             "doctor",
-        ),
-        (
-            &["db", "generate", "--format", "json", "--matrix-unknown"],
-            "db generate",
-        ),
-        (
-            &["db", "migrate", "--format", "json", "--matrix-unknown"],
-            "db migrate",
-        ),
-        (
-            &["db", "rollback", "--format", "json", "--matrix-unknown"],
-            "db rollback",
-        ),
-        (
-            &["db", "status", "--format", "json", "--matrix-unknown"],
-            "db status",
         ),
     ];
 
@@ -222,6 +168,8 @@ fn release_workflows_enforce_linux_full_and_cli_platform_split() {
         "cargo test --locked --workspace --all-features --doc",
         "cargo doc --locked --workspace --all-features --no-deps",
         "cargo package --locked --workspace --no-verify",
+        "cargo check -p mads-persistence --no-default-features",
+        "cargo check -p mads-persistence --no-default-features --features sea-orm-postgres",
     ] {
         assert!(
             verify_job.contains(required),
@@ -234,16 +182,6 @@ fn release_workflows_enforce_linux_full_and_cli_platform_split() {
         "ubuntu-latest",
         "macos-latest",
         "windows-latest",
-        "if: runner.os == 'Linux'",
-        "sudo apt-get update && sudo apt-get install --yes libpq-dev",
-        "if: runner.os == 'macOS'",
-        "brew install libpq",
-        "LIBRARY_PATH=$(brew --prefix libpq)/lib",
-        "PKG_CONFIG_PATH=$(brew --prefix libpq)/lib/pkgconfig",
-        "if: runner.os == 'Windows'",
-        "$pg = Get-ChildItem 'C:\\Program Files\\PostgreSQL' -Directory",
-        "PQ_LIB_DIR=$($pg.FullName)\\lib",
-        "$($pg.FullName)\\bin",
         "cargo test -p mads-cli --lib command::tests -- --test-threads=1",
         "cargo test -p mads-cli --test json_cli -- --test-threads=1",
         "scaffold::publish::tests::destination_race_preserves_the_competing_directory_and_cleans_staging",
@@ -258,6 +196,7 @@ fn release_workflows_enforce_linux_full_and_cli_platform_split() {
         );
     }
     assert!(!platform_job.contains("services:"));
+    assert!(!ci.contains("libpq"));
     assert!(!platform_job.contains("MADS_TEST_DATABASE_URL"));
     assert!(!platform_job.contains("--ignored"));
     for postgres_integration_test in [
@@ -267,6 +206,7 @@ fn release_workflows_enforce_linux_full_and_cli_platform_split() {
         "--test database_cli",
         "database_generate_postgres",
         "--test postgres_crud",
+        "--test postgres -- --ignored",
     ] {
         assert!(
             !platform_job.contains(postgres_integration_test),
@@ -279,12 +219,7 @@ fn release_workflows_enforce_linux_full_and_cli_platform_split() {
         "runs-on: ubuntu-latest",
         "image: postgres:16",
         "MADS_TEST_DATABASE_URL",
-        "--test database_postgres -- --ignored --test-threads=1",
-        "--test database_http_postgres -- --ignored --test-threads=1",
-        "database_migration_failure_prevents_listener_binding",
-        "--test database_cli -- --ignored --test-threads=1",
-        "--test database_generate_postgres -- --ignored --test-threads=1",
-        "--test postgres_crud -- --ignored --test-threads=1",
+        "-p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1",
     ] {
         assert!(
             postgres_job.contains(required),
@@ -309,6 +244,7 @@ fn release_workflows_enforce_linux_full_and_cli_platform_split() {
             "{workflow_path}"
         );
         assert!(workflow_job(&workflow, "postgres").contains("image: postgres:16"));
+        assert!(workflow_job(&workflow, "postgres").contains("-p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1"));
     }
 }
 
@@ -322,27 +258,17 @@ fn cli_documentation_lists_the_exact_surface() {
         "mads routes",
         "mads graph",
         "mads doctor",
-        "mads db generate",
-        "mads db migrate",
-        "mads db rollback",
-        "mads db status",
     ] {
         assert!(documentation.contains(command), "missing {command}");
     }
     for documented_contract in [
         "mads --format json routes",
         "mads routes --format json",
-        "mads --format json db status",
-        "mads db status --format json",
         "schema_version\": 1",
         "`new`",
         "`routes`",
         "`graph`",
         "`doctor`",
-        "`db generate`",
-        "`db migrate`",
-        "`db rollback`",
-        "`db status`",
         "Cargo.toml",
         "mads.toml",
         "src/main.rs",
@@ -361,7 +287,7 @@ fn cli_documentation_lists_the_exact_surface() {
             "missing CLI documentation contract: {documented_contract}",
         );
     }
-    assert!(!documentation.contains("mads db generate <name>"));
+    assert!(!documentation.contains("mads db"));
     assert!(!documentation.contains("mads foundation"));
     for unsupported_form in [
         "mads new <name> [--template",
@@ -432,15 +358,6 @@ fn assert_contains_all(output: &Output, stdout_contains: &[&str], stderr_contain
     }
 }
 
-fn assert_redacted(output: &Output) {
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    for secret in ["matrix-config-secret", "matrix-env-secret"] {
-        assert!(!stdout.contains(secret), "stdout leaked {secret}: {stdout}");
-        assert!(!stderr.contains(secret), "stderr leaked {secret}: {stderr}");
-    }
-}
-
 fn one_json_document(output: &Output) -> Value {
     assert!(
         output.stdout.ends_with(b"\n"),
@@ -498,6 +415,9 @@ fn copy_directory(source: &Path, destination: &Path) -> std::io::Result<()> {
     fs::create_dir_all(destination)?;
     for entry in fs::read_dir(source)? {
         let entry = entry?;
+        if entry.file_name() == "target" {
+            continue;
+        }
         let destination_path = destination.join(entry.file_name());
         if entry.file_type()?.is_dir() {
             copy_directory(&entry.path(), &destination_path)?;

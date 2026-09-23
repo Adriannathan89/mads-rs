@@ -1,0 +1,35 @@
+[package]
+name = "mads-persistence"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+readme = "README.md"
+description = "Native persistence connectors for MADS.rs applications"
+
+[[example]]
+name = "standard_run"
+required-features = ["sea-orm-postgres"]
+
+[features]
+default = []
+sea-orm-postgres = [
+    "dep:sea-orm",
+    "sea-orm/macros",
+    "sea-orm/sqlx-postgres",
+    "sea-orm/runtime-tokio-rustls",
+]
+
+[dependencies]
+mads-core = { path = "../mads-core", version = "=0.9.0" }
+sea-orm = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio.workspace = true
+sea-orm = { workspace = true, features = ["mock", "runtime-tokio-rustls"] }
+mads = { path = "../mads", version = "=0.9.0", default-features = false, features = ["http", "runtime-tokio"] }
+
+[lints]
+workspace = true

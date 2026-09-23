@@ -10,7 +10,7 @@ use crate::{
     ApplicationContext, ApplicationGraph, AutoConfigurationReport, Catalog, Config,
     ConstructionContext, ConstructionPlan, ConstructionStep, Diagnostic, Error, GraphAnalysis,
     LifecycleHook, LifecycleManager, LifecycleState, MADS006, MADS008, Module, ModuleGraph,
-    ProviderRegistry, Result,
+    ProviderContribution, ProviderDescriptor, ProviderRegistry, Result,
     graph::{
         SatisfiedProvider, analyze_catalog, analyze_descriptors, build_module_graph,
         select_scoped_providers, validate_module_catalog,
@@ -76,13 +76,8 @@ impl MadsBuilder {
         T: Send + Sync + 'static,
     {
         let descriptor = Catalog::provider_for::<T>()?;
-        let value = {
-            let context = ConstructionContext::new(&self.registry, &self.config);
-            (descriptor.constructor())(&context).await?
-        };
-
-        self.registry
-            .insert_erased(descriptor.type_id(), descriptor.type_name(), value)?;
+        let contribution = self.invoke_provider(descriptor).await?;
+        self.apply_provider_contribution(descriptor, contribution)?;
         self.satisfied
             .push(SatisfiedProvider::preconstructed::<T>());
         Ok(self)
@@ -157,14 +152,12 @@ impl MadsBuilder {
         }
 
         for step in construction_plan.steps() {
-            let value = {
-                let context = ConstructionContext::new(&self.registry, &self.config);
-                (step.descriptor().constructor())(&context)
-                    .await
-                    .map_err(|source| provider_construction_error(step, &graph, source))?
-            };
-            self.registry
-                .insert_erased(step.type_id(), step.type_name, value)?;
+            let descriptor = step.descriptor();
+            let contribution = self
+                .invoke_provider(descriptor)
+                .await
+                .map_err(|source| provider_construction_error(step, &graph, source))?;
+            self.apply_provider_contribution(descriptor, contribution)?;
         }
 
         Ok(Mads {
@@ -225,6 +218,34 @@ impl MadsBuilder {
             selected: auto_configuration.selected,
             failure: auto_configuration.failure,
         }
+    }
+
+    async fn invoke_provider(
+        &self,
+        descriptor: &'static ProviderDescriptor,
+    ) -> Result<ProviderContribution> {
+        let context = ConstructionContext::new(&self.registry, &self.config);
+        if let Some(constructor) = descriptor.lifecycle_constructor() {
+            constructor(&context).await
+        } else {
+            (descriptor.constructor())(&context)
+                .await
+                .map(ProviderContribution::from_provider)
+        }
+    }
+
+    fn apply_provider_contribution(
+        &mut self,
+        descriptor: &'static ProviderDescriptor,
+        contribution: ProviderContribution,
+    ) -> Result<()> {
+        let (provider, registrations) = contribution.into_parts();
+        self.registry
+            .insert_erased(descriptor.type_id(), descriptor.type_name(), provider)?;
+        for registration in registrations {
+            self.lifecycle.add_registration(registration);
+        }
+        Ok(())
     }
 
     fn analyze_complete_catalog(

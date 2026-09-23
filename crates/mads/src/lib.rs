@@ -1,6 +1,6 @@
 //! Public MADS.rs facade and feature composition boundary.
 //!
-//! The default facade composes the HTTP and database integrations with the
+//! The default facade composes the HTTP and logger integrations with the
 //! Tokio runtime. A root [`Module`] selects the Rust-namespace-owned providers,
 //! controllers, routes, guards, strategies, and official auto-configurations
 //! that belong to one application. Direct imports and unrestricted `pub`
@@ -32,7 +32,7 @@
 //! }
 //! ```
 //!
-//! Use the low-level builder for explicit configuration, embedded migrations,
+//! Use the low-level builder for explicit configuration,
 //! lifecycle hooks, native routers, or listener addresses. It never loads
 //! conventional sources. [`build_router`] returns an unconfigured generated
 //! router so native routes can be merged before [`configure_router`] or
@@ -47,12 +47,10 @@
 //! # async fn low_level(
 //! #     config: Config,
 //! #     native_router: mads::axum::Router,
-//! #     migrations: mads::diesel_migrations::EmbeddedMigrations,
 //! # )
 //! # -> Result<(), Box<dyn std::error::Error>> {
 //! let mut builder = Mads::builder_with_config(config);
 //! builder.root::<AppModule>()?;
-//! builder.database_migrations(migrations)?;
 //! // builder.lifecycle_hook(MyHook);
 //! let application = builder.build().await?;
 //! let router = build_router(&application)?.merge(native_router);
@@ -64,11 +62,9 @@
 //! The explicit address overrides `[server]` binding and may use port zero.
 //! `configure_router` is the alternative for direct in-process router use after
 //! the merge; do not pass an already configured router to `serve_router`.
-//! Database provisioning remains conditional on the selected application, and
-//! embedded migrations require explicit
-//! [`MadsBuilderDatabaseExt::database_migrations`] registration. The retained
-//! [`AutoConfigurationReport`] records expose redacted decision evidence only.
-//! `DatabaseBootstrap` remains the native Diesel override.
+//! Database provisioning is available through an explicitly imported
+//! `mads-persistence` module. The retained [`AutoConfigurationReport`] records
+//! expose redacted decision evidence only.
 //!
 //! Register custom access and refresh strategies as managed providers. MADS
 //! verifies JWT cryptography, registered claims, and token kind before either
@@ -169,6 +165,9 @@
 /// Re-exports the framework-neutral MADS.rs core.
 pub use mads_core as core;
 
+/// Version of the MADS framework facade used by downstream tooling.
+pub const FRAMEWORK_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Re-exports the asynchronous MADS.rs entry-point attribute.
 pub use mads_core::main;
 
@@ -203,9 +202,9 @@ pub use mads_core::service;
 /// Re-exports enabled standard integrations.
 #[cfg(any(
     feature = "http",
-    feature = "database",
     feature = "jwt",
-    feature = "cookies"
+    feature = "cookies",
+    feature = "logger"
 ))]
 pub use mads_common as common;
 
@@ -213,29 +212,13 @@ pub use mads_common as common;
 #[cfg(feature = "http")]
 pub use mads_common::axum;
 
-/// Re-exports Diesel for native persistence integration.
-#[cfg(feature = "database")]
-pub use mads_common::diesel;
-
-/// Re-exports Diesel migrations for native persistence integration.
-#[cfg(feature = "database")]
-pub use mads_common::diesel_migrations;
+/// Re-exports the standard logger façade, backend contract, and global module.
+#[cfg(feature = "logger")]
+pub use mads_common::{ConsoleLoggerService, LogLevel, Logger, LoggerModule, LoggerService};
 
 /// Re-exports strict cookie integration and the established cookie time types.
 #[cfg(feature = "cookies")]
 pub use mads_common::cookie;
-
-/// Re-exports database configuration, runtime, migration, and error contracts.
-#[cfg(feature = "database")]
-pub use mads_common::{
-    Database, DatabaseBootstrap, DatabaseConfig, DatabaseError, DatabaseErrorKind,
-    DatabasePoolStatus, DatabaseResult, MADS100, MADS101, MadsBuilderDatabaseExt, MigrationReport,
-    MigrationStatus,
-};
-
-/// Re-exports explicit HTTP delivery mapping for managed and native Diesel results.
-#[cfg(all(feature = "http", feature = "database"))]
-pub use mads_common::IntoHttpResult;
 
 /// Re-exports typed JWT claims, service, options, errors, and diagnostics.
 #[cfg(feature = "jwt")]
@@ -375,17 +358,9 @@ pub mod prelude {
         passport_strategy,
     };
 
-    /// Re-exports application-facing database configuration and runtime types.
-    #[cfg(feature = "database")]
-    pub use mads_common::{
-        Database, DatabaseBootstrap, DatabaseConfig, DatabaseError, DatabaseErrorKind,
-        DatabasePoolStatus, DatabaseResult, MadsBuilderDatabaseExt, MigrationReport,
-        MigrationStatus,
-    };
-
-    /// Re-exports explicit HTTP delivery mapping for managed and native Diesel results.
-    #[cfg(all(feature = "http", feature = "database"))]
-    pub use mads_common::IntoHttpResult;
+    /// Re-exports the standard logger façade, backend contract, and global module.
+    #[cfg(feature = "logger")]
+    pub use mads_common::{ConsoleLoggerService, LogLevel, Logger, LoggerModule, LoggerService};
 
     /// Re-exports application-facing Passport JWT contracts and services.
     #[cfg(feature = "jwt")]

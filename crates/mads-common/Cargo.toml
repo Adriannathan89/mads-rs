@@ -7,10 +7,10 @@ authors.workspace = true
 repository.workspace = true
 license.workspace = true
 readme = "README.md"
-description = "HTTP, PostgreSQL, JWT, cookies, and Passport integrations for MADS.rs"
+description = "HTTP, JWT, cookies, and Passport integrations for MADS.rs"
 
 [features]
-default = ["http", "database"]
+default = ["http"]
 http = [
     "dep:axum",
     "dep:axum-extra",
@@ -24,12 +24,6 @@ http = [
     "dep:tower",
     "dep:tower-http",
 ]
-database = [
-    "dep:deadpool-diesel",
-    "dep:diesel",
-    "dep:diesel_migrations",
-    "dep:tokio",
-]
 jwt = [
     "dep:base64",
     "dep:jsonwebtoken",
@@ -38,18 +32,16 @@ jwt = [
     "mads-common-macros?/passport",
 ]
 cookies = ["http", "dep:cookie", "axum-extra/cookie", "mads-common-macros?/cookies"]
+logger = ["dep:chrono"]
 
 [dependencies]
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 cookie = { workspace = true, optional = true }
-deadpool-diesel = { workspace = true, optional = true }
-diesel = { workspace = true, optional = true }
-diesel_migrations = { workspace = true, optional = true }
 jsonwebtoken = { workspace = true, optional = true }
-mads-common-macros = { path = "../mads-common-macros", version = "=0.8.1", optional = true }
-mads-core = { path = "../mads-core", version = "=0.8.1" }
+mads-common-macros = { path = "../mads-common-macros", version = "=0.9.0", optional = true }
+mads-core = { path = "../mads-core", version = "=0.9.0" }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 serde_path_to_error = { workspace = true, optional = true }
@@ -57,6 +49,7 @@ serde_urlencoded = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 tower = { workspace = true, optional = true }
 tower-http = { workspace = true, optional = true }
+chrono = { version = "0.4.24", optional = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 rustix = { workspace = true, optional = true }

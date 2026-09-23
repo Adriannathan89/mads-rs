@@ -15,19 +15,11 @@ const PACKAGES: &[&str] = &[
     "mads-core-macros",
     "mads-common-macros",
     "mads-core",
+    "mads-persistence",
     "mads-extra",
     "mads-common",
     "mads",
     "mads-cli",
-];
-
-const FRAMEWORK_PACKAGES: &[&str] = &[
-    "mads-core-macros",
-    "mads-common-macros",
-    "mads-core",
-    "mads-extra",
-    "mads-common",
-    "mads",
 ];
 
 #[cfg(unix)]
@@ -72,46 +64,42 @@ fn stable_release_sets_the_exact_stable_version() {
 
 #[cfg(unix)]
 #[test]
-fn stable_release_preserves_an_explicit_cli_version() {
+fn stable_release_rejects_an_explicit_cli_version_without_changes() {
     let fixture = ReleaseFixture::new("0.8.0");
     fixture.pin_cli_version("0.8.0");
+    let before = fixture.version_files();
 
     let output = fixture.run("release.sh", "0.8.1");
 
-    assert_success(&output);
-    fixture.assert_framework_version("0.8.1");
-
-    let cli_manifest = fs::read_to_string(fixture.root().join("crates/mads-cli/Cargo.toml"))
-        .expect("mads-cli manifest should exist");
-    assert!(cli_manifest.contains("version = \"0.8.0\""));
-    assert!(cli_manifest.contains("mads = { path = \"../mads\", version = \"=0.8.1\" }"));
-    assert!(
-        cli_manifest.contains("mads-common = { path = \"../mads-common\", version = \"=0.8.1\" }")
-    );
-
-    let lockfile = fs::read_to_string(fixture.root().join("Cargo.lock"))
-        .expect("workspace lockfile should exist");
-    assert!(lockfile.contains("name = \"mads-cli\"\nversion = \"0.8.0\""));
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("version.workspace = true"));
+    assert_eq!(fixture.version_files(), before);
 }
 
 #[cfg(unix)]
 #[test]
-fn stable_release_can_preserve_a_workspace_inherited_cli_version() {
+fn stable_release_rejects_retired_keep_cli_version_option() {
     let fixture = ReleaseFixture::new("0.8.0");
+    let before = fixture.version_files();
 
     let output = fixture.run_with_args("release.sh", &["--keep-cli-version", "0.8.1"]);
 
-    assert_success(&output);
-    fixture.assert_framework_version("0.8.1");
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(fixture.version_files(), before);
+}
 
+#[cfg(unix)]
+#[test]
+fn beta_release_advances_cli_with_workspace() {
+    let fixture = ReleaseFixture::new("0.8.0-beta.1");
+
+    let output = fixture.run("release-beta.sh", "0.8.0");
+
+    assert_success(&output);
+    fixture.assert_version("0.8.0-beta.2");
     let cli_manifest = fs::read_to_string(fixture.root().join("crates/mads-cli/Cargo.toml"))
         .expect("mads-cli manifest should exist");
-    assert!(cli_manifest.contains("version = \"0.8.0\""));
-    assert!(!cli_manifest.contains("version.workspace = true"));
-
-    let lockfile = fs::read_to_string(fixture.root().join("Cargo.lock"))
-        .expect("workspace lockfile should exist");
-    assert!(lockfile.contains("name = \"mads-cli\"\nversion = \"0.8.0\""));
+    assert!(cli_manifest.contains("version.workspace = true"));
 }
 
 #[cfg(unix)]
@@ -154,7 +142,7 @@ fn stable_workflow_enforces_release_gates_and_dependency_order() {
         "cargo test --locked --workspace --all-features",
         "cargo test --locked --workspace --all-features --doc",
         "cargo doc --locked --workspace --all-features --no-deps",
-        "cargo test --locked -p mads-cli --test database_generate_postgres -- --ignored --test-threads=1",
+        "cargo test --locked -p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1",
         "environment: stable",
         "CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}",
         "for attempt in {1..6}",
@@ -173,17 +161,11 @@ fn stable_workflow_enforces_release_gates_and_dependency_order() {
     }
     assert!(!workflow.contains("--prerelease"));
 
-    let mut offset = 0;
-    for package in FRAMEWORK_PACKAGES {
-        let relative = workflow[offset..]
-            .find(&format!("            {package}\n"))
-            .unwrap_or_else(|| panic!("missing package {package} in publication order"));
-        offset += relative + package.len();
-    }
+    assert_publish_order(&workflow);
 }
 
 #[test]
-fn beta_and_stable_workflows_require_the_complete_v080_gate_set() {
+fn beta_and_stable_workflows_require_the_complete_v090_gate_set() {
     let root = workspace_root();
     let beta = fs::read_to_string(root.join(".github/workflows/beta-publish.yml"))
         .expect("beta publication workflow should exist");
@@ -236,12 +218,7 @@ fn beta_and_stable_workflows_require_the_complete_v080_gate_set() {
             "runs-on: ubuntu-latest",
             "image: postgres:16",
             "MADS_TEST_DATABASE_URL",
-            "--test database_postgres -- --ignored --test-threads=1",
-            "--test database_http_postgres -- --ignored --test-threads=1",
-            "database_migration_failure_prevents_listener_binding",
-            "--test database_cli -- --ignored --test-threads=1",
-            "--test database_generate_postgres -- --ignored --test-threads=1",
-            "--test postgres_crud -- --ignored --test-threads=1",
+            "-p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1",
         ] {
             assert!(
                 postgres.contains(required),
@@ -259,6 +236,18 @@ fn beta_and_stable_workflows_require_the_complete_v080_gate_set() {
             workflow.contains(environment),
             "{name} publish must keep its protection"
         );
+        assert_publish_order(workflow);
+        for retired in [
+            "libpq",
+            "database_postgres",
+            "database_http_postgres",
+            "database_migration_failure",
+            "database_cli",
+            "database_generate_postgres",
+            "postgres_crud",
+        ] {
+            assert!(!workflow.contains(retired), "{name} retains {retired}");
+        }
     }
 
     let beta_feature_gates = feature_test_commands(&beta);
@@ -270,7 +259,7 @@ fn beta_and_stable_workflows_require_the_complete_v080_gate_set() {
 }
 
 #[test]
-fn release_workflows_verify_v080_feature_boundaries_and_package_contents() {
+fn release_workflows_verify_v090_feature_boundaries_and_package_contents() {
     let root = workspace_root();
     let beta = fs::read_to_string(root.join(".github/workflows/beta-publish.yml"))
         .expect("beta publication workflow should exist");
@@ -282,13 +271,10 @@ fn release_workflows_verify_v080_feature_boundaries_and_package_contents() {
         for command in [
             "cargo check -p mads-core --no-default-features",
             "cargo check -p mads-common --no-default-features --features http",
-            "cargo check -p mads-common --no-default-features --features database",
-            "cargo check -p mads-common --no-default-features --features http,database",
             "cargo check -p mads-common --no-default-features --features jwt",
             "cargo check -p mads-common --no-default-features --features cookies",
             "cargo check -p mads --no-default-features",
             "cargo check -p mads --no-default-features --features http,runtime-tokio",
-            "cargo check -p mads --no-default-features --features http,database",
             "cargo package --locked --workspace --no-verify",
         ] {
             assert!(
@@ -302,6 +288,38 @@ fn release_workflows_verify_v080_feature_boundaries_and_package_contents() {
                 "{name} release gate must execute the package-content policy for {package}"
             );
         }
+    }
+}
+
+#[test]
+fn persistence_release_gates_and_framework_publish_order() {
+    let root = workspace_root();
+    let ci = fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap();
+    for name in ["beta", "stable"] {
+        let workflow =
+            fs::read_to_string(root.join(format!(".github/workflows/{name}-publish.yml"))).unwrap();
+        for required in [
+            "cargo check -p mads-persistence --no-default-features",
+            "cargo check -p mads-persistence --no-default-features --features sea-orm-postgres",
+            "cargo test --locked -p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1",
+            "seaorm-minimum:",
+            "cargo update -p sea-orm --precise 2.0.0",
+            "cargo test -p mads-persistence --features sea-orm-postgres",
+        ] {
+            assert!(workflow.contains(required), "{name} missing {required}");
+        }
+        let publish = workflow_job(&workflow, "publish");
+        assert!(publish.contains("            mads-persistence\n"));
+        assert!(publish.contains("            mads-cli\n"));
+        assert!(publish.contains("      - seaorm-minimum"));
+    }
+    for required in [
+        "cargo check -p mads-persistence --no-default-features",
+        "cargo check -p mads-persistence --no-default-features --features sea-orm-postgres",
+        "cargo test --locked -p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1",
+        "seaorm-minimum:",
+    ] {
+        assert!(ci.contains(required), "CI missing {required}");
     }
 }
 
@@ -324,9 +342,8 @@ fn package_content_policy_checks_every_workspace_archive() {
 }
 
 #[test]
-fn framework_packages_use_v081_pins_while_cli_remains_v080() {
-    const VERSION: &str = "0.8.1";
-    const CLI_VERSION: &str = "0.8.0";
+fn all_packages_use_v090_pins_and_workspace_version() {
+    const VERSION: &str = "0.9.0";
 
     let root = workspace_root();
     let workspace_manifest =
@@ -338,7 +355,7 @@ fn framework_packages_use_v081_pins_while_cli_remains_v080() {
 
     let lockfile =
         fs::read_to_string(root.join("Cargo.lock")).expect("workspace lockfile should exist");
-    for package in FRAMEWORK_PACKAGES {
+    for package in PACKAGES {
         let manifest = fs::read_to_string(root.join("crates").join(package).join("Cargo.toml"))
             .unwrap_or_else(|error| panic!("{package} manifest should exist: {error}"));
         assert!(
@@ -365,7 +382,7 @@ fn framework_packages_use_v081_pins_while_cli_remains_v080() {
 
     let cli_manifest = fs::read_to_string(root.join("crates/mads-cli/Cargo.toml"))
         .expect("mads-cli manifest should exist");
-    assert!(cli_manifest.contains(&format!("version = \"{CLI_VERSION}\"")));
+    assert!(cli_manifest.contains("version.workspace = true"));
     for dependency in cli_manifest
         .lines()
         .filter(|line| line.contains("path = \"../"))
@@ -375,7 +392,54 @@ fn framework_packages_use_v081_pins_while_cli_remains_v080() {
             "mads-cli must pin the updated framework dependency: {dependency}"
         );
     }
-    assert!(lockfile.contains(&format!("name = \"mads-cli\"\nversion = \"{CLI_VERSION}\"")));
+    assert!(lockfile.contains(&format!("name = \"mads-cli\"\nversion = \"{VERSION}\"")));
+}
+
+#[test]
+fn active_090_docs_describe_native_persistence() {
+    let root = workspace_root();
+    let cli = fs::read_to_string(root.join("docs/CLI.md")).unwrap();
+    let readme = fs::read_to_string(root.join("README.md")).unwrap();
+    assert!(!cli.contains("mads db"));
+    assert!(readme.contains("mads-persistence"));
+    assert!(readme.contains("sea-orm-postgres"));
+    for path in [
+        "docs/superpowers/specs/2026-09-23-mads-persistence-design.md",
+        "docs/superpowers/plans/2026-09-23-mads-persistence.md",
+    ] {
+        let document = fs::read_to_string(root.join(path)).unwrap();
+        assert!(
+            document
+                .lines()
+                .take(6)
+                .any(|line| line.contains("Superseded"))
+        );
+    }
+}
+
+#[test]
+fn legacy_database_examples_are_marked_as_superseded() {
+    let root = workspace_root();
+    for path in [
+        "docs/final_ideav1.md",
+        "docs/examples/application.md",
+        "docs/examples/application_clean_architecture.md",
+        "docs/examples/final_application_clean_architecture.md",
+        "docs/examples/modular_user_jwt.md",
+        "docs/examples/passport_jwt.md",
+    ] {
+        let document = fs::read_to_string(root.join(path)).unwrap();
+        let introduction = document.lines().take(8).collect::<Vec<_>>().join(" ");
+        assert!(
+            introduction.contains("Superseded")
+                && introduction.contains("docs/mads-persistence.md"),
+            "{path} must direct readers to the current 0.9 persistence guide"
+        );
+    }
+    let contributing = fs::read_to_string(root.join("CONTRIBUTING.md")).unwrap();
+    let common = fs::read_to_string(root.join("crates/mads-common/README.md")).unwrap();
+    assert!(!contributing.contains("CORS, Diesel"));
+    assert!(!common.contains("PostgreSQL suites are ignored"));
 }
 
 #[test]
@@ -386,13 +450,7 @@ fn documentation_describes_the_v080_compatibility_boundaries() {
         .expect("architecture guide should exist");
 
     for (name, source) in [("README", &readme), ("architecture", &architecture)] {
-        for required in [
-            "ValidatedJson",
-            "native `Json`",
-            "Config::parse",
-            "Secret",
-            ".into_http()",
-        ] {
+        for required in ["ValidatedJson", "native `Json`", "Config::parse", "Secret"] {
             assert!(
                 source.contains(required),
                 "{name} must document the v0.8 compatibility contract: {required}",
@@ -614,20 +672,6 @@ impl ReleaseFixture {
         }
     }
 
-    fn assert_framework_version(&self, expected: &str) {
-        let root_manifest = fs::read_to_string(self.root().join("Cargo.toml")).unwrap();
-        assert!(root_manifest.contains(&format!("version = \"{expected}\"")));
-
-        let lock = fs::read_to_string(self.root().join("Cargo.lock")).unwrap();
-        for package in FRAMEWORK_PACKAGES {
-            let record = format!("name = \"{package}\"\nversion = \"{expected}\"");
-            assert!(
-                lock.contains(&record),
-                "lockfile missing {package} {expected}"
-            );
-        }
-    }
-
     fn version_files(&self) -> Vec<(PathBuf, Vec<u8>)> {
         let mut paths = vec![
             self.root().join("Cargo.toml"),
@@ -725,4 +769,17 @@ fn feature_test_commands(workflow: &str) -> Vec<&str> {
         .filter_map(|line| line.strip_prefix("- run: ").or(Some(line)))
         .filter(|line| line.starts_with("cargo test ") || line.starts_with("cargo llvm-cov "))
         .collect()
+}
+
+fn assert_publish_order(workflow: &str) {
+    let publish = workflow_job(workflow, "publish");
+    let package_block = publish
+        .split("packages=(")
+        .nth(1)
+        .expect("publish job must define package list")
+        .split(')')
+        .next()
+        .unwrap();
+    let published: Vec<_> = package_block.split_whitespace().collect();
+    assert_eq!(published, PACKAGES);
 }

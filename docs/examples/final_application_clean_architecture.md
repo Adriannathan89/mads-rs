@@ -1,5 +1,10 @@
 # MADS.rs — Clean Architecture CRUD User Example
 
+> **Superseded for MADS 0.9.** The database and migration-command portions
+> below describe historical 0.8 APIs. Use
+> [docs/mads-persistence.md](../mads-persistence.md) and
+> [docs/CLI.md](../CLI.md) for current guidance.
+
 > **Version scope:** The module declarations, standard
 > `Mads::run::<AppModule>()` startup, CLI workflow, typed configuration,
 > validation extractors, and REST errors shown here are the MADS

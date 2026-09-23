@@ -67,10 +67,10 @@ pub(super) fn parse(attributes: &[Attribute], whole: bool) -> syn::Result<Vec<Va
                     }
                     let min = validator.arguments.iter().find(|(key, _)| key == "min");
                     let max = validator.arguments.iter().find(|(key, _)| key == "max");
-                    if let (Some((_, min)), Some((_, max))) = (min, max) {
-                        if compare(min, max)? == Ordering::Greater {
-                            return Err(meta.error("minimum input bound exceeds maximum"));
-                        }
+                    if let (Some((_, min)), Some((_, max))) = (min, max)
+                        && compare(min, max)? == Ordering::Greater
+                    {
+                        return Err(meta.error("minimum input bound exceeds maximum"));
                     }
                 }
                 _ => return Err(meta.error("unknown input validator")),

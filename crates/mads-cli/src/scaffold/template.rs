@@ -32,7 +32,7 @@ const TEMPLATES: [&str; 7] = [
 
 const PROJECT_NAME_TOKEN: &str = "{{project_name}}";
 const MADS_VERSION_TOKEN: &str = "{{mads_version}}";
-const MADS_FRAMEWORK_VERSION: &str = "0.8.1";
+const MADS_FRAMEWORK_VERSION: &str = mads::FRAMEWORK_VERSION;
 
 /// One rendered starter file that has not yet been published to disk.
 #[derive(Clone, Debug, Eq, PartialEq)]

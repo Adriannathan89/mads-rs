@@ -33,13 +33,6 @@ pub(crate) struct NewCommand {
     pub(crate) name: ProjectName,
 }
 
-/// A database command and its selected Cargo package.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct DatabaseInvocation {
-    pub(crate) command: DatabaseCommand,
-    pub(crate) package: Option<String>,
-}
-
 /// A supported top-level command.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
@@ -55,23 +48,6 @@ pub(crate) enum Command {
     New(NewCommand),
     /// Inspects an application through its standard MADS entry point.
     Inspect(InspectionCommand),
-    /// Runs or describes a database command.
-    Database(DatabaseInvocation),
-}
-
-/// A supported database subcommand.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum DatabaseCommand {
-    /// Generates one complete, review-required schema diff migration.
-    Generate,
-    /// Applies pending migrations.
-    Migrate,
-    /// Reverts the most recently applied migration.
-    Rollback,
-    /// Prints migration status.
-    Status,
-    /// Prints database command help.
-    Help,
 }
 
 /// The finite output formats supported by MADS-owned commands.
@@ -120,16 +96,6 @@ pub(crate) enum CanonicalCommand {
     Graph,
     /// `mads doctor`.
     Doctor,
-    /// `mads db generate`.
-    DatabaseGenerate,
-    /// `mads db migrate`.
-    DatabaseMigrate,
-    /// `mads db rollback`.
-    DatabaseRollback,
-    /// `mads db status`.
-    DatabaseStatus,
-    /// `mads db --help`.
-    DatabaseHelp,
 }
 
 /// A syntax failure together with the output and command context parsed so far.
@@ -169,12 +135,6 @@ pub(crate) enum ParseError {
     InvalidProjectName(ProjectNameError),
     /// Application arguments were supplied to an inspection command.
     ApplicationArgumentsNotAccepted,
-    /// `db` was not followed by a database command.
-    MissingDatabaseCommand,
-    /// A database subcommand was not recognized.
-    UnknownDatabaseCommand(OsString),
-    /// A syntax error arose while parsing database command options.
-    DatabaseSyntax(Box<ParseError>),
 }
 
 /// Parses process arguments after the executable name.
@@ -238,7 +198,6 @@ pub(crate) fn parse(arguments: &[OsString]) -> Result<Invocation, ParseFailure> 
         Some("doctor") => {
             parse_finite_inspection(InspectionKind::Doctor, remaining, format, global_format)
         }
-        Some("db") => parse_database_command(remaining, format, global_format),
         _ => Err((ParseError::UnknownCommand(command.clone()), Some(format))),
     };
 
@@ -396,75 +355,6 @@ fn parse_application_command(arguments: &[OsString]) -> Result<ApplicationComman
     })
 }
 
-fn parse_database_command(
-    arguments: &[OsString],
-    format: OutputFormat,
-    global_format: bool,
-) -> CommandParseResult<(Command, OutputFormat)> {
-    let Some((command, options)) = arguments.split_first() else {
-        return Err((
-            ParseError::MissingDatabaseCommand,
-            Some(if global_format {
-                format
-            } else {
-                OutputFormat::Human
-            }),
-        ));
-    };
-
-    let command = match command.to_str() {
-        Some("generate") => DatabaseCommand::Generate,
-        Some("migrate") => DatabaseCommand::Migrate,
-        Some("rollback") => DatabaseCommand::Rollback,
-        Some("status") => DatabaseCommand::Status,
-        Some("--help" | "-h") => DatabaseCommand::Help,
-        _ => {
-            return Err((
-                ParseError::UnknownDatabaseCommand(command.clone()),
-                Some(if global_format {
-                    format
-                } else {
-                    OutputFormat::Human
-                }),
-            ));
-        }
-    };
-
-    let (format, options, format_selected) = select_local_format(options, format, global_format)?;
-    if command == DatabaseCommand::Help && format_selected {
-        return Err((
-            ParseError::OutputFormatNotSupported,
-            Some(OutputFormat::Human),
-        ));
-    }
-
-    let mut package = None;
-    let mut index = 0;
-    while let Some(argument) = options.get(index) {
-        match argument.to_str() {
-            Some("--package" | "-p") => {
-                parse_selector(&options, &mut index, "--package", &mut package)
-                    .map_err(|error| ParseError::DatabaseSyntax(Box::new(error)))
-                    .map_err(|error| (error, Some(format)))?;
-            }
-            _ => {
-                return Err((
-                    ParseError::DatabaseSyntax(Box::new(ParseError::UnknownArgument(
-                        argument.clone(),
-                    ))),
-                    Some(format),
-                ));
-            }
-        }
-        index += 1;
-    }
-
-    Ok((
-        Command::Database(DatabaseInvocation { command, package }),
-        format,
-    ))
-}
-
 fn select_local_format(
     arguments: &[OsString],
     mut format: OutputFormat,
@@ -539,20 +429,12 @@ fn contains_format_before_separator(arguments: &[OsString]) -> bool {
 }
 
 fn canonical_command(arguments: &[OsString]) -> Option<CanonicalCommand> {
-    let (command, remaining) = arguments.split_first()?;
+    let (command, _) = arguments.split_first()?;
     match command.to_str()? {
         "new" => Some(CanonicalCommand::New),
         "routes" => Some(CanonicalCommand::Routes),
         "graph" => Some(CanonicalCommand::Graph),
         "doctor" => Some(CanonicalCommand::Doctor),
-        "db" => match remaining.first()?.to_str()? {
-            "generate" => Some(CanonicalCommand::DatabaseGenerate),
-            "migrate" => Some(CanonicalCommand::DatabaseMigrate),
-            "rollback" => Some(CanonicalCommand::DatabaseRollback),
-            "status" => Some(CanonicalCommand::DatabaseStatus),
-            "--help" | "-h" => Some(CanonicalCommand::DatabaseHelp),
-            _ => None,
-        },
         _ => None,
     }
 }
@@ -577,28 +459,6 @@ fn parse_selector(
     }
     *destination = Some(value.to_owned());
     Ok(())
-}
-
-impl ParseError {
-    /// Returns whether the error arose while parsing a database command.
-    pub(crate) fn is_database_command(&self) -> bool {
-        match self {
-            Self::MissingDatabaseCommand
-            | Self::UnknownDatabaseCommand(_)
-            | Self::DatabaseSyntax(_) => true,
-            Self::UnknownCommand(_)
-            | Self::UnknownArgument(_)
-            | Self::MissingValue(_)
-            | Self::NonUnicodeValue(_)
-            | Self::DuplicateOption(_)
-            | Self::InvalidOutputFormat(_)
-            | Self::OutputFormatNotSupported
-            | Self::MissingCommand
-            | Self::MissingProjectName
-            | Self::InvalidProjectName(_)
-            | Self::ApplicationArgumentsNotAccepted => false,
-        }
-    }
 }
 
 impl std::fmt::Display for ParseError {
@@ -636,15 +496,6 @@ impl std::fmt::Display for ParseError {
                     "inspection command does not accept application arguments"
                 )
             }
-            Self::MissingDatabaseCommand => write!(formatter, "missing database command"),
-            Self::UnknownDatabaseCommand(command) => {
-                write!(
-                    formatter,
-                    "unknown database command: {}",
-                    command.to_string_lossy()
-                )
-            }
-            Self::DatabaseSyntax(error) => error.fmt(formatter),
         }
     }
 }
@@ -658,9 +509,8 @@ mod tests {
     use crate::scaffold::ProjectName;
 
     use super::{
-        ApplicationCommand, CanonicalCommand, Command, DatabaseCommand, DatabaseInvocation,
-        InspectionCommand, Invocation, NewCommand, OutputFormat, ParseError, TargetSelection,
-        parse as parse_invocation,
+        ApplicationCommand, CanonicalCommand, Command, InspectionCommand, Invocation, NewCommand,
+        OutputFormat, ParseError, TargetSelection, parse as parse_invocation,
     };
 
     fn args(arguments: &[&str]) -> Vec<OsString> {
@@ -701,34 +551,6 @@ mod tests {
                 Command::Inspect(InspectionCommand {
                     kind: InspectionKind::Doctor,
                     target: TargetSelection::default(),
-                }),
-            ),
-            (
-                args(&["db", "generate"]),
-                Command::Database(DatabaseInvocation {
-                    command: DatabaseCommand::Generate,
-                    package: None,
-                }),
-            ),
-            (
-                args(&["db", "migrate"]),
-                Command::Database(DatabaseInvocation {
-                    command: DatabaseCommand::Migrate,
-                    package: None,
-                }),
-            ),
-            (
-                args(&["db", "rollback"]),
-                Command::Database(DatabaseInvocation {
-                    command: DatabaseCommand::Rollback,
-                    package: None,
-                }),
-            ),
-            (
-                args(&["db", "status"]),
-                Command::Database(DatabaseInvocation {
-                    command: DatabaseCommand::Status,
-                    package: None,
                 }),
             ),
         ];
@@ -782,11 +604,10 @@ mod tests {
             assert_eq!(failure.command, Some(CanonicalCommand::Routes));
         }
 
-        let failure = parse_invocation(&args(&["--format", "json", "db", "status", "--unknown"]))
-            .unwrap_err();
-        assert!(matches!(failure.error, ParseError::DatabaseSyntax(_)));
+        let failure = parse_invocation(&args(&["--format", "json", "db", "status"])).unwrap_err();
+        assert!(matches!(failure.error, ParseError::UnknownCommand(command) if command == "db"));
         assert_eq!(failure.format, Some(OutputFormat::Json));
-        assert_eq!(failure.command, Some(CanonicalCommand::DatabaseStatus));
+        assert_eq!(failure.command, None);
     }
 
     #[test]
@@ -798,10 +619,6 @@ mod tests {
             args(&["dev", "--format", "json"]),
             args(&["--format", "json", "--help"]),
             args(&["--version", "--format", "json"]),
-            args(&["--format", "json", "db", "--help"]),
-            args(&["db", "--help", "--format", "json"]),
-            args(&["--format", "human", "db", "--help"]),
-            args(&["db", "--help", "--format", "human"]),
         ] {
             assert!(matches!(
                 parse_invocation(&arguments),
@@ -912,51 +729,11 @@ mod tests {
     }
 
     #[test]
-    fn database_commands_accept_package_but_reject_binary_and_application_arguments() {
-        assert!(matches!(
-            parse(&args(&["db", "status", "--package", "api"])),
-            Ok(Command::Database(DatabaseInvocation { .. }))
-        ));
-        assert!(parse(&args(&["db", "status", "--bin", "server"])).is_err());
-        assert!(parse(&args(&["db", "status", "--", "extra"])).is_err());
-    }
-
-    #[test]
-    fn generate_accepts_only_an_optional_package_selector() {
-        assert!(matches!(
-            parse(&args(&["db", "generate"])),
-            Ok(Command::Database(DatabaseInvocation {
-                command: DatabaseCommand::Generate,
-                package: None,
-            }))
-        ));
-        assert!(matches!(
-            parse(&args(&["db", "generate", "-p", "api"])),
-            Ok(Command::Database(DatabaseInvocation {
-                command: DatabaseCommand::Generate,
-                package: Some(package),
-            })) if package == "api"
-        ));
-
-        for arguments in [
-            ["db", "generate", "users"].as_slice(),
-            ["db", "generate", "--diff-schema"].as_slice(),
-            ["db", "generate", "--bin", "server"].as_slice(),
-            ["db", "generate", "--", "extra"].as_slice(),
-            ["db", "generate", "-p", "api", "--package", "web"].as_slice(),
-        ] {
-            assert!(
-                parse(&args(arguments)).is_err(),
-                "{arguments:?} should fail"
-            );
-        }
-    }
-
-    #[test]
-    fn rejects_foundation_and_named_generation_forms() {
+    fn rejects_removed_top_level_commands() {
         assert!(parse(&args(&["foundation"])).is_err());
-        assert!(parse(&args(&["db", "generate", "named"])).is_err());
-        assert!(parse(&args(&["db", "generate", "--diff-schema"])).is_err());
+        assert!(
+            matches!(parse(&args(&["db"])), Err(ParseError::UnknownCommand(command)) if command == "db")
+        );
     }
 
     #[test]
@@ -973,12 +750,6 @@ mod tests {
             parse(&args(&["run", "--package", "--bin", "server"])),
             Err(ParseError::MissingValue("--package"))
         ));
-        assert!(matches!(
-            parse(&args(&["db", "status", "--package", "--bin"])),
-            Err(ParseError::DatabaseSyntax(error))
-                if matches!(*error, ParseError::MissingValue("--package"))
-        ));
-
         let mut arguments = args(&["run", "--package"]);
         arguments.push(non_unicode_argument());
         assert!(matches!(
@@ -988,7 +759,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unknown_top_level_and_database_arguments_precisely() {
+    fn rejects_unknown_top_level_arguments_precisely() {
         assert!(matches!(
             parse(&args(&["unknown"])),
             Err(ParseError::UnknownCommand(command)) if command == "unknown"
@@ -997,29 +768,6 @@ mod tests {
             parse(&args(&["run", "extra"])),
             Err(ParseError::UnknownArgument(argument)) if argument == "extra"
         ));
-        assert!(matches!(
-            parse(&args(&["db"])),
-            Err(ParseError::MissingDatabaseCommand)
-        ));
-    }
-
-    #[test]
-    fn every_database_option_error_keeps_database_help_scope() {
-        let cases = [
-            args(&["db", "status", "--bin", "server"]),
-            args(&["db", "status", "--package", "api", "-p", "web"]),
-            args(&["db", "status", "--package"]),
-        ];
-
-        for arguments in cases {
-            let error = parse(&arguments).unwrap_err();
-            assert!(error.is_database_command(), "error lost DB scope: {error}");
-        }
-
-        let mut non_unicode = args(&["db", "status", "--package"]);
-        non_unicode.push(non_unicode_argument());
-        let error = parse(&non_unicode).unwrap_err();
-        assert!(error.is_database_command(), "error lost DB scope: {error}");
     }
 
     #[test]

@@ -2,12 +2,12 @@
 name = "mads-passport-without-cookies-consumer"
 version = "0.0.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.94"
 
 [dependencies]
 mads = { path = "../../..", default-features = false, features = ["http", "jwt"] }
 # This standalone compile fixture intentionally has no checked-in lockfile.
-# Pin the transitive JWT time floor so a clean resolution honors its Rust 1.85 MSRV.
+# Pin the transitive JWT time floor so this standalone fixture is reproducible.
 time = "=0.3.36"
 
 [workspace]

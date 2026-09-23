@@ -1,0 +1,11 @@
+error: `#[mads::provider(lifecycle)]` has two accepted async forms: `async fn ... -> LifecycleResource<T>` or `async fn ... -> mads_core::Result<LifecycleResource<T>>`
+ --> tests/ui/fail/provider_lifecycle_output.rs:4:1
+  |
+4 | async fn wrong_output() -> Resource {
+  | ^^^^^
+
+error: `#[mads::provider]` does not support lifetime, type, or const generics
+ --> tests/ui/fail/provider_lifecycle_output.rs:9:27
+  |
+9 | async fn generic_resource<T>() -> mads::core::LifecycleResource<T> {
+  |                           ^

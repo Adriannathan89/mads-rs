@@ -66,11 +66,11 @@ fn substitute_local_mads(project: &Path) {
     let local_path = local_mads.to_string_lossy().replace('\\', "\\\\");
     let registry_dependency = format!(
         "mads = {{ version = \"={}\", default-features = false, features = [\"http\", \"runtime-tokio\"] }}",
-        "0.8.1"
+        "0.9.0"
     );
     let local_dependency = format!(
         "mads = {{ path = \"{local_path}\", version = \"={}\", default-features = false, features = [\"http\", \"runtime-tokio\"] }}",
-        "0.8.1"
+        "0.9.0"
     );
     let substituted = manifest.replacen(&registry_dependency, &local_dependency, 1);
     assert_ne!(

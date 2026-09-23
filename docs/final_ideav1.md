@@ -1,5 +1,10 @@
 # MADS.rs — Final Idea v1
 
+> **Superseded for the 0.9 database and CLI boundaries.** This historical v1
+> proposal retains Diesel and migration-command examples that no longer work.
+> For current usage, see [docs/mads-persistence.md](mads-persistence.md) and
+> [docs/CLI.md](CLI.md).
+
 ## Modular Application Development System for Rust
 
 > **Declare what your application needs. MADS wires the rest.**

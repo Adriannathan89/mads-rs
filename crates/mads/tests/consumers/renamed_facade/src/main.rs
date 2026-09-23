@@ -13,14 +13,12 @@ struct AppModule;
 
 #[repository]
 struct RenamedRepository {
-    database: Database,
+    value: u32,
 }
 
 fn consume_repository(repository: &RenamedRepository) {
-    let _ = &repository.database;
+    let _ = repository.value;
 }
-
-fn diesel_backend(_: std::marker::PhantomData<framework::diesel::pg::Pg>) {}
 
 mod mads {
     pub struct Json;
@@ -101,33 +99,11 @@ impl ExtractorRoutes for ExtractorController {
     async fn request(&self, _request: framework::Request) {}
 }
 
-fn inspect_auto_configuration() {
-    let config = framework::core::ConfigBuilder::new()
-        .source(framework::core::MapSource::new(
-            "consumer",
-            [("database.url", "postgres://localhost/renamed")],
-        ))
-        .build()
-        .unwrap();
-    let analysis = Mads::builder_with_config(config).analyze();
-
-    assert_eq!(
-        analysis.auto_configurations()[0].status(),
-        AutoConfigurationStatus::Active,
-    );
-    assert_eq!(
-        analysis.graph().provider::<Database>().unwrap().origin(),
-        ProviderOrigin::AutoConfiguration,
-    );
-}
-
 fn main() {
     #[derive(Input)]
     struct RequestInput { #[validate(email)] email: String }
     assert!(RequestInput { email: "user@example.com".into() }.validate().is_ok());
     assert_eq!(Config::empty().parse::<Settings>().unwrap().host, "localhost");
     let _ = passport_principal;
-    let _ = inspect_auto_configuration;
-    let _ = diesel_backend;
     let _ = consume_repository;
 }

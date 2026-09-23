@@ -4,32 +4,14 @@ use mads::prelude::*;
 
 #[repository]
 struct MainRepository {
-    database: Database,
+    value: u32,
 }
 
 fn consume_repository(repository: &MainRepository) {
-    let _ = &repository.database;
+    let _ = repository.value;
 }
 
 #[mads::main]
 async fn main() {
-    let config = mads::core::ConfigBuilder::new()
-        .source(mads::core::MapSource::new(
-            "consumer",
-            [("database.url", "postgres://localhost/mads")],
-        ))
-        .build()
-        .unwrap();
-    let analysis = Mads::builder_with_config(config).analyze();
-
-    assert_eq!(
-        analysis.auto_configurations()[0].status(),
-        AutoConfigurationStatus::Active,
-    );
-    assert_eq!(
-        analysis.graph().provider::<Database>().unwrap().origin(),
-        ProviderOrigin::AutoConfiguration,
-    );
-
     let _ = consume_repository;
 }

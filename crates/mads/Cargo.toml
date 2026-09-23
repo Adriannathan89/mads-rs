@@ -7,16 +7,14 @@ authors.workspace = true
 repository.workspace = true
 license.workspace = true
 readme = "README.md"
-description = "Modular Rust application framework with Axum, Diesel, and Passport integrations"
+description = "Modular Rust application framework with Axum and Passport integrations"
 
 [dependencies]
-mads-common = { path = "../mads-common", version = "=0.8.1", optional = true, default-features = false }
-mads-core = { path = "../mads-core", version = "=0.8.1" }
-mads-extra = { path = "../mads-extra", version = "=0.8.1", optional = true }
+mads-common = { path = "../mads-common", version = "=0.9.0", optional = true, default-features = false }
+mads-core = { path = "../mads-core", version = "=0.9.0" }
+mads-extra = { path = "../mads-extra", version = "=0.9.0", optional = true }
 
 [dev-dependencies]
-diesel.workspace = true
-diesel_migrations.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
@@ -25,11 +23,11 @@ trybuild.workspace = true
 
 [features]
 default = ["common", "runtime-tokio"]
-common = ["http", "database"]
+common = ["http", "logger"]
 http = ["dep:mads-common", "mads-common/http"]
-database = ["dep:mads-common", "mads-common/database"]
 jwt = ["dep:mads-common", "mads-common/jwt"]
 cookies = ["http", "mads-common/cookies"]
+logger = ["dep:mads-common", "mads-common/logger"]
 runtime-tokio = ["mads-core/runtime-tokio"]
 extra = ["dep:mads-extra"]
 

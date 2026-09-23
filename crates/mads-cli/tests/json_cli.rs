@@ -1,14 +1,11 @@
 //! JSON contract coverage for finite MADS CLI output.
 
-use std::{fs, path::Path, process::Output};
+use std::{path::Path, process::Output};
 
 use assert_cmd::Command;
 use mads_cli::output::{
     json::render,
-    model::{
-        CliDiagnostic, CommandData, DatabaseGenerateData, DatabaseMigrateData,
-        DatabaseRollbackData, DatabaseStatusData, Envelope, RoutesData, SourceLocation,
-    },
+    model::{CliDiagnostic, CommandData, Envelope, RoutesData, SourceLocation},
     path::normalize_path,
 };
 use serde_json::{Deserializer, Value, json};
@@ -27,6 +24,21 @@ fn model_serializes_the_schema_v1_routes_success() {
         "{\"schema_version\":1,\"command\":\"routes\",\"ok\":true,\"data\":{\"routes\":[]},\"diagnostics\":[]}\n"
     );
     assert!(!output.contains("\u{1b}"));
+}
+
+#[test]
+fn retired_db_with_leading_json_format_is_an_unknown_command() {
+    let output = Command::cargo_bin("mads")
+        .unwrap()
+        .args(["--format", "json", "db", "status"])
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stderr.is_empty());
+    let document = one_json_document(&output);
+    assert_eq!(document["command"], Value::Null);
+    assert_eq!(document["diagnostics"][0]["code"], "MADS204");
+    assert_eq!(document["diagnostics"][0]["message"], "unknown command: db");
 }
 
 #[test]
@@ -69,22 +81,7 @@ fn model_serializes_nullable_diagnostics_and_normalized_locations() {
 }
 
 #[test]
-fn model_serializes_unavailable_operational_data_and_unknown_syntax_command() {
-    let operational = render(&Envelope::failure(
-        Some("db migrate".into()),
-        None,
-        vec![CliDiagnostic::error(
-            "MADS210",
-            "database command failed",
-            "the database command could not be completed",
-        )],
-    ))
-    .expect("operational failure should serialize");
-    assert_eq!(
-        operational,
-        "{\"schema_version\":1,\"command\":\"db migrate\",\"ok\":false,\"data\":null,\"diagnostics\":[{\"severity\":\"error\",\"code\":\"MADS210\",\"title\":\"database command failed\",\"message\":\"the database command could not be completed\",\"subject\":null,\"location\":null,\"suggestions\":[]}]}\n"
-    );
-
+fn model_serializes_unknown_syntax_command() {
     let syntax = render(&Envelope::failure(
         None,
         None,
@@ -99,50 +96,6 @@ fn model_serializes_unavailable_operational_data_and_unknown_syntax_command() {
         syntax,
         "{\"schema_version\":1,\"command\":null,\"ok\":false,\"data\":null,\"diagnostics\":[{\"severity\":\"error\",\"code\":\"MADS204\",\"title\":\"CLI syntax error\",\"message\":\"unknown command: nope\",\"subject\":null,\"location\":null,\"suggestions\":[]}]}\n"
     );
-}
-
-#[test]
-fn model_serializes_all_database_command_data_variants() {
-    let cases = [
-        (
-            "db generate",
-            CommandData::DatabaseGenerate(DatabaseGenerateData::new(
-                "generated",
-                Some("migrations/20260906120000_schema_diff".into()),
-                true,
-            )),
-            "{\"status\":\"generated\",\"migration_path\":\"migrations/20260906120000_schema_diff\",\"review_required\":true}",
-        ),
-        (
-            "db migrate",
-            CommandData::DatabaseMigrate(DatabaseMigrateData::new(vec!["20260906120000".into()])),
-            "{\"applied\":[\"20260906120000\"]}",
-        ),
-        (
-            "db rollback",
-            CommandData::DatabaseRollback(DatabaseRollbackData::new(vec!["20260906120000".into()])),
-            "{\"reverted\":[\"20260906120000\"]}",
-        ),
-        (
-            "db status",
-            CommandData::DatabaseStatus(DatabaseStatusData::new(
-                vec!["20260906120000".into()],
-                vec!["20260906120001".into()],
-            )),
-            "{\"applied\":[\"20260906120000\"],\"pending\":[\"20260906120001\"]}",
-        ),
-    ];
-
-    for (command, data, expected_data) in cases {
-        let output = render(&Envelope::success(command, data))
-            .expect("database command data should serialize");
-        assert_eq!(
-            output,
-            format!(
-                "{{\"schema_version\":1,\"command\":\"{command}\",\"ok\":true,\"data\":{expected_data},\"diagnostics\":[]}}\n"
-            )
-        );
-    }
 }
 
 #[test]
@@ -208,130 +161,11 @@ fn new_json_success_uses_the_full_schema_v1_snapshot_for_both_format_placements(
 }
 
 #[test]
-fn database_operational_failure_writes_safe_json_with_null_data() {
-    let project = tempdir().expect("temporary project should be created");
-    fs::write(
-        project.path().join("Cargo.toml"),
-        "[package]\nname = \"database-json-failure\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
-    )
-    .expect("manifest should be written");
-    fs::create_dir(project.path().join("src")).expect("source directory should be created");
-    fs::write(project.path().join("src/lib.rs"), "").expect("library target should be written");
-    fs::write(
-        project.path().join("mads.toml"),
-        "[database]\nurl = \"postgres://user:database-json-secret@127.0.0.1:1/mads\"\n",
-    )
-    .expect("database configuration should be written");
-
-    let output = Command::cargo_bin("mads")
-        .expect("CLI binary should build")
-        .current_dir(project.path())
-        .env_remove("DATABASE_URL")
-        .env_remove("MADS_DATABASE__URL")
-        .args(["db", "status", "--format", "json"])
-        .output()
-        .expect("database CLI should run");
-
-    assert_eq!(output.status.code(), Some(1));
-    assert!(output.stderr.is_empty(), "stderr was not empty: {output:?}");
-    let document = one_json_document(&output);
-    assert_eq!(document["command"], "db status");
-    assert_eq!(document["ok"], false);
-    assert_eq!(document["data"], Value::Null);
-    assert_eq!(document["diagnostics"][0]["severity"], "error");
-    assert_eq!(document["diagnostics"][0]["code"], "MADS210");
-    assert_eq!(
-        document["diagnostics"][0]["message"],
-        "the database command could not be completed"
-    );
-    assert!(!document.to_string().contains("database-json-secret"));
-}
-
-#[test]
-fn every_database_operational_failure_is_one_safe_json_document() {
-    let project = tempdir().expect("temporary project should be created");
-    fs::write(
-        project.path().join("Cargo.toml"),
-        "[package]\nname = \"database-json-matrix\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
-    )
-    .expect("manifest should be written");
-    fs::create_dir(project.path().join("src")).expect("source directory should be created");
-    fs::write(
-        project.path().join("src/lib.rs"),
-        "diesel::table! { users (id) { id -> Int8, name -> Text, } }\n",
-    )
-    .expect("schema source should be written");
-    fs::write(
-        project.path().join("mads.toml"),
-        "[database]\nurl = \"postgres://user:database-matrix-secret@127.0.0.1:1/mads\"\n",
-    )
-    .expect("database configuration should be written");
-    fs::write(
-        project.path().join(".env"),
-        "MADS_PRIVATE_INSPECTION_TOKEN=private-inspection-token-sentinel\nMADS_PRIVATE_INSPECTION_PATH=private-inspection-path-sentinel\nMADS_SQL_SENTINEL=CREATE_TABLE_SQL_SENTINEL\nMADS_CONSTRAINT_SENTINEL=unique_constraint_sentinel\nMADS_SOURCE_SENTINEL=arbitrary-source-error-sentinel\n",
-    )
-    .expect("dotenv sentinels should be written");
-
-    let cases: &[(&[&str], &str)] = &[
-        (&["db", "generate", "--format", "json"], "db generate"),
-        (&["db", "migrate", "--format", "json"], "db migrate"),
-        (&["db", "rollback", "--format", "json"], "db rollback"),
-        (&["db", "status", "--format", "json"], "db status"),
-    ];
-    let private_sentinels = [
-        "database-matrix-secret",
-        "postgres://user:database-matrix-secret@127.0.0.1:1/mads",
-        "private-inspection-token-sentinel",
-        "private-inspection-path-sentinel",
-        "CREATE_TABLE_SQL_SENTINEL",
-        "unique_constraint_sentinel",
-        "arbitrary-source-error-sentinel",
-    ];
-
-    for (arguments, command) in cases {
-        let output = Command::cargo_bin("mads")
-            .expect("CLI binary should build")
-            .current_dir(project.path())
-            .env_remove("DATABASE_URL")
-            .env_remove("MADS_DATABASE__URL")
-            .args(*arguments)
-            .output()
-            .expect("database CLI should run");
-
-        assert_eq!(output.status.code(), Some(1), "{arguments:?}");
-        assert!(output.stderr.is_empty(), "stderr was not empty: {output:?}");
-        let document = one_json_document(&output);
-        assert_eq!(document["command"], *command, "{arguments:?}");
-        assert_eq!(document["ok"], false, "{arguments:?}");
-        assert_eq!(document["data"], Value::Null, "{arguments:?}");
-        assert_eq!(document["diagnostics"][0]["severity"], "error");
-        assert_eq!(document["diagnostics"][0]["code"], "MADS210");
-        assert_no_sensitive_values(&output, &document, &private_sentinels);
-    }
-}
-
-#[test]
 fn every_finite_json_syntax_failure_has_one_canonical_document() {
     let cases: &[(&[&str], &str)] = &[
         (&["routes", "--format", "json", "--unknown"], "routes"),
         (&["graph", "--format", "json", "--unknown"], "graph"),
         (&["doctor", "--format", "json", "--unknown"], "doctor"),
-        (
-            &["db", "generate", "--format", "json", "--unknown"],
-            "db generate",
-        ),
-        (
-            &["db", "migrate", "--format", "json", "--unknown"],
-            "db migrate",
-        ),
-        (
-            &["db", "rollback", "--format", "json", "--unknown"],
-            "db rollback",
-        ),
-        (
-            &["db", "status", "--format", "json", "--unknown"],
-            "db status",
-        ),
     ];
 
     for (arguments, command) in cases {

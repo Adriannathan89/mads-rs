@@ -70,13 +70,13 @@ fn expand_with_common(
     let mut item: ItemTrait = syn::parse2(item)?;
     validate_trait_shape(&item)?;
 
-    if !cfg!(feature = "passport") {
-        if let Some(attribute) = first_guard_attribute(&item) {
-            return Err(Error::new(
-                attribute.span(),
-                "guards require the `jwt` feature",
-            ));
-        }
+    if !cfg!(feature = "passport")
+        && let Some(attribute) = first_guard_attribute(&item)
+    {
+        return Err(Error::new(
+            attribute.span(),
+            "guards require the `jwt` feature",
+        ));
     }
     let trait_guard = guard::take_guard(&mut item.attrs, GuardTarget::Trait)?;
     if let Some(trait_guard) = &trait_guard {

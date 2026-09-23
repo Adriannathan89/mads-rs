@@ -2,10 +2,16 @@ error[E0277]: the trait bound `Controller: Route` is not satisfied
  --> tests/ui/fail/msrv/controller_missing_impl.rs:8:8
   |
 8 | struct Controller;
-  |        ^^^^^^^^^^ the trait `Route` is not implemented for `Controller`
+  |        ^^^^^^^^^^ unsatisfied trait bound
   |
+help: the trait `Route` is not implemented for `Controller`
+ --> tests/ui/fail/msrv/controller_missing_impl.rs:7:1
+  |
+7 | #[mads::controller(routes = [Route])]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 help: this trait has no implementations, consider adding one
  --> tests/ui/fail/msrv/controller_missing_impl.rs:2:1
   |
 2 | trait Route {
   | ^^^^^^^^^^^
+  = note: this error originates in the attribute macro `mads::controller` (in Nightly builds, run with -Z macro-backtrace for more info)

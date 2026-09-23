@@ -2,6 +2,35 @@
 
 All notable changes to MADS.rs are documented in this file.
 
+## [0.9.0] - 2026-09-24
+
+### Compatibility
+
+- Raise the minimum supported Rust version from 1.85 to 1.94. MADS continues
+  to use Rust edition 2024.
+
+### Added
+
+- `mads-persistence` provides an explicitly imported SeaORM PostgreSQL
+  `DatabaseModule`, native `DatabaseConnection` injection, readiness and
+  graceful close. `DatabaseFactory::provide` returns the native connection or
+  a typed, safely formatted `PersistenceError`.
+
+- `mads-common` provide new logger module to imported into main apps with
+  default console logger. User can override the logger inner instance using
+  provide macros and provide their logger service
+
+### Breaking changes
+
+- Removed the Diesel-backed `mads-common/database` and `mads/database`
+  features and their public API. Persistence is available only by depending on
+  `mads-persistence` explicitly with `sea-orm-postgres`.
+- Removed the `mads db` migration commands and database-specific JSON data
+  types. Use SeaORM's native migration tooling instead.
+- `mads-cli` now inherits and publishes the 0.9.0 workspace version alongside
+  the framework crates. Release scripts no longer accept
+  `--keep-cli-version`.
+
 ## [0.8.1] - 2026-09-20
 
 ### Added
@@ -168,6 +197,7 @@ First public beta of the MADS.rs HTTP application foundation.
 - TLS, HTTP/2 configuration, multiple listeners, and declarative middleware are application-owned.
 - Public APIs may change in later `0.6.0-beta.*` releases based on adopter feedback.
 
+[0.9.0]: https://github.com/Adriannathan89/mads/releases/tag/v0.9.0
 [0.8.0]: https://github.com/Adriannathan89/mads/releases/tag/v0.8.0
 [0.6.0-beta.1]: https://github.com/Adriannathan89/mads/releases/tag/v0.6.0-beta.1
 [0.7.0]: https://github.com/Adriannathan89/mads/releases/tag/v0.7.0

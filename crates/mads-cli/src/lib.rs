@@ -1,4 +1,4 @@
-//! Development commands for running MADS.rs applications and managing migrations.
+//! Development commands for running and inspecting MADS.rs applications.
 //!
 //! The `mads` executable exposes the development command surface and
 //! preserves application arguments supplied after `--`. CLI syntax failures
@@ -10,7 +10,6 @@
 #[allow(dead_code)]
 mod cargo;
 mod command;
-mod database;
 mod dev;
 #[allow(dead_code)]
 mod dev_state;
@@ -30,10 +29,7 @@ mod watch;
 
 use std::{ffi::OsString, io, path::PathBuf, process::ExitCode};
 
-use command::{
-    CanonicalCommand, Command, DatabaseCommand, DatabaseInvocation, InspectionCommand, NewCommand,
-    OutputFormat, ParseError, ParseFailure,
-};
+use command::{Command, InspectionCommand, NewCommand, OutputFormat, ParseError, ParseFailure};
 use dev::run_dev;
 use diagnostic::{CliError, MADS201, MADS202};
 use inspection::{inspect_application, inspect_application_silently};
@@ -114,16 +110,6 @@ async fn run_command(
         }
         Command::New(command) => run_new_command(command, format, current_dir),
         Command::Inspect(command) => run_inspection_command(command, format, current_dir).await,
-        Command::Database(DatabaseInvocation {
-            command: DatabaseCommand::Help,
-            ..
-        }) => {
-            output::write_human(format!("{}\n", database_help()), String::new())?;
-            Ok(ExitCode::SUCCESS)
-        }
-        Command::Database(DatabaseInvocation { command, package }) => {
-            run_database_command(command, package.as_deref(), format, current_dir).await
-        }
     }
 }
 
@@ -215,33 +201,6 @@ async fn run_inspection_command(
     }
 }
 
-async fn run_database_command(
-    command: DatabaseCommand,
-    package: Option<&str>,
-    format: OutputFormat,
-    current_dir: io::Result<PathBuf>,
-) -> Result<ExitCode, CliError> {
-    let result = async {
-        let root = current_dir
-            .map_err(current_directory_error)
-            .map_err(database::CliError::diagnostic)?;
-        let project = CargoProject::load(root).map_err(database::CliError::diagnostic)?;
-        let package = project
-            .resolve_package(package)
-            .map_err(database::CliError::diagnostic)?;
-        database::execute(command, package.package_root()).await
-    }
-    .await;
-    let exit_code = if result.is_ok() {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::from(1)
-    };
-    let outcome = database::outcome(command, result);
-    output::write(format, &outcome)?;
-    Ok(exit_code)
-}
-
 fn current_directory_error(error: io::Error) -> CliError {
     CliError::new(
         MADS201,
@@ -257,15 +216,7 @@ fn render_parse_error(failure: &ParseFailure) -> Result<(), CliError> {
     let human_stderr = if matches!(&failure.error, ParseError::InvalidProjectName(_)) {
         format!("{diagnostic}\n")
     } else {
-        format!(
-            "error: {}\n{}\n",
-            failure.error,
-            if parse_error_needs_database_help(failure) {
-                database_help()
-            } else {
-                help()
-            }
-        )
+        format!("error: {}\n{}\n", failure.error, help())
     };
     let outcome = output::Outcome::syntax_failure(
         command,
@@ -284,24 +235,6 @@ fn parse_diagnostic(error: &ParseError) -> CliError {
     }
 }
 
-fn parse_error_needs_database_help(failure: &ParseFailure) -> bool {
-    failure.error.is_database_command()
-        || matches!(
-            failure.command,
-            Some(
-                CanonicalCommand::DatabaseGenerate
-                    | CanonicalCommand::DatabaseMigrate
-                    | CanonicalCommand::DatabaseRollback
-                    | CanonicalCommand::DatabaseStatus
-                    | CanonicalCommand::DatabaseHelp
-            )
-        )
-}
-
 const fn help() -> &'static str {
-    "Usage: mads <command> [options]\n\nCommands:\n  run       Build and run a MADS application\n  dev       Watch, rebuild, and restart a MADS application\n  new       Create a minimal MADS application\n  routes    Inspect application routes\n  graph     Inspect the application graph\n  doctor    Diagnose application configuration and metadata\n  db        Manage PostgreSQL migrations\n\nApplication selection:\n  -p, --package <package>\n      --bin <binary>"
-}
-
-const fn database_help() -> &'static str {
-    "Usage: mads db <command> [--package <package>]\n\nCommands:\n  generate  Generate one complete schema diff as <timestamp>_schema_diff\n  migrate   Apply pending migrations\n  rollback  Revert the latest applied migration\n  status    Show applied and pending migrations\n\nApplication selection:\n  -p, --package <package>"
+    "Usage: mads <command> [options]\n\nCommands:\n  run       Build and run a MADS application\n  dev       Watch, rebuild, and restart a MADS application\n  new       Create a minimal MADS application\n  routes    Inspect application routes\n  graph     Inspect the application graph\n  doctor    Diagnose application configuration and metadata\n\nApplication selection:\n  -p, --package <package>\n      --bin <binary>"
 }
