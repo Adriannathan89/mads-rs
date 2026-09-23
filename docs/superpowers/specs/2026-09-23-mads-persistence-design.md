@@ -1,6 +1,6 @@
 # MADS.rs v0.9.0 Native SeaORM Persistence Connector Design
 
-**Status:** Awaiting written-spec review
+**Status:** Approved for implementation
 
 **Target:** MADS framework crates 0.9.0 and Rust 1.94
 
@@ -45,7 +45,7 @@ formatting discloses connection data.
 9. Retain typed configuration and SeaORM causes while redacting public output.
 10. Prove native entity CRUD, transactions, readiness, and shutdown against a
     real PostgreSQL service.
-11. Release all framework crates as 0.9.0 while keeping `mads-cli` at 0.8.1.
+11. Release all framework crates as 0.9.0 while keeping `mads-cli` at 0.8.0.
 
 ## Non-goals
 
@@ -532,7 +532,7 @@ These packages move to 0.9.0:
 - `mads`;
 - `mads-persistence`.
 
-`mads-cli` remains package version 0.8.1 but updates its exact internal MADS
+`mads-cli` remains package version 0.8.0 but updates its exact internal MADS
 dependency pins to 0.9.0. It remains in workspace builds and platform tests.
 Neither beta nor stable 0.9 publication includes `mads-cli`.
 
@@ -636,7 +636,7 @@ MADS persistence 0.9 is complete only when:
 11. SeaORM 2.0.0 minimum resolution, current 2.0 resolution, stable Rust, Rust
     1.94, feature-boundary, PostgreSQL, package, documentation, lint, and
     coverage gates pass.
-12. Framework crates publish as 0.9.0, CLI remains 0.8.1 and is excluded from
+12. Framework crates publish as 0.9.0, CLI remains 0.8.0 and is excluded from
     both 0.9 publication lists, and release documentation is internally
     consistent.
 
