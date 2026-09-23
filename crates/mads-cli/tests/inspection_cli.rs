@@ -59,26 +59,6 @@ fn graph_and_doctor_return_deterministic_framework_evidence() {
 }
 
 #[test]
-fn database_enabled_app_is_inspected_offline_before_startup_or_bind() {
-    let markers = tempdir().expect("database marker directory should exist");
-    let construction = markers.path().join("constructed");
-
-    fixture_command("database")
-        .env("MADS_TEST_CONSTRUCTION_MARKER", &construction)
-        .arg("graph")
-        .assert()
-        .success()
-        .stdout(contains("mads_common::database::pool::Database"))
-        .stdout(contains("state=auto_configured"))
-        .stdout(contains("MADS application ready").not());
-
-    assert!(
-        !construction.exists(),
-        "database inspection constructed the application before startup"
-    );
-}
-
-#[test]
 fn a_binary_without_standard_run_is_killed_and_diagnosed() {
     let markers = tempdir().expect("unsupported marker directory should exist");
     let heartbeat = markers.path().join("heartbeat");

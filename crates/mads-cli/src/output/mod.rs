@@ -69,11 +69,6 @@ pub(crate) const fn command_name(command: CanonicalCommand) -> &'static str {
         CanonicalCommand::Routes => "routes",
         CanonicalCommand::Graph => "graph",
         CanonicalCommand::Doctor => "doctor",
-        CanonicalCommand::DatabaseGenerate => "db generate",
-        CanonicalCommand::DatabaseMigrate => "db migrate",
-        CanonicalCommand::DatabaseRollback => "db rollback",
-        CanonicalCommand::DatabaseStatus => "db status",
-        CanonicalCommand::DatabaseHelp => "db help",
     }
 }
 

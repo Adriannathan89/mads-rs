@@ -10,7 +10,6 @@ pub(crate) const MADS200: &str = "MADS200";
 pub(crate) const MADS201: &str = "MADS201";
 pub(crate) const MADS202: &str = "MADS202";
 pub(crate) const MADS204: &str = "MADS204";
-pub(crate) const MADS210: &str = "MADS210";
 pub(crate) const MADS211: &str = "MADS211";
 pub(crate) const MADS212: &str = "MADS212";
 pub(crate) const MADS213: &str = "MADS213";

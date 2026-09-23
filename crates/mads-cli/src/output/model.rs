@@ -71,14 +71,6 @@ pub enum CommandData {
     Graph(GraphData),
     /// `mads doctor` inspection data.
     Doctor(DoctorData),
-    /// `mads db generate` data.
-    DatabaseGenerate(DatabaseGenerateData),
-    /// `mads db migrate` data.
-    DatabaseMigrate(DatabaseMigrateData),
-    /// `mads db rollback` data.
-    DatabaseRollback(DatabaseRollbackData),
-    /// `mads db status` data.
-    DatabaseStatus(DatabaseStatusData),
 }
 
 /// Published project data for `mads new`.
@@ -318,69 +310,6 @@ pub enum DoctorStatus {
     Overridden,
     /// The check failed.
     Failed,
-}
-
-/// Data returned by `mads db generate`.
-#[derive(Clone, Debug, Serialize)]
-pub struct DatabaseGenerateData {
-    status: String,
-    migration_path: Option<String>,
-    review_required: bool,
-}
-
-impl DatabaseGenerateData {
-    /// Creates database-generation data.
-    pub fn new(
-        status: impl Into<String>,
-        migration_path: Option<String>,
-        review_required: bool,
-    ) -> Self {
-        Self {
-            status: status.into(),
-            migration_path,
-            review_required,
-        }
-    }
-}
-
-/// Data returned by `mads db migrate`.
-#[derive(Clone, Debug, Serialize)]
-pub struct DatabaseMigrateData {
-    applied: Vec<String>,
-}
-
-impl DatabaseMigrateData {
-    /// Creates database-migration data.
-    pub fn new(applied: Vec<String>) -> Self {
-        Self { applied }
-    }
-}
-
-/// Data returned by `mads db rollback`.
-#[derive(Clone, Debug, Serialize)]
-pub struct DatabaseRollbackData {
-    reverted: Vec<String>,
-}
-
-impl DatabaseRollbackData {
-    /// Creates database-rollback data.
-    pub fn new(reverted: Vec<String>) -> Self {
-        Self { reverted }
-    }
-}
-
-/// Data returned by `mads db status`.
-#[derive(Clone, Debug, Serialize)]
-pub struct DatabaseStatusData {
-    applied: Vec<String>,
-    pending: Vec<String>,
-}
-
-impl DatabaseStatusData {
-    /// Creates database-status data.
-    pub fn new(applied: Vec<String>, pending: Vec<String>) -> Self {
-        Self { applied, pending }
-    }
 }
 
 /// One source location in the public CLI schema.
