@@ -1142,6 +1142,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mads-persistence"
+version = "0.9.0"
+dependencies = [
+ "mads-core",
+ "tokio",
+]
+
+[[package]]
 name = "matchit"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

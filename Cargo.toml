@@ -4,6 +4,7 @@ members = [
     "crates/mads",
     "crates/mads-core",
     "crates/mads-core-macros",
+    "crates/mads-persistence",
     "crates/mads-common",
     "crates/mads-common-macros",
     "crates/mads-cli",
