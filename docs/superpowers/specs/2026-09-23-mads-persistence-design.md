@@ -257,7 +257,8 @@ construct complete provider graph
 
 For SeaORM:
 
-1. provider construction calls `sea_orm::Database::connect`;
+1. provider construction calls the PostgreSQL-specific
+   `sea_orm::SqlxPostgresConnector::connect` entry point;
 2. infrastructure startup resolves the registered `DatabaseConnection` from
    `ApplicationContext` and calls `ping()`;
 3. a successful ping is required before listener binding;
