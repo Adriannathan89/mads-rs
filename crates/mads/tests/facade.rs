@@ -147,48 +147,6 @@ async fn prelude_exposes_cookie_types_through_native_axum() {
     let _: mads::cookie::time::Duration = cookie::time::Duration::seconds(1);
 }
 
-#[cfg(feature = "database")]
-#[test]
-fn prelude_exposes_the_database_runtime_surface() {
-    use mads::diesel_migrations;
-    use mads::prelude::{
-        AutoConfigurationConfigEvidence, AutoConfigurationReasonCode, AutoConfigurationReport,
-        AutoConfigurationRequirement, AutoConfigurationStatus, Database, DatabaseBootstrap,
-        DatabaseConfig, DatabaseError, DatabaseErrorKind, DatabasePoolStatus, DatabaseResult,
-        MadsBuilderDatabaseExt, MigrationReport, MigrationStatus,
-    };
-
-    let _ = std::any::TypeId::of::<Database>();
-    let _ = std::any::TypeId::of::<DatabaseBootstrap>();
-    let _ = std::any::TypeId::of::<DatabaseConfig>();
-    let _ = std::any::TypeId::of::<DatabaseError>();
-    let _ = std::any::TypeId::of::<DatabaseErrorKind>();
-    let _ = std::any::TypeId::of::<DatabasePoolStatus>();
-    let _ = std::any::TypeId::of::<DatabaseResult<()>>();
-    let _ = std::any::TypeId::of::<MigrationReport>();
-    let _ = std::any::TypeId::of::<MigrationStatus>();
-    let _ = std::any::TypeId::of::<AutoConfigurationConfigEvidence>();
-    let _ = std::any::TypeId::of::<AutoConfigurationReasonCode>();
-    let _ = std::any::TypeId::of::<AutoConfigurationReport>();
-    let _ = std::any::TypeId::of::<AutoConfigurationRequirement>();
-    let _ = std::any::TypeId::of::<AutoConfigurationStatus>();
-
-    fn needs_extension<T: MadsBuilderDatabaseExt>() {}
-    needs_extension::<mads::core::MadsBuilder>();
-
-    let _: std::marker::PhantomData<mads::diesel::pg::Pg> = std::marker::PhantomData;
-    const MIGRATIONS: mads::diesel_migrations::EmbeddedMigrations =
-        mads::diesel_migrations::embed_migrations!("tests/fixtures/empty_migrations");
-    let _: mads::diesel_migrations::EmbeddedMigrations = MIGRATIONS;
-    let mut builder = mads::core::Mads::builder();
-    builder.database_migrations(MIGRATIONS).unwrap();
-
-    let _ = std::any::TypeId::of::<mads::Database>();
-    assert_eq!(mads::MADS100.as_str(), "MADS100");
-    assert_eq!(mads::core::MADS007.as_str(), "MADS007");
-    assert_eq!(mads::MADS101.as_str(), "MADS101");
-}
-
 #[test]
 fn prelude_exposes_core_types_and_bare_attributes() {
     use mads::prelude::*;

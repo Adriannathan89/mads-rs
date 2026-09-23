@@ -1,15 +1,15 @@
-error[E0277]: the trait bound `NotConfiguration: mads::Configuration` is not satisfied
+error[E0277]: the trait bound `NotConfiguration: Configuration` is not satisfied
  --> tests/ui-configuration/fail/stable/nested-bound.rs:6:24
   |
 6 | struct Parent { child: NotConfiguration }
   |                        ^^^^^^^^^^^^^^^^ unsatisfied trait bound
   |
-help: the trait `mads::Configuration` is not implemented for `NotConfiguration`
+help: the trait `Configuration` is not implemented for `NotConfiguration`
  --> tests/ui-configuration/fail/stable/nested-bound.rs:3:1
   |
 3 | struct NotConfiguration;
   | ^^^^^^^^^^^^^^^^^^^^^^^
-help: the trait `mads::Configuration` is implemented for `Parent`
+help: the trait `Configuration` is implemented for `Parent`
  --> tests/ui-configuration/fail/stable/nested-bound.rs:5:10
   |
 5 | #[derive(Configuration)]
