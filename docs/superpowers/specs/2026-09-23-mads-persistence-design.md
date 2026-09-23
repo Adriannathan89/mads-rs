@@ -1,5 +1,9 @@
 # MADS.rs v0.9.0 Native SeaORM Persistence Connector Design
 
+**Superseded for the 0.9 database/CLI boundary by**
+[`2026-09-23-mads-0.9-database-surface-removal-design.md`](2026-09-23-mads-0.9-database-surface-removal-design.md).
+This document remains the historical connector design record.
+
 **Status:** Approved for implementation
 
 **Target:** MADS framework crates 0.9.0 and Rust 1.94
