@@ -27,18 +27,18 @@ struct PersistenceConfig {
 impl SeaOrmConfig {
     pub(super) fn parse(config: &Config) -> Result<Self, ConfigurationErrors> {
         let parsed = config.parse::<PersistenceConfig>()?.seaorm;
-        if let (Some(min), Some(max)) = (parsed.min_connections, parsed.max_connections) {
-            if min > max {
-                let mut issue = ConfigurationIssue::new(
-                    "persistence.seaorm.min_connections",
-                    "invalid_relationship",
-                    "minimum connections must not exceed maximum connections",
-                );
-                if let Some(source) = config.source_of("persistence.seaorm.min_connections") {
-                    issue = issue.with_source(source);
-                }
-                return Err(ConfigurationErrors::from_issue(issue));
+        if let (Some(min), Some(max)) = (parsed.min_connections, parsed.max_connections)
+            && min > max
+        {
+            let mut issue = ConfigurationIssue::new(
+                "persistence.seaorm.min_connections",
+                "invalid_relationship",
+                "minimum connections must not exceed maximum connections",
+            );
+            if let Some(source) = config.source_of("persistence.seaorm.min_connections") {
+                issue = issue.with_source(source);
             }
+            return Err(ConfigurationErrors::from_issue(issue));
         }
         Ok(parsed)
     }
