@@ -62,6 +62,7 @@ packages = (
     "mads-core-macros",
     "mads-common-macros",
     "mads-core",
+    "mads-persistence",
     "mads-extra",
     "mads-common",
     "mads",

@@ -14,6 +14,7 @@ packages=(
   mads-core-macros
   mads-common-macros
   mads-core
+  mads-persistence
   mads-extra
   mads-common
   mads
@@ -118,6 +119,11 @@ require_package_specific_content() {
   require_file "$package" "$actual" "src/lib.rs"
 
   case "$package" in
+    mads-persistence)
+      for source in src/sea_orm/mod.rs src/sea_orm/config.rs src/sea_orm/connector.rs src/sea_orm/lifecycle.rs; do
+        require_file "$package" "$actual" "$source"
+      done
+      ;;
     mads)
       for prefix in tests/ui/ tests/ui-configuration/ tests/ui-database-http/ tests/ui-input/ tests/ui-passport/; do
         require_prefix "$package" "$actual" "$prefix"

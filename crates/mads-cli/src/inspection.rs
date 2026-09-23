@@ -301,8 +301,8 @@ async fn inspect_application_with_timeouts_and_streams(
 
 fn ensure_supported_mads_version(built: &BuiltApplication) -> Result<(), CliError> {
     let version = built.target().mads_version();
-    let current = semver::Version::parse(env!("CARGO_PKG_VERSION"))
-        .expect("CLI package version should be valid semver");
+    let current = semver::Version::parse(mads::FRAMEWORK_VERSION)
+        .expect("framework package version should be valid semver");
     if matches!(version, Some(version) if version.major == current.major && version.minor == current.minor)
     {
         return Ok(());
