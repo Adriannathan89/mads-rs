@@ -12,7 +12,7 @@ use mads_core::{
     ProviderKind, ProviderVisibility, SourceLocation,
 };
 
-static TEST_LOCK: Mutex<()> = Mutex::new(());
+static TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 static DROPS: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Clone)]
@@ -158,9 +158,7 @@ inventory::submit! {
 
 #[tokio::test]
 async fn automatic_build_registers_native_value_and_contributed_hook() {
-    let _guard = TEST_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = TEST_LOCK.lock().await;
     let mut builder = Mads::builder();
     builder.root::<automatic::AutomaticRoot>().unwrap();
     let mut app = builder.build().await.unwrap();
@@ -183,9 +181,7 @@ async fn automatic_build_registers_native_value_and_contributed_hook() {
 
 #[tokio::test]
 async fn explicit_construction_registers_the_contributed_hook_once() {
-    let _guard = TEST_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = TEST_LOCK.lock().await;
     let log = EventLog::new();
     let mut builder = Mads::builder();
     builder.root::<automatic::AutomaticRoot>().unwrap();
@@ -203,9 +199,7 @@ async fn explicit_construction_registers_the_contributed_hook_once() {
 
 #[tokio::test]
 async fn contributed_infrastructure_wraps_application_lifecycle() {
-    let _guard = TEST_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = TEST_LOCK.lock().await;
     let log = EventLog::new();
     let mut builder = Mads::builder();
     builder.root::<automatic::AutomaticRoot>().unwrap();
@@ -231,9 +225,7 @@ async fn contributed_infrastructure_wraps_application_lifecycle() {
 
 #[tokio::test]
 async fn later_construction_failure_starts_no_hook_and_drops_the_resource() {
-    let _guard = TEST_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = TEST_LOCK.lock().await;
     DROPS.store(0, Ordering::SeqCst);
     let log = EventLog::new();
     let mut builder = Mads::builder();
@@ -252,9 +244,7 @@ async fn later_construction_failure_starts_no_hook_and_drops_the_resource() {
 
 #[tokio::test]
 async fn hand_authored_ordinary_descriptor_still_constructs() {
-    let _guard = TEST_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = TEST_LOCK.lock().await;
     let mut builder = Mads::builder();
     builder.root::<empty::EmptyRoot>().unwrap();
     builder.construct::<OrdinaryValue>().await.unwrap();
