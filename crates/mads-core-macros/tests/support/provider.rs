@@ -119,6 +119,84 @@
                 ),
             )
             .expect_err("provider arguments must be rejected");
-            assert!(error.to_string().contains("does not accept arguments"));
+            assert!(error.to_string().contains("provider(lifecycle)"));
+        }
+
+        #[test]
+        fn parses_only_ordinary_and_lifecycle_modes() {
+            assert_eq!(parse_provider_mode(TokenStream::new()).unwrap(), ProviderMode::Ordinary);
+            assert_eq!(
+                parse_provider_mode(quote!(lifecycle)).unwrap(),
+                ProviderMode::Lifecycle
+            );
+            for arguments in [quote!(other), quote!(lifecycle, other), quote!(lifecycle lifecycle)] {
+                let error = parse_provider_mode(arguments).expect_err("arguments must fail");
+                assert!(error.to_string().contains("provider(lifecycle)"));
+            }
+        }
+
+        #[test]
+        fn recognizes_only_approved_lifecycle_outputs() {
+            for source in [
+                "LifecycleResource<NativeResource>",
+                "mads_core::LifecycleResource<NativeResource>",
+            ] {
+                let return_type = ty(source);
+                let (output, fallible) = lifecycle_resource_output(&return_type).unwrap();
+                assert_eq!(output.to_token_stream().to_string(), "NativeResource");
+                assert!(!fallible);
+            }
+
+            let return_type = ty("mads::core::Result<LifecycleResource<NativeResource>>");
+            let (output, fallible) = lifecycle_resource_output(&return_type).unwrap();
+            assert_eq!(output.to_token_stream().to_string(), "NativeResource");
+            assert!(fallible);
+
+            for source in [
+                "NativeResource",
+                "Option<LifecycleResource<NativeResource>>",
+                "std::result::Result<LifecycleResource<NativeResource>, CustomError>",
+                "LifecycleResource<NativeResource, Other>",
+            ] {
+                assert!(lifecycle_resource_output(&ty(source)).is_none(), "{source}");
+            }
+        }
+
+        #[test]
+        fn lifecycle_mode_requires_async_and_approved_output() {
+            for source in [
+                "fn resource() -> LifecycleResource<NativeResource> { todo!() }",
+                "async fn resource() -> NativeResource { todo!() }",
+            ] {
+                let error = validate_lifecycle_signature(&function(source))
+                    .expect_err("lifecycle signature must fail");
+                assert!(error.to_string().contains("two accepted async forms"));
+            }
+        }
+
+        #[test]
+        fn lifecycle_expansion_registers_native_output_and_both_constructors() {
+            let item = function(
+                "async fn resource() -> LifecycleResource<NativeResource> { todo!() }",
+            );
+            let expanded = expand_lifecycle_provider_with_core(
+                item,
+                syn::parse_quote!(mads_core),
+            )
+            .expect("lifecycle provider should expand")
+            .to_string();
+
+            assert!(expanded.contains("TypeId :: of :: < NativeResource >"), "{expanded}");
+            assert!(
+                !expanded.contains("TypeId :: of :: < LifecycleResource < NativeResource > >"),
+                "{expanded}"
+            );
+            assert!(
+                expanded.contains(
+                    ". with_runtime_type_name (__mads_runtime_type_name_resource) . with_lifecycle_constructor (__mads_construct_lifecycle_resource)"
+                ),
+                "{expanded}"
+            );
+            assert!(expanded.contains("fn __mads_construct < 'a >"), "{expanded}");
         }
     }
