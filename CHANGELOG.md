@@ -16,6 +16,10 @@ All notable changes to MADS.rs are documented in this file.
   graceful close. `DatabaseFactory::provide` returns the native connection or
   a typed, safely formatted `PersistenceError`.
 
+- `mads-common` provide new logger module to imported into main apps with
+  default console logger. User can override the logger inner instance using
+  provide macros and provide their logger service
+
 ### Breaking changes
 
 - Removed the Diesel-backed `mads-common/database` and `mads/database`
