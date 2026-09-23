@@ -324,8 +324,8 @@ fn package_content_policy_checks_every_workspace_archive() {
 }
 
 #[test]
-fn framework_packages_use_v081_pins_while_cli_remains_v080() {
-    const VERSION: &str = "0.8.1";
+fn framework_packages_use_v090_pins_while_cli_remains_v080() {
+    const VERSION: &str = "0.9.0";
     const CLI_VERSION: &str = "0.8.0";
 
     let root = workspace_root();
