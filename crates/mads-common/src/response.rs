@@ -41,31 +41,6 @@ impl IntoResponse for ResponseDescription<'_> {
     }
 }
 
-#[cfg(all(feature = "http", feature = "database"))]
-#[doc(hidden)]
-pub struct SourceRetainingClientError {
-    message: String,
-    source: Box<dyn Error + Send>,
-}
-
-#[cfg(all(feature = "http", feature = "database"))]
-impl SourceRetainingClientError {
-    fn new(message: impl Into<String>, source: impl Error + Send + 'static) -> Self {
-        Self {
-            message: message.into(),
-            source: Box::new(source),
-        }
-    }
-
-    fn message(&self) -> &str {
-        &self.message
-    }
-
-    fn source(&self) -> &(dyn Error + 'static) {
-        self.source.as_ref()
-    }
-}
-
 /// An HTTP error rendered as a stable JSON response.
 ///
 /// Construct values with [`HttpError::bad_request`],
@@ -83,15 +58,6 @@ pub enum HttpError {
     NotFound(String),
     /// A request that conflicts with the current state of a resource.
     Conflict(String),
-    #[cfg(all(feature = "http", feature = "database"))]
-    #[doc(hidden)]
-    NotFoundWithSource(SourceRetainingClientError),
-    #[cfg(all(feature = "http", feature = "database"))]
-    #[doc(hidden)]
-    ConflictWithSource(SourceRetainingClientError),
-    #[cfg(all(feature = "http", feature = "database"))]
-    #[doc(hidden)]
-    InternalWithSource(SourceRetainingClientError),
     /// Ordered validation issues with explicit request sources.
     Validation(Vec<SourcedValidationIssue>),
     /// An unexpected server-side failure whose source is not exposed to clients.
@@ -187,18 +153,6 @@ impl HttpError {
             Self::Forbidden(message) => (StatusCode::FORBIDDEN, "forbidden", message),
             Self::NotFound(message) => (StatusCode::NOT_FOUND, "not_found", message),
             Self::Conflict(message) => (StatusCode::CONFLICT, "conflict", message),
-            #[cfg(all(feature = "http", feature = "database"))]
-            Self::NotFoundWithSource(error) => {
-                (StatusCode::NOT_FOUND, "not_found", error.message())
-            }
-            #[cfg(all(feature = "http", feature = "database"))]
-            Self::ConflictWithSource(error) => (StatusCode::CONFLICT, "conflict", error.message()),
-            #[cfg(all(feature = "http", feature = "database"))]
-            Self::InternalWithSource(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "internal",
-                INTERNAL_SERVER_ERROR_MESSAGE,
-            ),
             Self::Validation(_) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "validation_error",
@@ -233,10 +187,6 @@ impl fmt::Display for HttpError {
 impl Error for HttpError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            #[cfg(all(feature = "http", feature = "database"))]
-            Self::NotFoundWithSource(error)
-            | Self::ConflictWithSource(error)
-            | Self::InternalWithSource(error) => Some(error.source()),
             Self::Internal(source) => Some(source.as_ref()),
             _ => None,
         }
@@ -323,12 +273,6 @@ impl NotFound {
         Self(HttpError::not_found(message))
     }
 
-    #[cfg(all(feature = "http", feature = "database"))]
-    pub(crate) fn from_source(source: impl Error + Send + 'static) -> Self {
-        Self(HttpError::NotFoundWithSource(
-            SourceRetainingClientError::new("resource not found", source),
-        ))
-    }
 }
 named_error_impls!(NotFound);
 
@@ -341,12 +285,6 @@ impl Conflict {
         Self(HttpError::conflict(message))
     }
 
-    #[cfg(all(feature = "http", feature = "database"))]
-    pub(crate) fn from_source(source: impl Error + Send + 'static) -> Self {
-        Self(HttpError::ConflictWithSource(
-            SourceRetainingClientError::new("resource already exists", source),
-        ))
-    }
 }
 named_error_impls!(Conflict);
 
@@ -370,12 +308,6 @@ impl InternalError {
         Self(HttpError::internal(source))
     }
 
-    #[cfg(all(feature = "http", feature = "database"))]
-    pub(crate) fn from_source(source: impl Error + Send + 'static) -> Self {
-        Self(HttpError::InternalWithSource(
-            SourceRetainingClientError::new(INTERNAL_SERVER_ERROR_MESSAGE, source),
-        ))
-    }
 }
 named_error_impls!(InternalError);
 

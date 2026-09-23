@@ -432,8 +432,6 @@ async fn wait_for_dev_shutdown(path: PathBuf) {
 #[cfg(test)]
 mod tests {
     use std::any::TypeId;
-    #[cfg(feature = "database")]
-    use std::error::Error as StdError;
     use std::io::{self, Read, Write};
     use std::net::{Ipv4Addr, SocketAddr};
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -453,12 +451,6 @@ mod tests {
     use crate::cors::CORS_AUTO_CONFIGURATION_ID;
     use crate::server_config::{HttpRuntimeMode, SERVER_AUTO_CONFIGURATION_ID, ServerBinding};
     use crate::{ControllerRouteDescriptor, HttpMethod, RouteContractDescriptor, RouteDescriptor};
-    #[cfg(feature = "database")]
-    use crate::{Database, DatabaseConfig, DatabaseErrorKind, MADS100, MadsBuilderDatabaseExt};
-
-    #[cfg(feature = "database")]
-    const FAILING_MIGRATIONS: diesel_migrations::EmbeddedMigrations =
-        diesel_migrations::embed_migrations!("tests/fixtures/failing_migrations");
 
     static STARTS: AtomicUsize = AtomicUsize::new(0);
     static BINDS: AtomicUsize = AtomicUsize::new(0);
@@ -518,19 +510,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "database")]
-    mod unreachable_database {
-        use super::*;
-
-        #[mads_core::repository]
-        pub(super) struct UnreachableRepository {
-            _database: Database,
-        }
-
-        #[mads_core::module]
-        pub(super) struct UnreachableDatabaseModule;
-    }
-
     #[cfg(feature = "jwt")]
     mod unreachable_jwt {
         use crate::{ClaimsPrincipal, PassportPrincipal};
@@ -576,25 +555,6 @@ mod tests {
 
     #[derive(Clone)]
     struct RouterPreflightEvents(Arc<Mutex<Vec<&'static str>>>);
-
-    #[cfg(feature = "database")]
-    mod auto_database_repository {
-        use super::*;
-
-        #[mads_core::repository]
-        pub(super) struct AutoDatabaseRepository {
-            database: Database,
-        }
-
-        impl AutoDatabaseRepository {
-            pub(super) fn database(&self) -> &Database {
-                &self.database
-            }
-        }
-    }
-
-    #[cfg(feature = "database")]
-    use auto_database_repository::AutoDatabaseRepository;
 
     fn preflight_controller_type_id() -> TypeId {
         TypeId::of::<PreflightController>()
@@ -682,15 +642,6 @@ mod tests {
     ) -> Mads {
         let mut builder = Mads::builder();
         builder.root::<ServerTestApp>().unwrap();
-        #[cfg(feature = "database")]
-        builder
-            .provide(
-                Database::from_config(
-                    &DatabaseConfig::new("postgres://127.0.0.1:1/server-test").unwrap(),
-                )
-                .unwrap(),
-            )
-            .unwrap();
         let router_preflight_events = Arc::clone(&events);
         builder.lifecycle_hook(RecordingHook {
             events,
@@ -821,21 +772,6 @@ mod tests {
             }
             other => panic!("expected bootstrap error, got {other:?}"),
         }
-    }
-
-    #[cfg(feature = "database")]
-    #[tokio::test]
-    async fn standard_run_preparation_ignores_unreachable_database_requirements() {
-        let directory = tempfile::tempdir().unwrap();
-
-        let prepared = prepare_standard_run::<standard_run::routed::RoutedApp>(directory.path())
-            .await
-            .unwrap();
-
-        assert_eq!(
-            automatic_report(&prepared.application, "mads.common.database.diesel").status(),
-            AutoConfigurationStatus::Skipped,
-        );
     }
 
     #[cfg(feature = "jwt")]
@@ -969,187 +905,6 @@ mod tests {
         assert_eq!(STARTS.load(Ordering::SeqCst), 0);
         assert_eq!(BINDS.load(Ordering::SeqCst), 0);
         assert!(events.lock().unwrap().is_empty());
-    }
-
-    #[cfg(feature = "database")]
-    #[tokio::test]
-    async fn database_start_failure_prevents_listener_binding() {
-        let _guard = TEST_LOCK.lock().await;
-        let database_url = "postgres://127.0.0.1:1/mads";
-        let events = Arc::new(Mutex::new(Vec::new()));
-        let config = ConfigBuilder::new()
-            .source(MapSource::new("test", [("database.url", database_url)]))
-            .build()
-            .unwrap();
-        let mut builder = Mads::builder_with_config(config);
-        builder.root::<ServerTestApp>().unwrap();
-        builder.provide(PreflightPermit).unwrap();
-        builder
-            .provide(RouterPreflightEvents(Arc::clone(&events)))
-            .unwrap();
-        let application = builder.build().await.unwrap();
-        assert_eq!(
-            application.auto_configurations()[0].status(),
-            AutoConfigurationStatus::Active,
-        );
-        BINDS.store(0, Ordering::SeqCst);
-
-        let error = serve_with(
-            application,
-            address(),
-            |_| async {
-                BINDS.fetch_add(1, Ordering::SeqCst);
-                tokio::net::TcpListener::bind(address()).await
-            },
-            async {},
-        )
-        .await
-        .unwrap_err();
-
-        match &error {
-            HttpRuntimeError::Lifecycle(error) => {
-                assert_eq!(error.code(), MADS011);
-                let source = std::error::Error::source(error)
-                    .unwrap()
-                    .downcast_ref::<Error>()
-                    .unwrap();
-                assert_eq!(source.code(), MADS100);
-            }
-            other => panic!("expected lifecycle failure, got {other:?}"),
-        }
-        assert_eq!(BINDS.load(Ordering::SeqCst), 0);
-        assert_eq!(*events.lock().unwrap(), ["router_preflight"]);
-        let output = format!("{error}\n{error:?}");
-        assert!(!output.contains(database_url));
-    }
-
-    #[cfg(feature = "database")]
-    #[tokio::test]
-    #[ignore = "requires PostgreSQL through MADS_TEST_DATABASE_URL"]
-    async fn database_migration_failure_prevents_listener_binding() {
-        let _guard = TEST_LOCK.lock().await;
-        STARTS.store(0, Ordering::SeqCst);
-        BINDS.store(0, Ordering::SeqCst);
-        let events = Arc::new(Mutex::new(Vec::new()));
-        let database_url = std::env::var("MADS_TEST_DATABASE_URL")
-            .expect("MADS_TEST_DATABASE_URL is required for ignored PostgreSQL tests");
-        let config = ConfigBuilder::new()
-            .source(MapSource::new(
-                "test",
-                [
-                    ("database.url", database_url.clone()),
-                    ("database.migrate", "true".to_owned()),
-                ],
-            ))
-            .build()
-            .unwrap();
-        let mut builder = Mads::builder_with_config(config);
-        builder.root::<ServerTestApp>().unwrap();
-        builder.provide(PreflightPermit).unwrap();
-        builder
-            .provide(RouterPreflightEvents(Arc::clone(&events)))
-            .unwrap();
-        builder.lifecycle_hook(RecordingHook {
-            events: Arc::clone(&events),
-            fail_shutdown: false,
-        });
-        builder.database_migrations(FAILING_MIGRATIONS).unwrap();
-        let application = builder.build().await.unwrap();
-        let database = application.context().resolve::<Database>().unwrap();
-
-        let error = serve_with(
-            application,
-            address(),
-            |address| async move {
-                BINDS.fetch_add(1, Ordering::SeqCst);
-                TcpListener::bind(address).await
-            },
-            async {},
-        )
-        .await
-        .unwrap_err();
-
-        match &error {
-            HttpRuntimeError::Lifecycle(error) => {
-                assert_eq!(error.code(), MADS011);
-                let bootstrap_error = StdError::source(error)
-                    .expect("MADS011 lifecycle errors retain their database bootstrap source")
-                    .downcast_ref::<Error>()
-                    .expect("MADS011 source is the database bootstrap error");
-                assert_eq!(bootstrap_error.code(), MADS100);
-                let database_source = StdError::source(bootstrap_error)
-                    .expect("MADS100 errors retain their database error source");
-                assert_eq!(
-                    database_source.to_string(),
-                    "database migration failed",
-                    "the source chain must retain DatabaseErrorKind::{:?}",
-                    DatabaseErrorKind::Migration,
-                );
-                assert!(
-                    format!("{database_source:?}")
-                        .contains(&format!("{:?}", DatabaseErrorKind::Migration))
-                );
-            }
-            other => panic!("expected lifecycle failure, got {other:?}"),
-        }
-        assert_eq!(STARTS.load(Ordering::SeqCst), 0);
-        assert_eq!(BINDS.load(Ordering::SeqCst), 0);
-        assert_eq!(*events.lock().unwrap(), ["router_preflight"]);
-        assert!(database.is_closed());
-        let output = format!("{error}\n{error:?}");
-        assert!(!output.contains(&database_url));
-    }
-
-    #[cfg(feature = "database")]
-    #[tokio::test]
-    async fn invalid_routes_prevent_automatic_database_checkout_and_binding() {
-        let _guard = TEST_LOCK.lock().await;
-        STARTS.store(0, Ordering::SeqCst);
-        BINDS.store(0, Ordering::SeqCst);
-        let events = Arc::new(Mutex::new(Vec::new()));
-        let config = ConfigBuilder::new()
-            .source(MapSource::new(
-                "test",
-                [("database.url", "postgres://127.0.0.1:1/mads")],
-            ))
-            .build()
-            .unwrap();
-        let mut builder = Mads::builder_with_config(config);
-        builder.root::<ServerTestApp>().unwrap();
-        builder.lifecycle_hook(RecordingHook {
-            events: Arc::clone(&events),
-            fail_shutdown: false,
-        });
-        let application = builder.build().await.unwrap();
-        assert_eq!(
-            application.auto_configurations()[0].status(),
-            AutoConfigurationStatus::Active,
-        );
-        let database = application.context().resolve::<Database>().unwrap();
-        let repository = application
-            .context()
-            .resolve::<AutoDatabaseRepository>()
-            .unwrap();
-        assert_eq!(repository.database().status().size(), 0);
-
-        let error = serve_with(
-            application,
-            address(),
-            |address| async move {
-                BINDS.fetch_add(1, Ordering::SeqCst);
-                TcpListener::bind(address).await
-            },
-            async {},
-        )
-        .await
-        .unwrap_err();
-
-        assert!(matches!(error, HttpRuntimeError::Bootstrap(_)));
-        assert_eq!(STARTS.load(Ordering::SeqCst), 0);
-        assert_eq!(BINDS.load(Ordering::SeqCst), 0);
-        assert_eq!(database.status().size(), 0);
-        assert!(events.lock().unwrap().is_empty());
-        database.close();
     }
 
     #[tokio::test]
