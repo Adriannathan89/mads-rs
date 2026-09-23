@@ -169,6 +169,9 @@
 /// Re-exports the framework-neutral MADS.rs core.
 pub use mads_core as core;
 
+/// Version of the MADS framework facade used by downstream tooling.
+pub const FRAMEWORK_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 /// Re-exports the asynchronous MADS.rs entry-point attribute.
 pub use mads_core::main;
 

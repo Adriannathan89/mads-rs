@@ -86,7 +86,12 @@ fn complete_command_matrix_has_stable_usage_and_exit_classes() {
     ];
     for arguments in success_cases {
         let output = cli_command(&single_fixture(), arguments).output().unwrap();
-        assert_eq!(output.status.code(), Some(0), "{arguments:?}");
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{arguments:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     let new_invocation = tempdir().unwrap();
@@ -222,6 +227,8 @@ fn release_workflows_enforce_linux_full_and_cli_platform_split() {
         "cargo test --locked --workspace --all-features --doc",
         "cargo doc --locked --workspace --all-features --no-deps",
         "cargo package --locked --workspace --no-verify",
+        "cargo check -p mads-persistence --no-default-features",
+        "cargo check -p mads-persistence --no-default-features --features sea-orm-postgres",
     ] {
         assert!(
             verify_job.contains(required),
@@ -267,6 +274,7 @@ fn release_workflows_enforce_linux_full_and_cli_platform_split() {
         "--test database_cli",
         "database_generate_postgres",
         "--test postgres_crud",
+        "--test postgres -- --ignored",
     ] {
         assert!(
             !platform_job.contains(postgres_integration_test),
@@ -285,6 +293,7 @@ fn release_workflows_enforce_linux_full_and_cli_platform_split() {
         "--test database_cli -- --ignored --test-threads=1",
         "--test database_generate_postgres -- --ignored --test-threads=1",
         "--test postgres_crud -- --ignored --test-threads=1",
+        "-p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1",
     ] {
         assert!(
             postgres_job.contains(required),
@@ -309,6 +318,7 @@ fn release_workflows_enforce_linux_full_and_cli_platform_split() {
             "{workflow_path}"
         );
         assert!(workflow_job(&workflow, "postgres").contains("image: postgres:16"));
+        assert!(workflow_job(&workflow, "postgres").contains("-p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1"));
     }
 }
 
@@ -498,6 +508,9 @@ fn copy_directory(source: &Path, destination: &Path) -> std::io::Result<()> {
     fs::create_dir_all(destination)?;
     for entry in fs::read_dir(source)? {
         let entry = entry?;
+        if entry.file_name() == "target" {
+            continue;
+        }
         let destination_path = destination.join(entry.file_name());
         if entry.file_type()?.is_dir() {
             copy_directory(&entry.path(), &destination_path)?;

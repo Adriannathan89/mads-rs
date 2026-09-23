@@ -30,6 +30,10 @@ jobs:
         run: cargo fmt --all --check
       - name: Lint
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Check persistence feature boundaries
+        run: |
+          cargo check -p mads-persistence --no-default-features
+          cargo check -p mads-persistence --no-default-features --features sea-orm-postgres
       - name: Test
         run: cargo test --locked --workspace --all-features
       - name: Test documentation
@@ -94,6 +98,18 @@ jobs:
       - name: Test minimum supported Rust version
         run: cargo test --locked --workspace --all-features
 
+  seaorm-minimum:
+    name: SeaORM 2.0.0 compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Resolve and test minimum SeaORM version
+        run: |
+          cargo update -p sea-orm --precise 2.0.0
+          cargo test -p mads-persistence --features sea-orm-postgres
+
   postgres:
     name: PostgreSQL integration
     runs-on: ubuntu-latest
@@ -125,6 +141,7 @@ jobs:
       - run: cargo test --locked -p mads-cli --test database_cli -- --ignored --test-threads=1
       - run: cargo test --locked -p mads-cli --test database_generate_postgres -- --ignored --test-threads=1
       - run: cargo test --locked -p mads --test postgres_crud -- --ignored --test-threads=1
+      - run: cargo test --locked -p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1
 
   coverage:
     name: Coverage

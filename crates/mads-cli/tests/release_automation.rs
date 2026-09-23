@@ -15,10 +15,10 @@ const PACKAGES: &[&str] = &[
     "mads-core-macros",
     "mads-common-macros",
     "mads-core",
+    "mads-persistence",
     "mads-extra",
     "mads-common",
     "mads",
-    "mads-persistence",
     "mads-cli",
 ];
 
@@ -26,10 +26,10 @@ const FRAMEWORK_PACKAGES: &[&str] = &[
     "mads-core-macros",
     "mads-common-macros",
     "mads-core",
+    "mads-persistence",
     "mads-extra",
     "mads-common",
     "mads",
-    "mads-persistence",
 ];
 
 #[cfg(unix)]
@@ -304,6 +304,38 @@ fn release_workflows_verify_v080_feature_boundaries_and_package_contents() {
                 "{name} release gate must execute the package-content policy for {package}"
             );
         }
+    }
+}
+
+#[test]
+fn persistence_release_gates_and_framework_publish_order() {
+    let root = workspace_root();
+    let ci = fs::read_to_string(root.join(".github/workflows/ci.yml")).unwrap();
+    for name in ["beta", "stable"] {
+        let workflow =
+            fs::read_to_string(root.join(format!(".github/workflows/{name}-publish.yml"))).unwrap();
+        for required in [
+            "cargo check -p mads-persistence --no-default-features",
+            "cargo check -p mads-persistence --no-default-features --features sea-orm-postgres",
+            "cargo test --locked -p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1",
+            "seaorm-minimum:",
+            "cargo update -p sea-orm --precise 2.0.0",
+            "cargo test -p mads-persistence --features sea-orm-postgres",
+        ] {
+            assert!(workflow.contains(required), "{name} missing {required}");
+        }
+        let publish = workflow_job(&workflow, "publish");
+        assert!(publish.contains("            mads-persistence\n"));
+        assert!(!publish.contains("            mads-cli\n"));
+        assert!(publish.contains("      - seaorm-minimum"));
+    }
+    for required in [
+        "cargo check -p mads-persistence --no-default-features",
+        "cargo check -p mads-persistence --no-default-features --features sea-orm-postgres",
+        "cargo test --locked -p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1",
+        "seaorm-minimum:",
+    ] {
+        assert!(ci.contains(required), "CI missing {required}");
     }
 }
 
