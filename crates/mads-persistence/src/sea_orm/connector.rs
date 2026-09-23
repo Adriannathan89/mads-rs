@@ -8,6 +8,7 @@ use crate::{DatabaseConnector, PersistenceError, PersistenceErrorKind, Persisten
 use super::config::SeaOrmConfig;
 
 /// A connector that returns SeaORM's native PostgreSQL database connection.
+#[derive(Clone)]
 pub struct SeaOrmPostgres {
     options: ConnectOptions,
 }

@@ -24,6 +24,7 @@ sea-orm = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio.workspace = true
+sea-orm = { workspace = true, features = ["mock", "runtime-tokio-rustls"] }
 
 [lints]
 workspace = true
