@@ -182,16 +182,6 @@ fn release_workflows_enforce_linux_full_and_cli_platform_split() {
         "ubuntu-latest",
         "macos-latest",
         "windows-latest",
-        "if: runner.os == 'Linux'",
-        "sudo apt-get update && sudo apt-get install --yes libpq-dev",
-        "if: runner.os == 'macOS'",
-        "brew install libpq",
-        "LIBRARY_PATH=$(brew --prefix libpq)/lib",
-        "PKG_CONFIG_PATH=$(brew --prefix libpq)/lib/pkgconfig",
-        "if: runner.os == 'Windows'",
-        "$pg = Get-ChildItem 'C:\\Program Files\\PostgreSQL' -Directory",
-        "PQ_LIB_DIR=$($pg.FullName)\\lib",
-        "$($pg.FullName)\\bin",
         "cargo test -p mads-cli --lib command::tests -- --test-threads=1",
         "cargo test -p mads-cli --test json_cli -- --test-threads=1",
         "scaffold::publish::tests::destination_race_preserves_the_competing_directory_and_cleans_staging",
@@ -206,6 +196,7 @@ fn release_workflows_enforce_linux_full_and_cli_platform_split() {
         );
     }
     assert!(!platform_job.contains("services:"));
+    assert!(!ci.contains("libpq"));
     assert!(!platform_job.contains("MADS_TEST_DATABASE_URL"));
     assert!(!platform_job.contains("--ignored"));
     for postgres_integration_test in [
@@ -228,12 +219,6 @@ fn release_workflows_enforce_linux_full_and_cli_platform_split() {
         "runs-on: ubuntu-latest",
         "image: postgres:16",
         "MADS_TEST_DATABASE_URL",
-        "--test database_postgres -- --ignored --test-threads=1",
-        "--test database_http_postgres -- --ignored --test-threads=1",
-        "database_migration_failure_prevents_listener_binding",
-        "--test database_cli -- --ignored --test-threads=1",
-        "--test database_generate_postgres -- --ignored --test-threads=1",
-        "--test postgres_crud -- --ignored --test-threads=1",
         "-p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1",
     ] {
         assert!(

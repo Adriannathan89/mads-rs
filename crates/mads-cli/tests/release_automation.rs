@@ -22,16 +22,6 @@ const PACKAGES: &[&str] = &[
     "mads-cli",
 ];
 
-const FRAMEWORK_PACKAGES: &[&str] = &[
-    "mads-core-macros",
-    "mads-common-macros",
-    "mads-core",
-    "mads-persistence",
-    "mads-extra",
-    "mads-common",
-    "mads",
-];
-
 #[cfg(unix)]
 #[test]
 fn beta_release_increments_a_matching_base_and_only_changes_versions() {
@@ -152,7 +142,7 @@ fn stable_workflow_enforces_release_gates_and_dependency_order() {
         "cargo test --locked --workspace --all-features",
         "cargo test --locked --workspace --all-features --doc",
         "cargo doc --locked --workspace --all-features --no-deps",
-        "cargo test --locked -p mads-cli --test database_generate_postgres -- --ignored --test-threads=1",
+        "cargo test --locked -p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1",
         "environment: stable",
         "CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}",
         "for attempt in {1..6}",
@@ -171,17 +161,11 @@ fn stable_workflow_enforces_release_gates_and_dependency_order() {
     }
     assert!(!workflow.contains("--prerelease"));
 
-    let mut offset = 0;
-    for package in FRAMEWORK_PACKAGES {
-        let relative = workflow[offset..]
-            .find(&format!("            {package}\n"))
-            .unwrap_or_else(|| panic!("missing package {package} in publication order"));
-        offset += relative + package.len();
-    }
+    assert_publish_order(&workflow);
 }
 
 #[test]
-fn beta_and_stable_workflows_require_the_complete_v080_gate_set() {
+fn beta_and_stable_workflows_require_the_complete_v090_gate_set() {
     let root = workspace_root();
     let beta = fs::read_to_string(root.join(".github/workflows/beta-publish.yml"))
         .expect("beta publication workflow should exist");
@@ -234,12 +218,7 @@ fn beta_and_stable_workflows_require_the_complete_v080_gate_set() {
             "runs-on: ubuntu-latest",
             "image: postgres:16",
             "MADS_TEST_DATABASE_URL",
-            "--test database_postgres -- --ignored --test-threads=1",
-            "--test database_http_postgres -- --ignored --test-threads=1",
-            "database_migration_failure_prevents_listener_binding",
-            "--test database_cli -- --ignored --test-threads=1",
-            "--test database_generate_postgres -- --ignored --test-threads=1",
-            "--test postgres_crud -- --ignored --test-threads=1",
+            "-p mads-persistence --features sea-orm-postgres --test postgres -- --ignored --test-threads=1",
         ] {
             assert!(
                 postgres.contains(required),
@@ -257,6 +236,10 @@ fn beta_and_stable_workflows_require_the_complete_v080_gate_set() {
             workflow.contains(environment),
             "{name} publish must keep its protection"
         );
+        assert_publish_order(workflow);
+        for retired in ["libpq", "database_postgres", "database_http_postgres", "database_migration_failure", "database_cli", "database_generate_postgres", "postgres_crud"] {
+            assert!(!workflow.contains(retired), "{name} retains {retired}");
+        }
     }
 
     let beta_feature_gates = feature_test_commands(&beta);
@@ -268,7 +251,7 @@ fn beta_and_stable_workflows_require_the_complete_v080_gate_set() {
 }
 
 #[test]
-fn release_workflows_verify_v080_feature_boundaries_and_package_contents() {
+fn release_workflows_verify_v090_feature_boundaries_and_package_contents() {
     let root = workspace_root();
     let beta = fs::read_to_string(root.join(".github/workflows/beta-publish.yml"))
         .expect("beta publication workflow should exist");
@@ -280,13 +263,10 @@ fn release_workflows_verify_v080_feature_boundaries_and_package_contents() {
         for command in [
             "cargo check -p mads-core --no-default-features",
             "cargo check -p mads-common --no-default-features --features http",
-            "cargo check -p mads-common --no-default-features --features database",
-            "cargo check -p mads-common --no-default-features --features http,database",
             "cargo check -p mads-common --no-default-features --features jwt",
             "cargo check -p mads-common --no-default-features --features cookies",
             "cargo check -p mads --no-default-features",
             "cargo check -p mads --no-default-features --features http,runtime-tokio",
-            "cargo check -p mads --no-default-features --features http,database",
             "cargo package --locked --workspace --no-verify",
         ] {
             assert!(
@@ -322,7 +302,7 @@ fn persistence_release_gates_and_framework_publish_order() {
         }
         let publish = workflow_job(&workflow, "publish");
         assert!(publish.contains("            mads-persistence\n"));
-        assert!(!publish.contains("            mads-cli\n"));
+        assert!(publish.contains("            mads-cli\n"));
         assert!(publish.contains("      - seaorm-minimum"));
     }
     for required in [
@@ -740,4 +720,17 @@ fn feature_test_commands(workflow: &str) -> Vec<&str> {
         .filter_map(|line| line.strip_prefix("- run: ").or(Some(line)))
         .filter(|line| line.starts_with("cargo test ") || line.starts_with("cargo llvm-cov "))
         .collect()
+}
+
+fn assert_publish_order(workflow: &str) {
+    let publish = workflow_job(workflow, "publish");
+    let package_block = publish
+        .split("packages=(")
+        .nth(1)
+        .expect("publish job must define package list")
+        .split(')')
+        .next()
+        .unwrap();
+    let published: Vec<_> = package_block.split_whitespace().collect();
+    assert_eq!(published, PACKAGES);
 }
