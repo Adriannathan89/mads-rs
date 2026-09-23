@@ -48,7 +48,12 @@ fn default_dependency_tree() -> String {
 #[test]
 fn default_and_core_only_facades_exclude_diesel() {
     for tree in [default_dependency_tree(), dependency_tree("")] {
-        for forbidden in ["diesel v", "deadpool-diesel v", "diesel_migrations v", "pq-sys v"] {
+        for forbidden in [
+            "diesel v",
+            "deadpool-diesel v",
+            "diesel_migrations v",
+            "pq-sys v",
+        ] {
             assert!(!tree.contains(forbidden), "{forbidden} in {tree}");
         }
     }

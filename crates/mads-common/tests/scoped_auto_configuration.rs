@@ -8,7 +8,6 @@ use mads_common::{
     core::{AutoConfigurationReport, AutoConfigurationStatus, Config, Mads, Module, Result},
 };
 
-
 #[derive(serde::Deserialize)]
 struct UnreachableClaims;
 
@@ -78,7 +77,6 @@ mod roots {
         ])]
         pub struct GuardedRoot;
     }
-
 }
 
 async fn build_root<M: Module>(config: Config) -> Result<Mads> {
