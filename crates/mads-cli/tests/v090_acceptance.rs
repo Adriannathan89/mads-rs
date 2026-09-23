@@ -1,4 +1,4 @@
-//! Release-level CLI acceptance coverage for the complete v0.8 command surface.
+//! Release-level CLI acceptance coverage for the supported v0.9 command surface.
 
 use std::{
     ffi::OsString,
@@ -10,7 +10,6 @@ use std::{
 use serde_json::{Deserializer, Value, json};
 use tempfile::tempdir;
 
-const SECRET_SENTINEL: &str = "v080-cli-secret-sentinel";
 const GENERATED_FILES: [&str; 7] = [
     "Cargo.toml",
     "mads.toml",
@@ -22,7 +21,7 @@ const GENERATED_FILES: [&str; 7] = [
 ];
 
 #[test]
-fn v080_cli_generates_a_registry_ready_project_and_inspects_it_in_both_formats() {
+fn v090_cli_generates_a_registry_ready_project_and_inspects_it_in_both_formats() {
     let invocation = tempdir().expect("temporary invocation directory should exist");
     assert!(
         !invocation.path().join("Cargo.toml").exists(),
@@ -108,7 +107,6 @@ fn v080_cli_generates_a_registry_ready_project_and_inspects_it_in_both_formats()
             human_stdout.contains(human_fragment),
             "{command} human output missing {human_fragment:?}: {human_stdout}"
         );
-        assert_no_secret(&human);
 
         let json_output = mads_command(&project, json_arguments)
             .env("CARGO_NET_OFFLINE", "true")
@@ -121,7 +119,6 @@ fn v080_cli_generates_a_registry_ready_project_and_inspects_it_in_both_formats()
         assert_eq!(document["ok"], true, "{command}");
         assert_eq!(document["diagnostics"], json!([]), "{command}");
         assert!(document["data"].is_object(), "{command}: {document}");
-        assert_no_secret(&json_output);
     }
 
     let duplicate = mads_command(
@@ -140,7 +137,7 @@ fn v080_cli_generates_a_registry_ready_project_and_inspects_it_in_both_formats()
 }
 
 #[test]
-fn v080_cli_json_failures_preserve_exit_classes_and_redact_every_channel() {
+fn v090_cli_json_failures_preserve_exit_classes() {
     let syntax_cases: &[(&[&str], Option<&str>)] = &[
         (
             &["new", "release-app", "--format", "json", "--unknown"],
@@ -149,22 +146,6 @@ fn v080_cli_json_failures_preserve_exit_classes_and_redact_every_channel() {
         (&["routes", "--format", "json", "--unknown"], Some("routes")),
         (&["graph", "--format", "json", "--unknown"], Some("graph")),
         (&["doctor", "--format", "json", "--unknown"], Some("doctor")),
-        (
-            &["db", "generate", "--format", "json", "--unknown"],
-            Some("db generate"),
-        ),
-        (
-            &["db", "migrate", "--format", "json", "--unknown"],
-            Some("db migrate"),
-        ),
-        (
-            &["db", "rollback", "--format", "json", "--unknown"],
-            Some("db rollback"),
-        ),
-        (
-            &["db", "status", "--format", "json", "--unknown"],
-            Some("db status"),
-        ),
         (&["--format", "json", "unknown-command"], None),
     ];
     for (arguments, command) in syntax_cases {
@@ -185,7 +166,6 @@ fn v080_cli_json_failures_preserve_exit_classes_and_redact_every_channel() {
             document["diagnostics"][0]["code"], "MADS204",
             "{arguments:?}"
         );
-        assert_no_secret(&output);
     }
 
     let invalid_name = mads_command(workspace_root(), ["new", "Release-App", "--format", "json"])
@@ -216,30 +196,6 @@ fn v080_cli_json_failures_preserve_exit_classes_and_redact_every_channel() {
                 .contains("output format is not supported for this command"),
             "streaming rejection should remain human: {output:?}"
         );
-        assert_no_secret(&output);
-    }
-
-    let project = temporary_database_project();
-    for (arguments, command) in [
-        (["db", "generate", "--format", "json"], "db generate"),
-        (["db", "migrate", "--format", "json"], "db migrate"),
-        (["db", "rollback", "--format", "json"], "db rollback"),
-        (["db", "status", "--format", "json"], "db status"),
-    ] {
-        let output = mads_command(project.path(), arguments)
-            .env_remove("DATABASE_URL")
-            .env_remove("MADS_DATABASE__URL")
-            .output()
-            .expect("database JSON operational failure should run");
-        assert_exit(&output, 1, command);
-        assert!(output.stderr.is_empty(), "database JSON stderr: {output:?}");
-        let document = one_json_document(&output);
-        assert_eq!(document["command"], command);
-        assert_eq!(document["ok"], false);
-        assert_eq!(document["data"], Value::Null);
-        assert_eq!(document["diagnostics"][0]["severity"], "error");
-        assert_eq!(document["diagnostics"][0]["code"], "MADS210");
-        assert_no_secret(&output);
     }
 }
 
@@ -293,23 +249,6 @@ fn substitute_local_mads(manifest_path: &Path, registry_manifest: &str) {
         "the registry dependency must not remain after local substitution"
     );
     fs::write(manifest_path, substituted).expect("local dependency substitution should write");
-}
-
-fn temporary_database_project() -> tempfile::TempDir {
-    let project = tempdir().expect("temporary database project should exist");
-    fs::write(
-        project.path().join("Cargo.toml"),
-        "[package]\nname = \"v080-database-failure\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
-    )
-    .expect("database fixture manifest should write");
-    fs::create_dir(project.path().join("src")).expect("database fixture source directory");
-    fs::write(project.path().join("src/lib.rs"), "").expect("database fixture source should write");
-    fs::write(
-        project.path().join("mads.toml"),
-        format!("[database]\nurl = \"postgres://user:{SECRET_SENTINEL}@127.0.0.1:1/v080\"\n"),
-    )
-    .expect("database fixture configuration should write");
-    project
 }
 
 fn listed_files(root: &Path) -> Vec<String> {
@@ -378,17 +317,6 @@ fn assert_success(context: &str, output: &Output) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr),
     );
-}
-
-fn assert_no_secret(output: &Output) {
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    for channel in [&stdout, &stderr] {
-        assert!(
-            !channel.contains(SECRET_SENTINEL),
-            "CLI channel leaked the configured secret: {channel}"
-        );
-    }
 }
 
 fn workspace_root() -> &'static Path {

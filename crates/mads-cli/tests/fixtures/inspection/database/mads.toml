@@ -1,8 +1,0 @@
-[database]
-url = "postgres://mads:mads@127.0.0.1:1/mads_inspection"
-pool_size = "1"
-migrate = "false"
-
-[server]
-host = "127.0.0.1"
-port = "3000"

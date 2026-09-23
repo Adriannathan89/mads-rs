@@ -26,10 +26,6 @@ axum-extra = { version = "0.12.6", default-features = false, features = ["typed-
 base64 = "0.22"
 cargo_metadata = "=0.19.2"
 cookie = { version = "=0.18.1", default-features = false, features = ["percent-encode"] }
-deadpool-diesel = { version = "=0.6.1", default-features = false, features = ["postgres", "rt_tokio_1"] }
-diesel = { version = "=2.2.12", default-features = false, features = ["postgres", "32-column-tables"] }
-diesel_migrations = { version = "=2.2.0", default-features = false, features = ["postgres"] }
-diesel_table_macro_syntax = "=0.2.0"
 dotenvy = "=0.15.7"
 http-body = "1"
 inventory = "0.3"

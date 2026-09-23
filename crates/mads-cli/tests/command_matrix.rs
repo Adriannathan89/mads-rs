@@ -1,4 +1,4 @@
-//! Black-box coverage for the complete v0.8 command surface.
+//! Black-box coverage for the supported v0.9 command surface.
 
 use std::{
     fs,
@@ -46,13 +46,13 @@ const USAGE_CASES: &[CommandCase] = &[
         arguments: &["db", "generate", "named"],
         expected_code: 2,
         stdout_contains: &[],
-        stderr_contains: &["unknown argument"],
+        stderr_contains: &["unknown command: db"],
     },
     CommandCase {
         arguments: &["db", "generate", "--diff-schema"],
         expected_code: 2,
         stdout_contains: &[],
-        stderr_contains: &["unknown argument"],
+        stderr_contains: &["unknown command: db"],
     },
     CommandCase {
         arguments: &["routes", "--", "extra"],
@@ -126,49 +126,6 @@ fn complete_command_matrix_has_stable_usage_and_exit_classes() {
 }
 
 #[test]
-fn operational_database_failures_are_redacted_and_exit_one() {
-    for (arguments, command) in [
-        (["db", "generate"].as_slice(), "db generate"),
-        (["db", "migrate"].as_slice(), "db migrate"),
-        (["db", "rollback"].as_slice(), "db rollback"),
-        (["db", "status"].as_slice(), "db status"),
-    ] {
-        let output = cli_command(&single_fixture(), arguments)
-            .env_remove("DATABASE_URL")
-            .env_remove("MADS_DATABASE__URL")
-            .env(
-                "MADS_DATABASE__URL",
-                "postgres://matrix-env-secret@127.0.0.1:1/matrix",
-            )
-            .output()
-            .unwrap();
-        assert_eq!(output.status.code(), Some(1), "{arguments:?}");
-        assert_contains_all(&output, &[], &[]);
-        assert_redacted(&output);
-
-        let mut json_arguments = arguments.to_vec();
-        json_arguments.extend(["--format", "json"]);
-        let output = cli_command(&single_fixture(), &json_arguments)
-            .env_remove("DATABASE_URL")
-            .env_remove("MADS_DATABASE__URL")
-            .env(
-                "MADS_DATABASE__URL",
-                "postgres://matrix-env-secret@127.0.0.1:1/matrix",
-            )
-            .output()
-            .unwrap();
-        assert_eq!(output.status.code(), Some(1), "{json_arguments:?}");
-        assert!(output.stderr.is_empty(), "stderr was not empty: {output:?}");
-        let document = one_json_document(&output);
-        assert_eq!(document["command"], command);
-        assert_eq!(document["ok"], false);
-        assert_eq!(document["data"], Value::Null);
-        assert_eq!(document["diagnostics"][0]["severity"], "error");
-        assert_redacted(&output);
-    }
-}
-
-#[test]
 fn finite_json_syntax_matrix_has_one_document_and_canonical_commands() {
     let cases: &[(&[&str], &str)] = &[
         (
@@ -183,22 +140,6 @@ fn finite_json_syntax_matrix_has_one_document_and_canonical_commands() {
         (
             &["doctor", "--format", "json", "--matrix-unknown"],
             "doctor",
-        ),
-        (
-            &["db", "generate", "--format", "json", "--matrix-unknown"],
-            "db generate",
-        ),
-        (
-            &["db", "migrate", "--format", "json", "--matrix-unknown"],
-            "db migrate",
-        ),
-        (
-            &["db", "rollback", "--format", "json", "--matrix-unknown"],
-            "db rollback",
-        ),
-        (
-            &["db", "status", "--format", "json", "--matrix-unknown"],
-            "db status",
         ),
     ];
 
@@ -439,15 +380,6 @@ fn assert_contains_all(output: &Output, stdout_contains: &[&str], stderr_contain
             stderr.contains(expected),
             "stderr missing {expected}: {stderr}"
         );
-    }
-}
-
-fn assert_redacted(output: &Output) {
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    for secret in ["matrix-config-secret", "matrix-env-secret"] {
-        assert!(!stdout.contains(secret), "stdout leaked {secret}: {stdout}");
-        assert!(!stderr.contains(secret), "stderr leaked {secret}: {stderr}");
     }
 }
 

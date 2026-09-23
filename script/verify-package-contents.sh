@@ -125,7 +125,7 @@ require_package_specific_content() {
       done
       ;;
     mads)
-      for prefix in tests/ui/ tests/ui-configuration/ tests/ui-database-http/ tests/ui-input/ tests/ui-passport/; do
+      for prefix in tests/ui/ tests/ui-configuration/ tests/ui-input/ tests/ui-passport/; do
         require_prefix "$package" "$actual" "$prefix"
       done
       ;;
@@ -146,14 +146,7 @@ require_package_specific_content() {
         tests/fixtures/dev/build.rs \
         tests/fixtures/dev/src/main.rs \
         tests/fixtures/inspection/.gitignore \
-        tests/fixtures/migrations/202608220201_create_cli_items/down.sql \
-        tests/fixtures/migrations/202608220201_create_cli_items/up.sql \
-        tests/fixtures/run/.gitignore \
-        tests/fixtures/schema/expected/create_users_down.sql \
-        tests/fixtures/schema/expected/create_users_up.sql \
-        tests/fixtures/schema/single/src/schema.rs \
-        tests/fixtures/schema/split/src/schema/comment.rs \
-        tests/fixtures/schema/split/src/schema/user.rs; do
+        tests/fixtures/run/.gitignore; do
         require_file "$package" "$actual" "$fixture"
       done
       ;;

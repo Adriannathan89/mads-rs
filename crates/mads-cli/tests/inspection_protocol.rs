@@ -8,7 +8,7 @@ use tempfile::tempdir;
 
 #[test]
 fn incompatible_direct_mads_version_is_rejected_before_launch() {
-    let current = semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+    let current = semver::Version::parse(mads::FRAMEWORK_VERSION).unwrap();
     for incompatible in [
         semver::Version::new(current.major + 1, current.minor, 0),
         semver::Version::new(current.major, current.minor + 1, 0),
