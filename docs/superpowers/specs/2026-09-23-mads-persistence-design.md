@@ -451,7 +451,7 @@ scope rules expose the database to every selected module. Without that import,
 the module is unreachable and none of its providers is selected or run.
 
 Provider identity remains concrete Rust `TypeId`. A second unqualified
-`DatabaseConnection` is a normal duplicate-provider error. Named databases,
+`DatabaseConnection` is a normal `MADS002` ambiguous-provider error. Named databases,
 string resolution, and implicit winner selection remain deferred.
 
 ## Errors and redaction

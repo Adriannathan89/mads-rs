@@ -834,7 +834,8 @@ both analyses must succeed without the missing required URL being parsed.
 Build the unimported root with the same empty config and prove construction
 succeeds, demonstrating that the connector constructor was not selected. Add
 a second public native connection provider in another imported module and
-assert the existing duplicate diagnostic remains `MADS001`.
+assert the existing ambiguous-binding diagnostic remains `MADS002` for two
+distinct provider declarations producing `DatabaseConnection`.
 
 - [ ] **Step 2: Run the module test and observe missing provider metadata**
 
