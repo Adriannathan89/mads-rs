@@ -18,6 +18,7 @@ const PACKAGES: &[&str] = &[
     "mads-extra",
     "mads-common",
     "mads",
+    "mads-persistence",
     "mads-cli",
 ];
 
@@ -28,6 +29,7 @@ const FRAMEWORK_PACKAGES: &[&str] = &[
     "mads-extra",
     "mads-common",
     "mads",
+    "mads-persistence",
 ];
 
 #[cfg(unix)]
