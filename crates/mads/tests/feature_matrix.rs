@@ -31,6 +31,32 @@ fn dependency_tree(features: &str) -> String {
     String::from_utf8(output.stdout).expect("cargo output should be UTF-8")
 }
 
+fn default_dependency_tree() -> String {
+    let output = Command::new(env!("CARGO"))
+        .current_dir(workspace_root())
+        .args(["tree", "-e", "normal", "-p", "mads"])
+        .output()
+        .expect("cargo tree should start");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap()
+}
+
+#[test]
+fn default_and_core_only_facades_exclude_diesel() {
+    for tree in [default_dependency_tree(), dependency_tree("")] {
+        for forbidden in ["diesel v", "deadpool-diesel v", "diesel_migrations v", "pq-sys v"] {
+            assert!(!tree.contains(forbidden), "{forbidden} in {tree}");
+        }
+    }
+    let manifest = std::fs::read_to_string(workspace_root().join("crates/mads/Cargo.toml"))
+        .expect("facade manifest should exist");
+    assert!(!manifest.contains("diesel.workspace"));
+}
+
 #[test]
 fn jwt_only_excludes_http_and_database_dependencies() {
     let tree = dependency_tree("jwt");
@@ -70,43 +96,6 @@ fn http_includes_validation_and_rest_without_database_or_jwt() {
         "jsonwebtoken v",
         "cookie v",
     ] {
-        assert!(
-            !tree.contains(forbidden),
-            "unexpected HTTP dependency: {forbidden}\n{tree}"
-        );
-    }
-}
-
-#[test]
-fn http_and_database_expose_the_explicit_mapping_pair_gate() {
-    let tree = dependency_tree("http,database");
-    for required in ["axum v", "tower-http v", "diesel v", "deadpool-diesel v"] {
-        assert!(
-            tree.contains(required),
-            "missing dependency required by the http + database mapping gate: {required}\n{tree}"
-        );
-    }
-    for forbidden in ["jsonwebtoken v", "cookie v"] {
-        assert!(
-            !tree.contains(forbidden),
-            "unexpected authentication dependency: {forbidden}\n{tree}"
-        );
-    }
-
-    let facade = std::fs::read_to_string(workspace_root().join("crates/mads/src/lib.rs"))
-        .expect("mads facade source should exist");
-    assert!(
-        facade.contains(
-            "#[cfg(all(feature = \"http\", feature = \"database\"))]\npub use mads_common::IntoHttpResult;"
-        ),
-        "IntoHttpResult must remain available only when http and database are both enabled"
-    );
-}
-
-#[test]
-fn database_excludes_http_dependencies() {
-    let tree = dependency_tree("database");
-    for forbidden in ["axum v", "axum-extra v", "tower-http v"] {
         assert!(
             !tree.contains(forbidden),
             "unexpected HTTP dependency: {forbidden}\n{tree}"

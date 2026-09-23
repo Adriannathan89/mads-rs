@@ -1,6 +1,6 @@
-//! Release-level facade acceptance coverage for the v0.8 public surface.
+//! Release-level facade acceptance coverage for the v0.9 public surface.
 
-#![cfg(all(feature = "http", feature = "database"))]
+#![cfg(feature = "http")]
 
 use std::{
     io,
@@ -21,7 +21,7 @@ use mads::{
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
-const SECRET_SENTINEL: &str = "v080-facade-secret-sentinel";
+const SECRET_SENTINEL: &str = "v090-facade-secret-sentinel";
 
 static VALIDATED_HANDLER_CALLS: AtomicUsize = AtomicUsize::new(0);
 static NATIVE_HANDLER_CALLS: AtomicUsize = AtomicUsize::new(0);
@@ -122,7 +122,7 @@ async fn native_json(_: mads::Json<application::CreateAccount>) -> &'static str 
 }
 
 #[tokio::test]
-async fn v080_facade_validates_before_service_invocation_and_preserves_native_json() {
+async fn v090_facade_validates_before_service_invocation_and_preserves_native_json() {
     reset_handler_calls();
     let application = configured_application()
         .build()
@@ -215,7 +215,7 @@ async fn v080_facade_validates_before_service_invocation_and_preserves_native_js
 }
 
 #[tokio::test]
-async fn v080_facade_preserves_named_errors_and_redacts_internal_values() {
+async fn v090_facade_preserves_named_errors_and_redacts_internal_values() {
     let application = configured_application()
         .build()
         .await
@@ -268,7 +268,7 @@ async fn v080_facade_preserves_named_errors_and_redacts_internal_values() {
 }
 
 #[tokio::test]
-async fn v080_facade_missing_typed_configuration_fails_before_construction() {
+async fn v090_facade_missing_typed_configuration_fails_before_construction() {
     let mut builder = Mads::builder_with_config(Config::empty());
     builder
         .root::<application::AcceptanceModule>()
@@ -287,18 +287,4 @@ async fn v080_facade_missing_typed_configuration_fails_before_construction() {
         !rendered.contains(SECRET_SENTINEL),
         "missing configuration diagnostics must not expose values: {rendered}"
     );
-}
-
-#[test]
-fn v080_facade_exposes_explicit_database_http_mapping_without_postgres() {
-    fn managed<T>(value: mads::DatabaseResult<T>) -> mads::HttpResult<T> {
-        value.into_http()
-    }
-
-    fn native<T>(value: mads::diesel::QueryResult<T>) -> mads::HttpResult<T> {
-        value.into_http()
-    }
-
-    let _ = managed::<()>;
-    let _ = native::<()>;
 }

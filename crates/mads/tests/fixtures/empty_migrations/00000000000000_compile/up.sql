@@ -1,1 +1,0 @@
--- Compile-only facade migration fixture.
