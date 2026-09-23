@@ -3,8 +3,10 @@
 use std::any::TypeId;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 
-use crate::{ConstructionContext, ErasedProvider, Result, SourceLocation};
+use crate::lifecycle::LifecycleRegistration;
+use crate::{ConstructionContext, ErasedProvider, LifecycleResource, Result, SourceLocation};
 
 /// Marker implemented by `#[module]` declarations.
 pub trait Module: Send + Sync + 'static {}
@@ -58,6 +60,57 @@ pub type ProviderFuture<'a> = Pin<Box<dyn Future<Output = Result<ErasedProvider>
 /// Constructs a provider using the dependencies and configuration available at startup.
 pub type ProviderConstructor = for<'a> fn(&'a ConstructionContext<'a>) -> ProviderFuture<'a>;
 
+/// A type-erased provider and lifecycle registrations produced together.
+#[doc(hidden)]
+pub struct ProviderContribution {
+    provider: ErasedProvider,
+    registrations: Vec<LifecycleRegistration>,
+}
+
+impl ProviderContribution {
+    /// Creates a contribution containing an ordinary provider and no hooks.
+    #[doc(hidden)]
+    pub fn from_provider(provider: ErasedProvider) -> Self {
+        Self {
+            provider,
+            registrations: Vec::new(),
+        }
+    }
+
+    /// Erases the native value while retaining its authored lifecycle hooks.
+    #[doc(hidden)]
+    pub fn from_resource<T>(resource: LifecycleResource<T>) -> Self
+    where
+        T: Send + Sync + 'static,
+    {
+        let (value, registrations) = resource.into_parts();
+        Self {
+            provider: Arc::new(value),
+            registrations,
+        }
+    }
+
+    pub(crate) fn into_parts(self) -> (ErasedProvider, Vec<LifecycleRegistration>) {
+        (self.provider, self.registrations)
+    }
+
+    /// Returns only the native provider, discarding unregistered hook metadata.
+    #[doc(hidden)]
+    pub fn into_provider(self) -> ErasedProvider {
+        self.into_parts().0
+    }
+}
+
+/// The asynchronous result of constructing a provider with lifecycle metadata.
+#[doc(hidden)]
+pub type LifecycleProviderFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<ProviderContribution>> + Send + 'a>>;
+
+/// Constructs a provider and its lifecycle registrations together.
+#[doc(hidden)]
+pub type LifecycleProviderConstructor =
+    for<'a> fn(&'a ConstructionContext<'a>) -> LifecycleProviderFuture<'a>;
+
 /// Describes a provider dependency by its stable type metadata.
 pub struct DependencyDescriptor {
     type_name: &'static str,
@@ -92,6 +145,7 @@ pub struct ProviderDescriptor {
     visibility: ProviderVisibility,
     location: SourceLocation,
     constructor: ProviderConstructor,
+    lifecycle_constructor: Option<LifecycleProviderConstructor>,
 }
 
 impl ProviderDescriptor {
@@ -115,7 +169,19 @@ impl ProviderDescriptor {
             visibility,
             location,
             constructor,
+            lifecycle_constructor: None,
         }
+    }
+
+    /// Attaches the constructor that retains lifecycle registrations.
+    #[doc(hidden)]
+    #[must_use]
+    pub const fn with_lifecycle_constructor(
+        mut self,
+        constructor: LifecycleProviderConstructor,
+    ) -> Self {
+        self.lifecycle_constructor = Some(constructor);
+        self
     }
 
     /// Attaches the resolved Rust type name emitted by a provider macro.
@@ -181,6 +247,12 @@ impl ProviderDescriptor {
     /// Returns the provider constructor.
     pub const fn constructor(&self) -> ProviderConstructor {
         self.constructor
+    }
+
+    /// Returns the lifecycle-aware constructor, when this provider has one.
+    #[doc(hidden)]
+    pub const fn lifecycle_constructor(&self) -> Option<LifecycleProviderConstructor> {
+        self.lifecycle_constructor
     }
 }
 
