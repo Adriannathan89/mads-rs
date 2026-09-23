@@ -2,16 +2,11 @@
 set -euo pipefail
 
 mode="stable"
-keep_cli_version="false"
 
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --beta)
       mode="beta"
-      shift
-      ;;
-    --keep-cli-version)
-      keep_cli_version="true"
       shift
       ;;
     *)
@@ -22,9 +17,9 @@ done
 
 if [[ "$#" -ne 1 || ! "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   if [[ "$mode" == "beta" ]]; then
-    echo "Usage: script/release-beta.sh [--keep-cli-version] X.Y.Z" >&2
+    echo "Usage: script/release-beta.sh X.Y.Z" >&2
   else
-    echo "Usage: script/release.sh [--keep-cli-version] X.Y.Z" >&2
+    echo "Usage: script/release.sh X.Y.Z" >&2
   fi
   exit 2
 fi
@@ -47,7 +42,7 @@ fi
 
 target_version="$1"
 new_version="$({
-  python3 - "$repository_root" "$mode" "$target_version" "$keep_cli_version" <<'PY'
+  python3 - "$repository_root" "$mode" "$target_version" <<'PY'
 import os
 import re
 import sys
@@ -57,7 +52,6 @@ from pathlib import Path
 root = Path(sys.argv[1])
 mode = sys.argv[2]
 base = sys.argv[3]
-keep_cli_version = sys.argv[4] == "true"
 packages = (
     "mads-core-macros",
     "mads-common-macros",
@@ -99,20 +93,6 @@ pin_pattern = re.compile(r'(\bversion\s*=\s*")=[^"]+("\s*[,}])')
 pin_count = 0
 for manifest in sorted((root / "crates").glob("*/Cargo.toml")):
     original = manifest.read_text(encoding="utf-8")
-    if keep_cli_version and manifest.parent.name == "mads-cli":
-        cli_version_pattern = re.compile(r'(?m)^version\.workspace\s*=\s*true\s*$')
-        original, count = cli_version_pattern.subn(f'version = "{current}"', original, count=1)
-        if count == 0:
-            cli_manifest = tomllib.loads(original)
-            cli_version = cli_manifest.get("package", {}).get("version")
-            if not isinstance(cli_version, str):
-                raise SystemExit(
-                    "mads-cli must declare a literal version or version.workspace = true."
-                )
-        elif count != 1:
-            raise SystemExit(
-                "mads-cli must use version.workspace = true when --keep-cli-version is set."
-            )
     output_lines = []
     for line in original.splitlines(keepends=True):
         if re.match(r"\s*mads(?:-[a-z0-9-]+)?\s*=", line) and "path" in line:
@@ -123,6 +103,10 @@ for manifest in sorted((root / "crates").glob("*/Cargo.toml")):
             pin_count += 1
         output_lines.append(line)
     changes[manifest] = "".join(output_lines)
+
+cli_manifest = tomllib.loads(changes[root / "crates" / "mads-cli" / "Cargo.toml"])
+if cli_manifest["package"].get("version") != {"workspace": True}:
+    raise SystemExit("mads-cli must use version.workspace = true.")
 
 if pin_count == 0:
     raise SystemExit("No internal MADS dependency pins were found.")
