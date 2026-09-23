@@ -1,5 +1,9 @@
 # MADS.rs — Clean Architecture with v0.8 Persistence
 
+> **Superseded for MADS 0.9.** This historical example uses removed Diesel
+> APIs. Use [docs/mads-persistence.md](../mads-persistence.md) and
+> [docs/CLI.md](../CLI.md) for current guidance.
+
 MADS belongs at the composition and delivery edge. Domain and application code
 should not depend on Axum, Diesel, or HTTP response types.
 

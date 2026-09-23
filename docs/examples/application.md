@@ -1,5 +1,10 @@
 # MADS.rs 0.8 PostgreSQL User Slice
 
+> **Superseded for MADS 0.9.** This historical 0.8 example uses removed Diesel
+> APIs and migration commands. Use
+> [docs/mads-persistence.md](../mads-persistence.md) and
+> [docs/CLI.md](../CLI.md) for current guidance.
+
 This example keeps a PostgreSQL repository explicit while using the current
 v0.8 CLI, error, validation, and configuration boundaries. The generated
 `mads new` starter is intentionally database-free; add persistence only where

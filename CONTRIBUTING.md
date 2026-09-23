@@ -16,6 +16,8 @@ Start with:
 - [`README.md`](README.md) for the public API, supported features, and usage;
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for crate boundaries and
   framework design;
+- [`docs/mads-persistence.md`](docs/mads-persistence.md) and
+  [`docs/CLI.md`](docs/CLI.md) for current persistence and CLI guidance;
 - the relevant files under [`docs/`](docs/) for examples, release decisions,
   historical context, and acceptance requirements;
 
@@ -88,8 +90,8 @@ The main workspace responsibilities are:
 - `crates/mads-core`: framework-neutral construction, configuration, provider
   graph, lifecycle, diagnostics, and auto-configuration decisions;
 - `crates/mads-core-macros`: core procedural macros;
-- `crates/mads-common`: HTTP, routes, Passport/JWT, cookies, CORS, Diesel, and
-  PostgreSQL integration;
+- `crates/mads-common`: HTTP, routes, Passport/JWT, cookies, CORS, and logging;
+- `crates/mads-persistence`: opt-in native SeaORM PostgreSQL integration;
 - `crates/mads-common-macros`: shared route-related procedural macros;
 - `crates/mads`: stable public facade;
 - `crates/mads-cli`: command-line interface;
