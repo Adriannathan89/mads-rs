@@ -1,0 +1,5 @@
+error: `#[mads::provider]` supports only `#[mads::provider]` and `#[mads::provider(lifecycle)]`
+ --> tests/ui/fail/provider_lifecycle_argument.rs:1:18
+  |
+1 | #[mads::provider(other)]
+  |                  ^^^^^

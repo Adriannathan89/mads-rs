@@ -4,23 +4,53 @@ use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned};
 use syn::visit::{self, Visit};
 use syn::{
-    Error, Expr, FnArg, GenericArgument, ItemFn, PathArguments, ReturnType, Type, spanned::Spanned,
+    Error, Expr, FnArg, GenericArgument, Ident, ItemFn, PathArguments, ReturnType, Type,
+    spanned::Spanned,
 };
 
 use crate::path::core_path;
 
 /// Expands a provider function into the original function and registered constructor metadata.
 pub(crate) fn expand(arguments: TokenStream, item: TokenStream) -> syn::Result<TokenStream> {
-    if !arguments.is_empty() {
-        return Err(Error::new(
-            arguments.span(),
-            "`#[mads::provider]` does not accept arguments",
-        ));
-    }
-
+    let mode = parse_provider_mode(arguments)?;
     let item: ItemFn = syn::parse2(item)?;
     validate_signature(&item)?;
-    expand_provider(item)
+    match mode {
+        ProviderMode::Ordinary => expand_provider(item),
+        ProviderMode::Lifecycle => {
+            validate_lifecycle_signature(&item)?;
+            let core = core_path()?;
+            expand_lifecycle_provider_with_core(item, core)
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProviderMode {
+    Ordinary,
+    Lifecycle,
+}
+
+fn parse_provider_mode(arguments: TokenStream) -> syn::Result<ProviderMode> {
+    if arguments.is_empty() {
+        return Ok(ProviderMode::Ordinary);
+    }
+
+    let span = arguments.span();
+    let argument = syn::parse2::<Ident>(arguments).map_err(|_| {
+        Error::new(
+            span,
+            "`#[mads::provider]` supports only `#[mads::provider]` and `#[mads::provider(lifecycle)]`",
+        )
+    })?;
+    if argument == "lifecycle" {
+        Ok(ProviderMode::Lifecycle)
+    } else {
+        Err(Error::new(
+            argument.span(),
+            "`#[mads::provider]` supports only `#[mads::provider]` and `#[mads::provider(lifecycle)]`",
+        ))
+    }
 }
 
 fn validate_signature(item: &ItemFn) -> syn::Result<()> {
@@ -187,6 +217,137 @@ fn expand_provider_with_core(item: ItemFn, core: syn::Path) -> syn::Result<Token
     })
 }
 
+fn validate_lifecycle_signature(item: &ItemFn) -> syn::Result<()> {
+    let valid_output = match &item.sig.output {
+        ReturnType::Type(_, output) => lifecycle_resource_output(output).is_some(),
+        ReturnType::Default => false,
+    };
+    if item.sig.asyncness.is_some() && valid_output {
+        return Ok(());
+    }
+
+    Err(Error::new(
+        item.sig.span(),
+        "`#[mads::provider(lifecycle)]` has two accepted async forms: `async fn ... -> LifecycleResource<T>` or `async fn ... -> mads_core::Result<LifecycleResource<T>>`",
+    ))
+}
+
+fn expand_lifecycle_provider_with_core(item: ItemFn, core: syn::Path) -> syn::Result<TokenStream> {
+    let provider_visibility = provider_visibility(&item.vis, &core);
+    let ident = &item.sig.ident;
+    let type_id_ident = format_ident!("__mads_type_id_{ident}");
+    let runtime_type_name_ident = format_ident!("__mads_runtime_type_name_{ident}");
+    let lifecycle_constructor_ident = format_ident!("__mads_construct_lifecycle_{ident}");
+    let return_type = match &item.sig.output {
+        ReturnType::Type(_, return_type) => return_type.as_ref(),
+        ReturnType::Default => unreachable!("lifecycle provider return type was validated"),
+    };
+    let (output_type, fallible) = lifecycle_resource_output(return_type)
+        .expect("lifecycle provider output was validated before expansion");
+
+    let dependencies: Vec<_> = item
+        .sig
+        .inputs
+        .iter()
+        .filter_map(|argument| match argument {
+            FnArg::Typed(argument) => Some(argument.ty.as_ref()),
+            FnArg::Receiver(_) => None,
+        })
+        .collect();
+    let dependency_idents: Vec<_> = (0..dependencies.len())
+        .map(|index| format_ident!("__mads_dependency_{index}"))
+        .collect();
+    let resolve_dependencies =
+        dependencies
+            .iter()
+            .zip(&dependency_idents)
+            .map(|(dependency, dependency_ident)| {
+                quote_spanned! {dependency.span()=>
+                    let #dependency_ident =
+                        __mads_assert_provider_dependency::<#dependency>(context)?;
+                }
+            });
+    let dependency_descriptors = dependencies.iter().map(|dependency| {
+        quote! {
+            #core::DependencyDescriptor::new(
+                stringify!(#dependency),
+                || ::core::any::TypeId::of::<#dependency>(),
+            )
+        }
+    });
+    let call = quote!(#ident(#(#dependency_idents),*).await);
+    let construct_resource = if fallible {
+        quote!(let resource: #core::LifecycleResource<#output_type> = #call?;)
+    } else {
+        quote!(let resource: #core::LifecycleResource<#output_type> = #call;)
+    };
+
+    Ok(quote! {
+        #item
+
+        const _: () = {
+            fn __mads_assert_provider_dependency<'a, T>(
+                context: &'a #core::ConstructionContext<'a>,
+            ) -> #core::Result<T>
+            where
+                T: ::core::clone::Clone
+                    + ::core::marker::Send
+                    + ::core::marker::Sync
+                    + 'static,
+            {
+                Ok(::core::clone::Clone::clone(context.resolve::<T>()?.as_ref()))
+            }
+
+            #[doc(hidden)]
+            fn #lifecycle_constructor_ident<'a>(
+                context: &'a #core::ConstructionContext<'a>,
+            ) -> #core::LifecycleProviderFuture<'a> {
+                ::std::boxed::Box::pin(async move {
+                    #(#resolve_dependencies)*
+                    #construct_resource
+                    Ok(#core::ProviderContribution::from_resource(resource))
+                })
+            }
+
+            #[doc(hidden)]
+            fn __mads_construct<'a>(
+                context: &'a #core::ConstructionContext<'a>,
+            ) -> #core::ProviderFuture<'a> {
+                ::std::boxed::Box::pin(async move {
+                    Ok(#lifecycle_constructor_ident(context).await?.into_provider())
+                })
+            }
+
+            #[doc(hidden)]
+            #[allow(non_snake_case)]
+            fn #type_id_ident() -> ::core::any::TypeId {
+                ::core::any::TypeId::of::<#output_type>()
+            }
+
+            #[doc(hidden)]
+            #[allow(non_snake_case)]
+            fn #runtime_type_name_ident() -> &'static str {
+                ::core::any::type_name::<#output_type>()
+            }
+
+            #core::__private::inventory::submit! {
+                #core::ProviderDescriptor::new(
+                    #core::ProviderKind::Provider,
+                    stringify!(#output_type),
+                    #type_id_ident,
+                    &[#(#dependency_descriptors,)*],
+                    #provider_visibility,
+                    #core::SourceLocation::new(file!(), line!(), column!()),
+                    __mads_construct,
+                )
+                .with_runtime_type_name(#runtime_type_name_ident)
+                .with_lifecycle_constructor(#lifecycle_constructor_ident)
+                .with_namespace(module_path!())
+            }
+        };
+    })
+}
+
 fn provider_visibility(visibility: &syn::Visibility, core: &syn::Path) -> TokenStream {
     if matches!(visibility, syn::Visibility::Public(_)) {
         quote!(#core::ProviderVisibility::Public)
@@ -248,6 +409,53 @@ fn result_output(return_type: &Type) -> Option<&Type> {
         [result] => result == "Result",
         [core, result] => core == "mads_core" && result == "Result",
         [facade, core, result] => facade == "mads" && core == "core" && result == "Result",
+        _ => false,
+    };
+    if !recognized {
+        return None;
+    }
+
+    let PathArguments::AngleBracketed(arguments) = &type_path.path.segments.last()?.arguments
+    else {
+        return None;
+    };
+    if arguments.args.len() != 1 {
+        return None;
+    }
+    match arguments.args.first()? {
+        GenericArgument::Type(output) => Some(output),
+        _ => None,
+    }
+}
+
+fn lifecycle_resource_output(return_type: &Type) -> Option<(&Type, bool)> {
+    if let Some(output) = lifecycle_resource_inner(return_type) {
+        return Some((output, false));
+    }
+    let result = result_output(return_type)?;
+    lifecycle_resource_inner(result).map(|output| (output, true))
+}
+
+fn lifecycle_resource_inner(return_type: &Type) -> Option<&Type> {
+    let Type::Path(type_path) = ungroup_type(return_type) else {
+        return None;
+    };
+    if type_path.qself.is_some() {
+        return None;
+    }
+
+    let names: Vec<_> = type_path
+        .path
+        .segments
+        .iter()
+        .map(|segment| segment.ident.to_string())
+        .collect();
+    let recognized = match names.as_slice() {
+        [resource] => resource == "LifecycleResource",
+        [core, resource] => core == "mads_core" && resource == "LifecycleResource",
+        [facade, core, resource] => {
+            facade == "mads" && core == "core" && resource == "LifecycleResource"
+        }
         _ => false,
     };
     if !recognized {

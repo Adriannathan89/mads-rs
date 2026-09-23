@@ -1,0 +1,5 @@
+error: `#[mads::provider(lifecycle)]` has two accepted async forms: `async fn ... -> LifecycleResource<T>` or `async fn ... -> mads_core::Result<LifecycleResource<T>>`
+ --> tests/ui/fail/provider_lifecycle_sync.rs:4:1
+  |
+4 | fn resource() -> mads::core::LifecycleResource<Resource> {
+  | ^^
