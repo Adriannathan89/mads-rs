@@ -272,7 +272,6 @@ impl NotFound {
     pub fn new(message: impl Into<String>) -> Self {
         Self(HttpError::not_found(message))
     }
-
 }
 named_error_impls!(NotFound);
 
@@ -284,7 +283,6 @@ impl Conflict {
     pub fn new(message: impl Into<String>) -> Self {
         Self(HttpError::conflict(message))
     }
-
 }
 named_error_impls!(Conflict);
 
@@ -307,7 +305,6 @@ impl InternalError {
     pub fn new(source: impl Error + Send + Sync + 'static) -> Self {
         Self(HttpError::internal(source))
     }
-
 }
 named_error_impls!(InternalError);
 
