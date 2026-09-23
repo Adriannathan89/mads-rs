@@ -53,6 +53,8 @@ pub use descriptor::{
     DependencyDescriptor, Module, ModuleDescriptor, ModuleImportDescriptor, ProviderConstructor,
     ProviderDescriptor, ProviderFuture, ProviderKind, ProviderVisibility,
 };
+#[doc(hidden)]
+pub use descriptor::{LifecycleProviderConstructor, LifecycleProviderFuture, ProviderContribution};
 pub use diagnostic::{
     Diagnostic, DiagnosticCode, Error, MADS001, MADS002, MADS003, MADS004, MADS005, MADS006,
     MADS007, MADS008, MADS009, MADS010, MADS011, MADS020, MADS030, Result, SourceLocation,
@@ -68,7 +70,9 @@ pub use graph::{
     ModuleImportInspectionSnapshot, ModuleInspectionSnapshot, OwnedSourceLocation,
     ProviderInspectionSnapshot,
 };
-pub use lifecycle::{LifecycleFuture, LifecycleHook, LifecycleManager, LifecycleState};
+pub use lifecycle::{
+    LifecycleFuture, LifecycleHook, LifecycleManager, LifecycleResource, LifecycleState,
+};
 pub use registry::{ErasedProvider, ProviderRegistry};
 
 pub use mads_core_macros::{Configuration, main, module, provider, repository, service};

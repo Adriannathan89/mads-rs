@@ -4,9 +4,10 @@ use std::any::TypeId;
 use std::sync::Arc;
 
 use mads_core::{
-    Config, ConstructionContext, DependencyDescriptor, ErasedProvider, ModuleDescriptor,
-    ModuleImportDescriptor, ProviderDescriptor, ProviderFuture, ProviderKind, ProviderRegistry,
-    ProviderVisibility, SourceLocation,
+    Config, ConstructionContext, DependencyDescriptor, ErasedProvider, LifecycleProviderFuture,
+    LifecycleResource, ModuleDescriptor, ModuleImportDescriptor, ProviderContribution,
+    ProviderDescriptor, ProviderFuture, ProviderKind, ProviderRegistry, ProviderVisibility,
+    SourceLocation,
 };
 
 struct Dependency;
@@ -22,6 +23,14 @@ fn output_type_id() -> TypeId {
 
 fn output_constructor<'a>(_: &'a ConstructionContext<'a>) -> ProviderFuture<'a> {
     Box::pin(async { Ok(Arc::new(Output) as ErasedProvider) })
+}
+
+fn lifecycle_constructor<'a>(_: &'a ConstructionContext<'a>) -> LifecycleProviderFuture<'a> {
+    Box::pin(async {
+        Ok(ProviderContribution::from_resource(LifecycleResource::new(
+            Output,
+        )))
+    })
 }
 
 static DEPENDENCIES: [DependencyDescriptor; 1] = [DependencyDescriptor::new(
@@ -86,6 +95,23 @@ fn provider_namespace_is_additive_and_optional() {
 
     let owned = plain.with_namespace("descriptor");
     assert_eq!(owned.namespace(), Some("descriptor"));
+}
+
+#[test]
+fn ordinary_descriptor_contract_remains_unchanged_and_lifecycle_is_additive() {
+    let plain = ProviderDescriptor::new(
+        ProviderKind::Provider,
+        "descriptor::Output",
+        output_type_id,
+        &[],
+        ProviderVisibility::Public,
+        SourceLocation::new("provider.rs", 1, 1),
+        output_constructor,
+    );
+    assert!(plain.lifecycle_constructor().is_none());
+
+    let lifecycle = plain.with_lifecycle_constructor(lifecycle_constructor);
+    assert!(lifecycle.lifecycle_constructor().is_some());
 }
 
 #[test]
