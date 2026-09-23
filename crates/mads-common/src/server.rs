@@ -392,14 +392,29 @@ async fn finish_after_error(
 
 async fn shutdown_signal() {
     let Some(path) = std::env::var_os(crate::__private::DEV_SHUTDOWN_ENV).map(PathBuf::from) else {
-        let _ = tokio::signal::ctrl_c().await;
+        os_shutdown_signal().await;
         return;
     };
 
     tokio::select! {
-        _ = tokio::signal::ctrl_c() => {}
+        _ = os_shutdown_signal() => {}
         _ = wait_for_dev_shutdown(path) => {}
     }
+}
+
+async fn os_shutdown_signal() {
+    #[cfg(unix)]
+    if let Ok(mut terminate) =
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+    {
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = terminate.recv() => {}
+        }
+        return;
+    }
+
+    let _ = tokio::signal::ctrl_c().await;
 }
 
 async fn wait_for_dev_shutdown(path: PathBuf) {

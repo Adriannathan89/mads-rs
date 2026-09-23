@@ -1575,6 +1575,7 @@ dependencies = [
 name = "mads-persistence"
 version = "0.9.0"
 dependencies = [
+ "mads",
  "mads-core",
  "sea-orm",
  "tokio",
