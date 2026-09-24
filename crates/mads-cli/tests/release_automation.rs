@@ -22,6 +22,17 @@ const PACKAGES: &[&str] = &[
     "mads-cli",
 ];
 
+const PUBLISH_ORDER: &[&str] = &[
+    "mads-core-macros",
+    "mads-common-macros",
+    "mads-core",
+    "mads-extra",
+    "mads-common",
+    "mads",
+    "mads-persistence",
+    "mads-cli",
+];
+
 #[cfg(unix)]
 #[test]
 fn beta_release_increments_a_matching_base_and_only_changes_versions() {
@@ -781,5 +792,5 @@ fn assert_publish_order(workflow: &str) {
         .next()
         .unwrap();
     let published: Vec<_> = package_block.split_whitespace().collect();
-    assert_eq!(published, PACKAGES);
+    assert_eq!(published, PUBLISH_ORDER);
 }
