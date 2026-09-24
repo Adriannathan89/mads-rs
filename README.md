@@ -3,7 +3,7 @@
 [![Latest release](https://img.shields.io/github/v/release/Adriannathan89/mads?display_name=tag&sort=semver)](https://github.com/Adriannathan89/mads/releases/latest)
 [![CI](https://github.com/Adriannathan89/mads/actions/workflows/ci.yml/badge.svg)](https://github.com/Adriannathan89/mads/actions/workflows/ci.yml)
 
-MADS.rs 0.9.0 is a Rust application framework with a framework-neutral
+MADS.rs 0.9.1 is a Rust application framework with a framework-neutral
 core, a scoped Axum HTTP runtime, source-aware typed configuration, safe REST
 errors, request validation, and opt-in native SeaORM persistence. A root
 module selects one application; startup validates its scoped graph and routes
@@ -127,7 +127,7 @@ guides for dependencies, source layout, and change ownership.
 
 ~~~toml
 [dependencies]
-mads = "0.9.0"
+mads = "0.9.1"
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
@@ -381,7 +381,7 @@ Database support is not a `mads` or `mads-common` feature. Add the connector
 explicitly and import its global module in your application root:
 
 ```toml
-mads-persistence = { version = "0.9.0", features = ["sea-orm-postgres"] }
+mads-persistence = { version = "0.9.1", features = ["sea-orm-postgres"] }
 ```
 
 ```rust,ignore

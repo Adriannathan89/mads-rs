@@ -165,7 +165,7 @@ fn generated_project_compiles_and_exposes_the_minimal_application_offline() {
 fn registry_manifest() -> String {
     format!(
         "[package]\nname = \"generated-app\"\nversion = \"0.1.0\"\nedition = \"2024\"\nrust-version = \"1.94\"\n\n[dependencies]\nmads = {{ version = \"={}\", default-features = false, features = [\"http\", \"runtime-tokio\"] }}\n",
-        "0.9.0"
+        "0.9.1"
     )
 }
 
@@ -177,11 +177,11 @@ fn local_manifest(registry_manifest: &str) -> String {
     let toml_path = local_mads.to_string_lossy().replace('\\', "\\\\");
     let registry_dependency = format!(
         "mads = {{ version = \"={}\", default-features = false, features = [\"http\", \"runtime-tokio\"] }}",
-        "0.9.0"
+        "0.9.1"
     );
     let local_dependency = format!(
         "mads = {{ path = \"{toml_path}\", version = \"={}\", default-features = false, features = [\"http\", \"runtime-tokio\"] }}",
-        "0.9.0"
+        "0.9.1"
     );
     let substituted = registry_manifest.replacen(&registry_dependency, &local_dependency, 1);
     assert_ne!(

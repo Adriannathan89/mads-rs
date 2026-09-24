@@ -3,7 +3,7 @@
 Status: original connector design record. The 0.9 database/CLI boundary is
 superseded by the [approved removal design](superpowers/specs/2026-09-23-mads-0.9-database-surface-removal-design.md).
 
-In 0.9, applications add `mads-persistence = { version = "0.9.0", features =
+In 0.9, applications add `mads-persistence = { version = "0.9.1", features =
 ["sea-orm-postgres"] }` explicitly and import
 `mads_persistence::sea_orm::DatabaseModule`. `DatabaseFactory::provide` returns
 the native `DatabaseConnection` or typed `PersistenceError`; database support

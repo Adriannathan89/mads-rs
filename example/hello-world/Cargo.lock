@@ -371,7 +371,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "mads"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b133edc3181da467732abc37d8ca073ae841a67044eed318426e8f10016ae794"
 dependencies = [
@@ -381,7 +381,7 @@ dependencies = [
 
 [[package]]
 name = "mads-common"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac4e162a486d0a7efcde14b73baf15684df9d7185522094b616d82a01e8c487d"
 dependencies = [
@@ -401,7 +401,7 @@ dependencies = [
 
 [[package]]
 name = "mads-common-macros"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5dfcfea7c90c0956ae60295b863a4dc72306ada369185793660159d1c10f6f9b"
 dependencies = [
@@ -413,7 +413,7 @@ dependencies = [
 
 [[package]]
 name = "mads-core"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d894710da4ccee605119c407d42204340e7ce2f45fcfda19fc2954954ad4bfe"
 dependencies = [
@@ -427,7 +427,7 @@ dependencies = [
 
 [[package]]
 name = "mads-core-macros"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9099fa40accf4d3133de6e57b2a58ef76dedbf4c155aa15af0e4be34a2487e06"
 dependencies = [

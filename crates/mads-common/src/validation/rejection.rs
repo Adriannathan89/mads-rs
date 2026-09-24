@@ -11,7 +11,7 @@ use axum::{
             JsonRejection, JsonSyntaxError, PathRejection, QueryRejection,
         },
     },
-    http::StatusCode,
+    http::{HeaderValue, StatusCode, header::CONNECTION},
     response::{IntoResponse, Response},
 };
 use serde::Serialize;
@@ -201,7 +201,12 @@ fn transport_error_response(
             fixed_error_response(status, "unsupported_media_type", CONTENT_TYPE_MESSAGE)
         }
         StatusCode::PAYLOAD_TOO_LARGE => {
-            fixed_error_response(status, "payload_too_large", PAYLOAD_TOO_LARGE_MESSAGE)
+            let mut response =
+                fixed_error_response(status, "payload_too_large", PAYLOAD_TOO_LARGE_MESSAGE);
+            response
+                .headers_mut()
+                .insert(CONNECTION, HeaderValue::from_static("close"));
+            response
         }
         status if status.is_client_error() => BadRequest::new(BODY_READ_MESSAGE).into_response(),
         _ => InternalError::new(source).into_response(),

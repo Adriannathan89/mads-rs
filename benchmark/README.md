@@ -1,9 +1,9 @@
 # MADS HTTP stress benchmark
 
-This suite drives the three [MADS 0.9 example applications](../example/) over
+This suite drives the three [MADS 0.9.1 example applications](../example/) over
 real loopback HTTP. It checks response content and status under load, then
 reports throughput and client-observed p50/p95/p99 latency. The applications
-use published MADS 0.9.0 packages, as pinned in their `Cargo.lock` files.
+target MADS 0.9.1 packages, as pinned in their `Cargo.lock` files.
 Python 3's standard library generates the traffic; no load-test package is
 required.
 
@@ -14,13 +14,14 @@ required.
 | `hello` | 12,000 GETs, 64 clients | Every response is 200 with `Hello, world!`. |
 | `validation` | 3,000 POSTs, 32 clients | Empty fields, malformed JSON, and 128 KiB invalid bodies all return a validation error. |
 | `oversized` | 32 POSTs, 8 clients | 3 MiB JSON bodies exceed the default limit and return a structured 413 response. |
-| `oversized-reuse` | Eight POSTs, four clients | Diagnostic for reusing one HTTP/1.1 connection after a 413. Currently reproduces the issue in [REPORT.md](REPORT.md) and exits nonzero. |
+| `oversized-reuse` | Eight POSTs, four clients | Each 413 signals `Connection: close`; clients can send the next request without a transport error. |
 | `jwt` | 6,000 GETs, 64 clients | Valid JWT returns the demo profile; missing and malformed JWTs return 401 with a Bearer challenge. |
 | `posts` | 800 CRUD transactions, 32 clients | Each transaction creates, reads, updates, deletes, then confirms 404 for its own post (4,000 HTTP requests total). |
 | `database-failure` | One forced startup failure | An unavailable PostgreSQL endpoint fails startup within 10 seconds, never binds HTTP, and does not print the URL password. |
 
 `smoke` uses 200/90/4/90/20 operations for hello/validation/oversized/JWT/posts.
 `extended` uses 50,000/10,000/64/25,000/2,000 operations for those cases.
+Both also run eight `oversized-reuse` requests.
 The runner starts and stops each application, reuses one HTTP connection per
 worker, and exits nonzero for unexpected status, incorrect response content,
 transport errors, or a failed startup. `database-failure` expects startup to
@@ -28,9 +29,9 @@ fail and checks that its test credential is redacted. The suite does not impose
 arbitrary throughput thresholds. A run against `posts` writes and deletes rows,
 so use an isolated PostgreSQL database.
 The `oversized` case opens a new connection per request because the body-limit
-rejection may close its connection. The separate `oversized-reuse` case tests
-the persistent-connection behavior explicitly; it is excluded from the default
-set while that issue is under triage.
+rejection closes its connection. The `oversized-reuse` case checks that the
+response signals this closure and that clients can continue on a new connection.
+It is included in the default run.
 
 ## Prepare
 

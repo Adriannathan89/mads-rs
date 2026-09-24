@@ -60,7 +60,7 @@ For an HTTP-only application, use:
 
 ~~~toml
 [dependencies]
-mads = { version = "0.9.0", default-features = false, features = ["http", "runtime-tokio"] }
+mads = { version = "0.9.1", default-features = false, features = ["http", "runtime-tokio"] }
 ~~~
 
 The workspace crates use exact internal version pins. External dependency

@@ -356,7 +356,7 @@ def oversized_case(profile: str) -> dict[str, object]:
 
 
 def oversized_reuse_case() -> dict[str, object]:
-    """Diagnostic: the next request on a rejected-body connection may fail."""
+    """Verify clients can send another request after a signaled 413 closure."""
     large_input = json.dumps({"username": "x" * (3 * 1024 * 1024), "password": "short"}).encode()
 
     def operation(client: Client, stats: Measurements, _worker: int, _index: int) -> None:
@@ -488,7 +488,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, help="write JSON results to this file")
     args = parser.parse_args()
 
-    cases = args.case or ["hello", "validation", "oversized", "jwt", "posts", "database-failure"]
+    cases = args.case or ["hello", "validation", "oversized", "oversized-reuse", "jwt", "posts", "database-failure"]
     database_url = os.environ.get("BENCH_DATABASE_URL")
     if "posts" in cases and not database_url:
         parser.error("posts requires BENCH_DATABASE_URL pointing to an isolated database with the posts migration applied")

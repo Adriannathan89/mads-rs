@@ -81,7 +81,7 @@ fn name_and_templates_render_the_exact_minimal_project_manifest() {
             "Cargo.toml".to_owned(),
             format!(
                 "[package]\nname = \"my-app\"\nversion = \"0.1.0\"\nedition = \"2024\"\nrust-version = \"1.94\"\n\n[dependencies]\nmads = {{ version = \"={}\", default-features = false, features = [\"http\", \"runtime-tokio\"] }}\n",
-                "0.9.0"
+                "0.9.1"
             ),
         ),
         (

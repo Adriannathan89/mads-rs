@@ -71,6 +71,8 @@
 //! strategy receives typed claims:
 //!
 //! ```
+//! # #[cfg(feature = "jwt")]
+//! # mod jwt_strategy_example {
 //! use mads::prelude::*;
 //!
 //! #[derive(serde::Deserialize)]
@@ -115,6 +117,7 @@
 //!     }
 //! }
 //! # fn main() {}
+//! # }
 //! ```
 //!
 //! Route guards inherit field by field. Method clauses replace only supplied
@@ -122,6 +125,8 @@
 //! an inherited guard:
 //!
 //! ```
+//! # #[cfg(feature = "jwt")]
+//! # mod jwt_guard_example {
 //! use mads::prelude::*;
 //!
 //! struct UserPrincipal;
@@ -157,6 +162,7 @@
 //!     async fn login(&self);
 //! }
 //! # fn main() {}
+//! # }
 //! ```
 
 #![deny(missing_docs)]
