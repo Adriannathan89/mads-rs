@@ -53,6 +53,10 @@ See the [authoritative CLI reference](docs/CLI.md) for target selectors,
 forwarded application arguments, diagnostics, watcher behavior, inspection
 limits.
 
+For runnable MADS 0.9 walkthroughs, see the [three example projects](example/):
+Hello World, PostgreSQL posts CRUD, and a JWT-protected route with validation
+and logging.
+
 ## Standard application
 
 ```rust,no_run

@@ -1,0 +1,11 @@
+[server]
+host = "127.0.0.1"
+port = 3002
+
+[passport]
+secret = "${JWT_SECRET}"
+algorithms = ["HS256"]
+
+[demo]
+username = "${DEMO_USERNAME}"
+password = "${DEMO_PASSWORD}"
