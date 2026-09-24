@@ -1,6 +1,6 @@
 import unittest
 
-from run import Measurements, Response, percentiles, work_chunks
+from run import Measurements, Response, json_body, json_body_at_size, percentiles, work_chunks
 
 
 class BenchmarkMathTests(unittest.TestCase):
@@ -20,6 +20,14 @@ class BenchmarkMathTests(unittest.TestCase):
         self.assertFalse(stats.check("hello", response, 200, lambda body: body == b"Hello, world!"))
         self.assertEqual(stats.error_count, 1)
         self.assertEqual(stats.statuses[200], 1)
+
+    def test_body_limit_payloads_have_exact_byte_lengths_and_valid_json(self):
+        for size in (2_097_151, 2_097_152, 2_097_153):
+            with self.subTest(size=size):
+                payload = json_body_at_size(size)
+                self.assertEqual(len(payload), size)
+                self.assertEqual(json_body(payload)["password"], "short")
+                self.assertTrue(json_body(payload)["username"])
 
 
 if __name__ == "__main__":

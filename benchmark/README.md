@@ -12,16 +12,20 @@ required.
 | Case | Stress profile | Contract checked |
 | --- | --- | --- |
 | `hello` | 12,000 GETs, 64 clients | Every response is 200 with `Hello, world!`. |
+| `connection-churn` | 2,000 GETs, 64 clients | A fresh connection for every request still returns the expected 200 body. |
 | `validation` | 3,000 POSTs, 32 clients | Empty fields, malformed JSON, and 128 KiB invalid bodies all return a validation error. |
 | `oversized` | 32 POSTs, 8 clients | 3 MiB JSON bodies exceed the default limit and return a structured 413 response. |
 | `oversized-reuse` | Eight POSTs, four clients | Each 413 signals `Connection: close`; clients can send the next request without a transport error. |
+| `body-limit-boundary` | 96 POSTs and 96 follow-up GETs, 8 clients | Valid JSON at 2 MiB − 1 and 2 MiB gets 422; at 2 MiB + 1 it gets 413 with `Connection: close`; each client then receives a 401 on its next request. |
+| `aborted-upload` | 256 partial uploads, 256 logins, and 256 protected GETs, 32 clients | Clients close a 1 KiB upload with a declared 1 MiB body; login and JWT-protected reads still succeed. |
 | `jwt` | 6,000 GETs, 64 clients | Valid JWT returns the demo profile; missing and malformed JWTs return 401 with a Bearer challenge. |
 | `posts` | 800 CRUD transactions, 32 clients | Each transaction creates, reads, updates, deletes, then confirms 404 for its own post (4,000 HTTP requests total). |
 | `database-failure` | One forced startup failure | An unavailable PostgreSQL endpoint fails startup within 10 seconds, never binds HTTP, and does not print the URL password. |
 
-`smoke` uses 200/90/4/90/20 operations for hello/validation/oversized/JWT/posts.
-`extended` uses 50,000/10,000/64/25,000/2,000 operations for those cases.
-Both also run eight `oversized-reuse` requests.
+`smoke` uses 200/40/90/4/12/16/90/20 operations for
+hello/connection-churn/validation/oversized/body-limit-boundary/aborted-upload/JWT/posts.
+`extended` uses 50,000/5,000/10,000/64/192/512/25,000/2,000 operations
+for the same cases. Every profile also runs eight `oversized-reuse` requests.
 The runner starts and stops each application, reuses one HTTP connection per
 worker, and exits nonzero for unexpected status, incorrect response content,
 transport errors, or a failed startup. `database-failure` expects startup to
@@ -64,17 +68,23 @@ python3 benchmark/run.py --profile smoke --output /tmp/mads-smoke.json
 python3 benchmark/run.py --profile stress --output /tmp/mads-stress.json
 python3 benchmark/run.py --profile extended --output /tmp/mads-extended.json
 python3 benchmark/run.py --case oversized-reuse --output /tmp/mads-reuse.json
+python3 benchmark/run.py --profile stress \
+  --case connection-churn --case body-limit-boundary --case aborted-upload \
+  --output /tmp/mads-edges.json
 ```
 
 To skip PostgreSQL, select only HTTP cases:
 
 ```sh
 python3 benchmark/run.py --profile stress \
-  --case hello --case validation --case oversized --case jwt --case database-failure
+  --case hello --case connection-churn --case validation --case oversized \
+  --case oversized-reuse --case body-limit-boundary --case aborted-upload \
+  --case jwt --case database-failure
 ```
 
 For a quick local check with existing debug binaries, add
-`--binary-profile debug`. Use release binaries for reported performance numbers.
+`--binary-profile debug`. Use release binaries for comparable performance
+numbers; the 0.9.1 edge-case follow-up explicitly reports debug builds.
 The JSON output includes the commit, OS, CPU count, profile, statuses, errors,
 request rate, and latency percentiles. A `posts` operation is a five-request
 transaction, whereas other operations are one HTTP request.

@@ -3,10 +3,30 @@
 Hotfix follow-up (2026-09-25): the `mads-common` response for oversized JSON
 now includes `Connection: close`. With the protected-route example built against
 the local hotfix source, `oversized-reuse` returned eight 413 responses across
-four clients with zero transport errors. The measurements below remain the
-historical results for the published 0.9.0 build.
+four clients with zero transport errors. The 0.9.0 outcome below remains a
+historical result for the published 0.9.0 build.
 
-## Outcome
+## 0.9.1 edge-case follow-up — 2026-09-25
+
+Three new cases ran against debug example binaries built from local MADS 0.9.1
+source on loopback HTTP/1.1. A combined HTTP smoke pass with the existing
+validation, JWT, and oversized-body cases also passed. Stress passed for each
+new case. The extended profile recorded:
+
+| Case | Clients | Attempts and checked responses | p95 | p99 | Unexpected errors |
+| --- | ---: | --- | ---: | ---: | ---: |
+| Connection churn | 64 | 5,000 fresh connections; 5,000 HTTP 200 | 20.633 ms | 26.780 ms | 0 |
+| 2 MiB body boundary | 16 | 192 uploads; 128 HTTP 422, 64 HTTP 413; 192 recovery HTTP 401 | 31.674 ms | 40.835 ms | 0 |
+| Aborted upload | 64 | 512 partial uploads closed by clients; 512 login and 512 protected GET responses, all HTTP 200 | 11.636 ms | 15.675 ms | 0 |
+
+The boundary case checks exact byte lengths of 2 MiB − 1, 2 MiB, and
+2 MiB + 1. Each 413 advertised `Connection: close`. The aborted-upload case
+checks successful login and JWT-protected reads after clients close incomplete
+request bodies; it does not expect a response on the abandoned sockets. These
+results cover the listed workloads on one host. They do not establish behavior
+under longer runs, TLS, or database faults during active requests.
+
+## 0.9.0 outcome
 
 The final `extended` run completed 95,064 HTTP responses across routing,
 validation, 3 MiB body-limit rejection, Passport JWT, and PostgreSQL CRUD. All

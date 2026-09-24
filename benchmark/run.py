@@ -35,9 +35,24 @@ PROJECTS = {
 }
 
 PROFILES = {
-    "smoke": {"hello": (200, 8), "validation": (90, 8), "oversized": (4, 2), "jwt": (90, 8), "posts": (20, 4)},
-    "stress": {"hello": (12_000, 64), "validation": (3_000, 32), "oversized": (32, 8), "jwt": (6_000, 64), "posts": (800, 32)},
-    "extended": {"hello": (50_000, 64), "validation": (10_000, 32), "oversized": (64, 8), "jwt": (25_000, 64), "posts": (2_000, 32)},
+    "smoke": {
+        "hello": (200, 8), "connection-churn": (40, 8),
+        "validation": (90, 8), "oversized": (4, 2),
+        "body-limit-boundary": (12, 4), "aborted-upload": (16, 4),
+        "jwt": (90, 8), "posts": (20, 4),
+    },
+    "stress": {
+        "hello": (12_000, 64), "connection-churn": (2_000, 64),
+        "validation": (3_000, 32), "oversized": (32, 8),
+        "body-limit-boundary": (96, 8), "aborted-upload": (256, 32),
+        "jwt": (6_000, 64), "posts": (800, 32),
+    },
+    "extended": {
+        "hello": (50_000, 64), "connection-churn": (5_000, 64),
+        "validation": (10_000, 32), "oversized": (64, 8),
+        "body-limit-boundary": (192, 16), "aborted-upload": (512, 64),
+        "jwt": (25_000, 64), "posts": (2_000, 32),
+    },
 }
 
 
@@ -217,6 +232,15 @@ def json_body(body: bytes) -> object:
     return json.loads(body)
 
 
+def json_body_at_size(size: int) -> bytes:
+    """Build a valid login JSON body with an exact byte length."""
+    prefix = b'{"username":"'
+    suffix = b'","password":"short"}'
+    if size <= len(prefix) + len(suffix):
+        raise ValueError("body size must leave room for a username")
+    return prefix + b"x" * (size - len(prefix) - len(suffix)) + suffix
+
+
 def port_is_open(port: int) -> bool:
     try:
         with socket.create_connection(("127.0.0.1", port), timeout=0.2):
@@ -278,6 +302,17 @@ def hello_case(profile: str) -> dict[str, object]:
         stats.check("hello", response, 200, lambda body: body == b"Hello, world!")
 
     return run_workers("hello", operations, concurrency, 3000, operation)
+
+
+def connection_churn_case(profile: str) -> dict[str, object]:
+    operations, concurrency = PROFILES[profile]["connection-churn"]
+
+    def operation(client: Client, stats: Measurements, _worker: int, _index: int) -> None:
+        client.reset()
+        response = client.request(stats, "connection churn", "GET", "/")
+        stats.check("connection churn", response, 200, lambda body: body == b"Hello, world!")
+
+    return run_workers("connection-churn", operations, concurrency, 3000, operation)
 
 
 def validation_case(profile: str) -> dict[str, object]:
@@ -369,6 +404,70 @@ def oversized_reuse_case() -> dict[str, object]:
                 stats.error("413 response closed the connection without Connection: close")
 
     return run_workers("oversized-reuse", 8, 4, 3002, operation)
+
+
+def body_limit_boundary_case(profile: str) -> dict[str, object]:
+    operations, concurrency = PROFILES[profile]["body-limit-boundary"]
+    sizes = (2_097_151, 2_097_152, 2_097_153)
+    payloads = [json_body_at_size(size) for size in sizes]
+
+    def operation(client: Client, stats: Measurements, worker: int, index: int) -> None:
+        variant = (worker + index) % 3
+        status = 413 if variant == 2 else 422
+        code = "payload_too_large" if status == 413 else "validation_error"
+        response = client.request(
+            stats, f"body limit {sizes[variant]}", "POST", "/auth/login", payloads[variant],
+            {"Content-Type": "application/json"},
+        )
+        if stats.check("body limit", response, status, json_error(code)) and status == 413:
+            if response is not None and response.headers.get("connection", "").lower() != "close":
+                stats.error("body limit: 413 did not signal Connection: close")
+        recovery = client.request(stats, "body limit recovery", "GET", "/auth/me")
+        stats.check("body limit recovery", recovery, 401, json_error("unauthorized"))
+
+    return run_workers("body-limit-boundary", operations, concurrency, 3002, operation)
+
+
+def aborted_upload_case(profile: str) -> dict[str, object]:
+    operations, concurrency = PROFILES[profile]["aborted-upload"]
+    login_body = json.dumps({"username": DEMO_USERNAME, "password": DEMO_PASSWORD}).encode()
+    incomplete_request = (
+        b"POST /auth/login HTTP/1.1\r\n"
+        b"Host: 127.0.0.1\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Content-Length: 1048576\r\n\r\n"
+        + b"x" * 1024
+    )
+
+    def operation(client: Client, stats: Measurements, _worker: int, _index: int) -> None:
+        try:
+            with socket.create_connection(("127.0.0.1", 3002), timeout=10) as connection:
+                connection.sendall(incomplete_request)
+        except OSError as error:
+            stats.error(f"aborted upload: transport failure: {type(error).__name__}: {error}")
+        login = client.request(
+            stats, "aborted upload recovery login", "POST", "/auth/login", login_body,
+            {"Content-Type": "application/json"},
+        )
+        if not stats.check("aborted upload recovery login", login, 200):
+            return
+        try:
+            token = json_body(login.body)["access_token"]
+            if not isinstance(token, str) or not token:
+                raise ValueError("missing access token")
+        except (ValueError, KeyError, TypeError) as error:
+            stats.error(f"aborted upload recovery login: invalid token response: {error}")
+            return
+        profile_response = client.request(
+            stats, "aborted upload recovery profile", "GET", "/auth/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        stats.check(
+            "aborted upload recovery profile", profile_response, 200,
+            lambda body: json_body(body) == {"id": 1, "username": DEMO_USERNAME},
+        )
+
+    return run_workers("aborted-upload", operations, concurrency, 3002, operation)
 
 
 def posts_case(profile: str) -> dict[str, object]:
@@ -482,13 +581,21 @@ def main() -> int:
     parser.add_argument("--profile", choices=PROFILES, default="smoke")
     parser.add_argument(
         "--case", action="append",
-        choices=("hello", "validation", "oversized", "oversized-reuse", "jwt", "posts", "database-failure"),
+        choices=(
+            "hello", "connection-churn", "validation", "oversized",
+            "oversized-reuse", "body-limit-boundary", "aborted-upload",
+            "jwt", "posts", "database-failure",
+        ),
     )
     parser.add_argument("--binary-profile", choices=("debug", "release"), default="release")
     parser.add_argument("--output", type=Path, help="write JSON results to this file")
     args = parser.parse_args()
 
-    cases = args.case or ["hello", "validation", "oversized", "oversized-reuse", "jwt", "posts", "database-failure"]
+    cases = args.case or [
+        "hello", "connection-churn", "validation", "oversized",
+        "oversized-reuse", "body-limit-boundary", "aborted-upload",
+        "jwt", "posts", "database-failure",
+    ]
     database_url = os.environ.get("BENCH_DATABASE_URL")
     if "posts" in cases and not database_url:
         parser.error("posts requires BENCH_DATABASE_URL pointing to an isolated database with the posts migration applied")
@@ -505,14 +612,25 @@ def main() -> int:
     }
     results: list[dict[str, object]] = []
     try:
-        if "hello" in cases:
+        if "hello" in cases or "connection-churn" in cases:
             with ManagedServer("hello", args.binary_profile, os.environ.copy()) as server:
-                result = hello_case(args.profile)
-                if not result["passed"]:
-                    server.keep_log = True
-                    result["server_log"] = server.log_file.name
-                results.append(result)
-        if "validation" in cases or "oversized" in cases or "oversized-reuse" in cases or "jwt" in cases:
+                if "hello" in cases:
+                    result = hello_case(args.profile)
+                    if not result["passed"]:
+                        server.keep_log = True
+                        result["server_log"] = server.log_file.name
+                    results.append(result)
+                if "connection-churn" in cases:
+                    result = connection_churn_case(args.profile)
+                    if not result["passed"]:
+                        server.keep_log = True
+                        result["server_log"] = server.log_file.name
+                    results.append(result)
+        auth_cases = (
+            "validation", "oversized", "oversized-reuse",
+            "body-limit-boundary", "aborted-upload", "jwt",
+        )
+        if any(case in cases for case in auth_cases):
             environment = os.environ.copy()
             environment.update({
                 "DEMO_USERNAME": DEMO_USERNAME,
@@ -534,6 +652,18 @@ def main() -> int:
                     results.append(result)
                 if "oversized-reuse" in cases:
                     result = oversized_reuse_case()
+                    if not result["passed"]:
+                        server.keep_log = True
+                        result["server_log"] = server.log_file.name
+                    results.append(result)
+                if "body-limit-boundary" in cases:
+                    result = body_limit_boundary_case(args.profile)
+                    if not result["passed"]:
+                        server.keep_log = True
+                        result["server_log"] = server.log_file.name
+                    results.append(result)
+                if "aborted-upload" in cases:
+                    result = aborted_upload_case(args.profile)
                     if not result["passed"]:
                         server.keep_log = True
                         result["server_log"] = server.log_file.name
