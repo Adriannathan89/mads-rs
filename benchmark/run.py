@@ -19,6 +19,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from typing import Callable
 
@@ -507,6 +508,43 @@ def posts_case(profile: str) -> dict[str, object]:
     return run_workers("posts", operations, concurrency, 3001, operation)
 
 
+class StalledPostgres:
+    """Accept PostgreSQL TCP connections but never complete the handshake."""
+
+    def __init__(self) -> None:
+        self.accepted = threading.Event()
+        self._stop = threading.Event()
+        self._connections: list[socket.socket] = []
+        self._listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._listener.bind(("127.0.0.1", 0))
+        self._listener.listen()
+        self._listener.settimeout(0.1)
+        self.port = self._listener.getsockname()[1]
+        self._thread = threading.Thread(target=self._accept, daemon=True)
+
+    def _accept(self) -> None:
+        while not self._stop.is_set():
+            try:
+                connection, _address = self._listener.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            self._connections.append(connection)
+            self.accepted.set()
+
+    def __enter__(self) -> StalledPostgres:
+        self._thread.start()
+        return self
+
+    def __exit__(self, _exc_type: object, _exc: object, _traceback: object) -> None:
+        self._stop.set()
+        self._listener.close()
+        self._thread.join(timeout=1)
+        for connection in self._connections:
+            connection.close()
+
+
 def database_failure_case(binary_profile: str) -> dict[str, object]:
     """A missing database must fail startup and redact connection credentials."""
     directory, binary_name, port, _path, _status = PROJECTS["posts"]
@@ -569,6 +607,76 @@ def database_failure_case(binary_profile: str) -> dict[str, object]:
     return result
 
 
+def database_connect_timeout_case(binary_profile: str) -> dict[str, object]:
+    """A stalled PostgreSQL handshake must honor the configured connect timeout."""
+    directory, binary_name, port, _path, _status = PROJECTS["posts"]
+    project = ROOT / "example" / directory
+    binary = project / "target" / binary_profile / binary_name
+    if not binary.is_file():
+        raise RuntimeError(f"missing binary {binary}; build it as described in benchmark/README.md")
+    if port_is_open(port):
+        raise RuntimeError(f"port {port} is already in use; stop that server before benchmarking")
+    secret_marker = "benchmark-timeout-secret-should-not-leak"
+    environment = os.environ.copy()
+    environment["MADS_PERSISTENCE__SEAORM__CONNECT_TIMEOUT_SECONDS"] = "2"
+    with StalledPostgres() as database:
+        environment["DATABASE_URL"] = (
+            f"postgres://bench:{secret_marker}@127.0.0.1:{database.port}/stalled"
+        )
+        log = tempfile.NamedTemporaryFile(prefix="mads-benchmark-timeout-", suffix=".log", delete=False)
+        start = time.perf_counter()
+        process = subprocess.Popen(
+            [str(binary)], cwd=project, env=environment, stdout=log, stderr=subprocess.STDOUT
+        )
+        timed_out = False
+        bound_before_ready = False
+        try:
+            deadline = time.monotonic() + 10
+            while process.poll() is None and time.monotonic() < deadline:
+                bound_before_ready |= port_is_open(port)
+                time.sleep(0.05)
+            if process.poll() is None:
+                timed_out = True
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+        finally:
+            log.close()
+        duration = time.perf_counter() - start
+        accepted = database.accepted.is_set()
+    contents = Path(log.name).read_text(errors="replace")
+    errors = []
+    if not accepted:
+        errors.append("database did not accept a connection")
+    if duration < 1.5 or duration > 5 or timed_out:
+        errors.append("database did not finish near the configured 2-second timeout")
+    if bound_before_ready:
+        errors.append("HTTP listener bound before database readiness succeeded")
+    if process.returncode == 0:
+        errors.append("database timeout exited successfully instead of rejecting startup")
+    if "MADS140" not in contents or "kind: Connection" not in contents:
+        errors.append("startup did not report a MADS persistence connection failure")
+    if secret_marker in contents:
+        errors.append("database credential appeared in the startup log")
+    result: dict[str, object] = {
+        "case": "database-connect-timeout",
+        "duration_seconds": round(duration, 3),
+        "connection_accepted": accepted,
+        "exit_code": process.returncode,
+        "error_count": len(errors),
+        "error_examples": errors,
+        "passed": not errors,
+    }
+    if errors:
+        result["server_log"] = log.name
+    else:
+        Path(log.name).unlink(missing_ok=True)
+    return result
+
+
 def git_head() -> str:
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True, capture_output=True, text=True
@@ -584,7 +692,7 @@ def main() -> int:
         choices=(
             "hello", "connection-churn", "validation", "oversized",
             "oversized-reuse", "body-limit-boundary", "aborted-upload",
-            "jwt", "posts", "database-failure",
+            "jwt", "posts", "database-failure", "database-connect-timeout",
         ),
     )
     parser.add_argument("--binary-profile", choices=("debug", "release"), default="release")
@@ -594,7 +702,7 @@ def main() -> int:
     cases = args.case or [
         "hello", "connection-churn", "validation", "oversized",
         "oversized-reuse", "body-limit-boundary", "aborted-upload",
-        "jwt", "posts", "database-failure",
+        "jwt", "posts", "database-failure", "database-connect-timeout",
     ]
     database_url = os.environ.get("BENCH_DATABASE_URL")
     if "posts" in cases and not database_url:
@@ -685,6 +793,8 @@ def main() -> int:
                 results.append(result)
         if "database-failure" in cases:
             results.append(database_failure_case(args.binary_profile))
+        if "database-connect-timeout" in cases:
+            results.append(database_connect_timeout_case(args.binary_profile))
     except Exception as error:
         report["fatal_error"] = f"{type(error).__name__}: {error}"
     report["cases"] = results

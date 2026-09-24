@@ -1,5 +1,10 @@
+import socket
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
+import run
 from run import Measurements, Response, json_body, json_body_at_size, percentiles, work_chunks
 
 
@@ -28,6 +33,30 @@ class BenchmarkMathTests(unittest.TestCase):
                 self.assertEqual(len(payload), size)
                 self.assertEqual(json_body(payload)["password"], "short")
                 self.assertTrue(json_body(payload)["username"])
+
+    def test_stalled_postgres_accepts_connection_without_replying(self):
+        self.assertTrue(hasattr(run, "StalledPostgres"))
+        with run.StalledPostgres() as server:
+            with socket.create_connection(("127.0.0.1", server.port), timeout=1) as connection:
+                connection.sendall(b"postgres startup")
+                self.assertTrue(server.accepted.wait(timeout=1))
+                connection.settimeout(0.1)
+                with self.assertRaises(socket.timeout):
+                    connection.recv(1)
+
+    def test_connect_timeout_case_rejects_failure_without_accepted_connection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            binary = root / "example/posts-crud/target/debug/mads-example-posts-crud"
+            binary.parent.mkdir(parents=True)
+            binary.write_text("#!/usr/bin/env python3\nimport sys\nprint('MADS140 kind: Connection')\nsys.exit(1)\n")
+            binary.chmod(0o755)
+            with patch.object(run, "ROOT", root):
+                result = run.database_connect_timeout_case("debug")
+            if "server_log" in result:
+                self.addCleanup(Path(result["server_log"]).unlink, missing_ok=True)
+            self.assertFalse(result["passed"])
+            self.assertIn("database did not accept a connection", result["error_examples"])
 
 
 if __name__ == "__main__":

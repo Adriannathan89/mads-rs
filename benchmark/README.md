@@ -21,6 +21,7 @@ required.
 | `jwt` | 6,000 GETs, 64 clients | Valid JWT returns the demo profile; missing and malformed JWTs return 401 with a Bearer challenge. |
 | `posts` | 800 CRUD transactions, 32 clients | Each transaction creates, reads, updates, deletes, then confirms 404 for its own post (4,000 HTTP requests total). |
 | `database-failure` | One forced startup failure | An unavailable PostgreSQL endpoint fails startup within 10 seconds, never binds HTTP, and does not print the URL password. |
+| `database-connect-timeout` | One stalled PostgreSQL handshake | A local TCP server accepts the database connection but never replies; startup must fail near the configured 2-second timeout, before binding HTTP, without leaking credentials. |
 
 `smoke` uses 200/40/90/4/12/16/90/20 operations for
 hello/connection-churn/validation/oversized/body-limit-boundary/aborted-upload/JWT/posts.
@@ -29,7 +30,10 @@ for the same cases. Every profile also runs eight `oversized-reuse` requests.
 The runner starts and stops each application, reuses one HTTP connection per
 worker, and exits nonzero for unexpected status, incorrect response content,
 transport errors, or a failed startup. `database-failure` expects startup to
-fail and checks that its test credential is redacted. The suite does not impose
+fail and checks that its test credential is redacted. `database-connect-timeout`
+uses a local simulated PostgreSQL socket, not a real database, and requires the
+connection to be accepted before the timeout. Neither case needs
+`BENCH_DATABASE_URL`. The suite does not impose
 arbitrary throughput thresholds. A run against `posts` writes and deletes rows,
 so use an isolated PostgreSQL database.
 The `oversized` case opens a new connection per request because the body-limit
@@ -68,6 +72,8 @@ python3 benchmark/run.py --profile smoke --output /tmp/mads-smoke.json
 python3 benchmark/run.py --profile stress --output /tmp/mads-stress.json
 python3 benchmark/run.py --profile extended --output /tmp/mads-extended.json
 python3 benchmark/run.py --case oversized-reuse --output /tmp/mads-reuse.json
+python3 benchmark/run.py --case database-connect-timeout \
+  --output /tmp/mads-database-timeout.json
 python3 benchmark/run.py --profile stress \
   --case connection-churn --case body-limit-boundary --case aborted-upload \
   --output /tmp/mads-edges.json
@@ -79,7 +85,7 @@ To skip PostgreSQL, select only HTTP cases:
 python3 benchmark/run.py --profile stress \
   --case hello --case connection-churn --case validation --case oversized \
   --case oversized-reuse --case body-limit-boundary --case aborted-upload \
-  --case jwt --case database-failure
+  --case jwt --case database-failure --case database-connect-timeout
 ```
 
 For a quick local check with existing debug binaries, add

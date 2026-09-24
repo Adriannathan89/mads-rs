@@ -26,6 +26,16 @@ request bodies; it does not expect a response on the abandoned sockets. These
 results cover the listed workloads on one host. They do not establish behavior
 under longer runs, TLS, or database faults during active requests.
 
+The new `database-connect-timeout` case ran against the same local debug 0.9.1
+source build of `posts-crud`. A loopback TCP server accepted the PostgreSQL
+connection and deliberately withheld its handshake response. With a configured
+2-second connect timeout, the application failed startup in 2.012 seconds with
+the MADS persistence connection diagnostic. The HTTP listener did not bind,
+the test credential did not appear in the startup log, and the benchmark
+reported zero unexpected errors. This is distinct from `database-failure`,
+which uses a closed port and can fail immediately. Neither case tests query
+timeouts or database outages during active requests.
+
 ## 0.9.0 outcome
 
 The final `extended` run completed 95,064 HTTP responses across routing,
