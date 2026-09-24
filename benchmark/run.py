@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import http.client
@@ -22,6 +23,9 @@ import tempfile
 import threading
 import time
 from typing import Callable
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from faults import PostgresTableLock, StallablePostgresProxy
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -240,6 +244,26 @@ def json_body_at_size(size: int) -> bytes:
     if size <= len(prefix) + len(suffix):
         raise ValueError("body size must leave room for a username")
     return prefix + b"x" * (size - len(prefix) - len(suffix)) + suffix
+
+
+def statement_timeout_url(url: str, timeout_ms: int) -> str:
+    """Apply PostgreSQL statement_timeout to this benchmark connection only."""
+    parsed = urlsplit(url)
+    query = parse_qsl(parsed.query, keep_blank_values=True)
+    if any(key == "options" for key, _value in query):
+        raise ValueError("database URL already has PostgreSQL options")
+    query.append(("options", f"-c statement_timeout={timeout_ms}"))
+    return urlunsplit(parsed._replace(query=urlencode(query)))
+
+
+def proxy_database_url(url: str, port: int) -> str:
+    """Route a PostgreSQL URL through a loopback TCP proxy without changing credentials."""
+    parsed = urlsplit(url)
+    if parsed.scheme not in ("postgres", "postgresql") or not parsed.hostname:
+        raise ValueError("BENCH_DATABASE_URL must use a TCP PostgreSQL host")
+    credentials, separator, _host = parsed.netloc.rpartition("@")
+    authority = f"{credentials}@" if separator else ""
+    return urlunsplit(parsed._replace(netloc=f"{authority}127.0.0.1:{port}"))
 
 
 def port_is_open(port: int) -> bool:
@@ -508,6 +532,120 @@ def posts_case(profile: str) -> dict[str, object]:
     return run_workers("posts", operations, concurrency, 3001, operation)
 
 
+def database_query_timeout_recovery_case(binary_profile: str, database_url: str) -> dict[str, object]:
+    """A timed-out SQL statement must not stop HTTP or poison later queries."""
+    environment = os.environ.copy()
+    environment["DATABASE_URL"] = statement_timeout_url(database_url, 2000)
+    stats = Measurements()
+    start = time.perf_counter()
+    with ManagedServer("posts", binary_profile, environment) as server:
+        with closing(Client(3001)) as client:
+            baseline = client.request(stats, "query timeout baseline", "GET", "/posts")
+            stats.check("query timeout baseline", baseline, 200)
+            timeout = None
+            with PostgresTableLock(database_url):
+                timeout = client.request(stats, "query timeout", "GET", "/posts")
+                stats.check("query timeout", timeout, 500, json_error("internal"))
+                if timeout is not None and not 1500 <= timeout.latency_ms <= 5000:
+                    stats.error("query did not finish near the configured 2-second timeout")
+                liveness = client.request(stats, "HTTP during query timeout", "GET", "/not-a-route")
+                stats.check("HTTP during query timeout", liveness, 404)
+                if server.process.poll() is not None:
+                    stats.error("HTTP server exited after the query timeout")
+            recovered = client.request(stats, "query timeout recovery", "GET", "/posts")
+            stats.check("query timeout recovery", recovered, 200)
+            if server.process.poll() is not None:
+                stats.error("HTTP server exited before query recovery")
+        result = {
+            "case": "database-query-timeout-recovery",
+            "duration_seconds": round(time.perf_counter() - start, 3),
+            "timeout_response_ms": None if timeout is None else round(timeout.latency_ms, 3),
+            "status_counts": {str(status): count for status, count in sorted(stats.statuses.items())},
+            "error_count": stats.error_count,
+            "error_examples": stats.error_examples,
+            "passed": stats.error_count == 0,
+        }
+        if not result["passed"]:
+            server.keep_log = True
+            result["server_log"] = server.log_file.name
+        return result
+
+
+def database_tcp_stall_recovery_case(binary_profile: str, database_url: str) -> dict[str, object]:
+    """A stalled DB reply must not stop HTTP; a pool timeout must recover."""
+    parsed = urlsplit(database_url)
+    if not parsed.hostname:
+        raise ValueError("BENCH_DATABASE_URL must use a TCP PostgreSQL host")
+    with StallablePostgresProxy(parsed.hostname, parsed.port or 5432) as proxy:
+        environment = os.environ.copy()
+        environment["DATABASE_URL"] = proxy_database_url(database_url, proxy.port)
+        environment["MADS_PERSISTENCE__SEAORM__MIN_CONNECTIONS"] = "1"
+        environment["MADS_PERSISTENCE__SEAORM__MAX_CONNECTIONS"] = "1"
+        environment["MADS_PERSISTENCE__SEAORM__ACQUIRE_TIMEOUT_SECONDS"] = "2"
+        stats = Measurements()
+        start = time.perf_counter()
+        with ManagedServer("posts", binary_profile, environment) as server:
+            startup_connections = proxy.accepted_connections
+            with closing(Client(3001)) as client:
+                baseline = client.request(stats, "TCP stall baseline", "GET", "/posts")
+                stats.check("TCP stall baseline", baseline, 200)
+                def held_query() -> tuple[Response | None, Measurements]:
+                    held_stats = Measurements()
+                    connection = Client(3001)
+                    try:
+                        response = connection.request(held_stats, "stalled connection request", "GET", "/posts")
+                        return response, held_stats
+                    finally:
+                        connection.close()
+
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    proxy.pause_downstream()
+                    timeout = None
+                    held_response = None
+                    try:
+                        future = executor.submit(held_query)
+                        if not proxy.downstream_blocked.wait(timeout=3):
+                            stats.error("proxy did not observe a stalled database reply")
+                        timeout = client.request(stats, "pool acquire timeout", "GET", "/posts")
+                        stats.check("pool acquire timeout", timeout, 500, json_error("internal"))
+                        if timeout is not None and not 1500 <= timeout.latency_ms <= 5000:
+                            stats.error("pool acquire did not finish near the configured 2-second timeout")
+                        liveness = client.request(stats, "HTTP during TCP stall", "GET", "/not-a-route")
+                        stats.check("HTTP during TCP stall", liveness, 404)
+                        if server.process.poll() is not None:
+                            stats.error("HTTP server exited during the TCP stall")
+                    finally:
+                        proxy.resume_downstream()
+                    try:
+                        held_response, held_stats = future.result(timeout=5)
+                        stats.merge(held_stats)
+                        stats.check("stalled connection request", held_response, 500, json_error("internal"))
+                        if held_response is not None and not 1500 <= held_response.latency_ms <= 5000:
+                            stats.error("stalled connection did not finish near the 2-second acquire timeout")
+                    except TimeoutError:
+                        stats.error("stalled connection request did not finish after TCP recovery")
+                recovered = client.request(stats, "TCP stall recovery", "GET", "/posts")
+                stats.check("TCP stall recovery", recovered, 200)
+                if server.process.poll() is not None:
+                    stats.error("HTTP server exited before TCP recovery")
+            result = {
+                "case": "database-tcp-stall-recovery",
+                "duration_seconds": round(time.perf_counter() - start, 3),
+                "proxy_connections_at_startup": startup_connections,
+                "proxy_connections_after_recovery": proxy.accepted_connections,
+                "stalled_response_ms": None if held_response is None else round(held_response.latency_ms, 3),
+                "acquire_timeout_response_ms": None if timeout is None else round(timeout.latency_ms, 3),
+                "status_counts": {str(status): count for status, count in sorted(stats.statuses.items())},
+                "error_count": stats.error_count,
+                "error_examples": stats.error_examples,
+                "passed": stats.error_count == 0,
+            }
+            if not result["passed"]:
+                server.keep_log = True
+                result["server_log"] = server.log_file.name
+            return result
+
+
 class StalledPostgres:
     """Accept PostgreSQL TCP connections but never complete the handshake."""
 
@@ -693,6 +831,7 @@ def main() -> int:
             "hello", "connection-churn", "validation", "oversized",
             "oversized-reuse", "body-limit-boundary", "aborted-upload",
             "jwt", "posts", "database-failure", "database-connect-timeout",
+            "database-query-timeout-recovery", "database-tcp-stall-recovery",
         ),
     )
     parser.add_argument("--binary-profile", choices=("debug", "release"), default="release")
@@ -703,10 +842,12 @@ def main() -> int:
         "hello", "connection-churn", "validation", "oversized",
         "oversized-reuse", "body-limit-boundary", "aborted-upload",
         "jwt", "posts", "database-failure", "database-connect-timeout",
+        "database-query-timeout-recovery", "database-tcp-stall-recovery",
     ]
     database_url = os.environ.get("BENCH_DATABASE_URL")
-    if "posts" in cases and not database_url:
-        parser.error("posts requires BENCH_DATABASE_URL pointing to an isolated database with the posts migration applied")
+    database_cases = ("posts", "database-query-timeout-recovery", "database-tcp-stall-recovery")
+    if any(case in cases for case in database_cases) and not database_url:
+        parser.error("selected database workload requires BENCH_DATABASE_URL pointing to an isolated database with the posts migration applied")
 
     report: dict[str, object] = {
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -795,6 +936,10 @@ def main() -> int:
             results.append(database_failure_case(args.binary_profile))
         if "database-connect-timeout" in cases:
             results.append(database_connect_timeout_case(args.binary_profile))
+        if "database-query-timeout-recovery" in cases:
+            results.append(database_query_timeout_recovery_case(args.binary_profile, database_url))
+        if "database-tcp-stall-recovery" in cases:
+            results.append(database_tcp_stall_recovery_case(args.binary_profile, database_url))
     except Exception as error:
         report["fatal_error"] = f"{type(error).__name__}: {error}"
     report["cases"] = results

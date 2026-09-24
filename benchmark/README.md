@@ -22,6 +22,8 @@ required.
 | `posts` | 800 CRUD transactions, 32 clients | Each transaction creates, reads, updates, deletes, then confirms 404 for its own post (4,000 HTTP requests total). |
 | `database-failure` | One forced startup failure | An unavailable PostgreSQL endpoint fails startup within 10 seconds, never binds HTTP, and does not print the URL password. |
 | `database-connect-timeout` | One stalled PostgreSQL handshake | A local TCP server accepts the database connection but never replies; startup must fail near the configured 2-second timeout, before binding HTTP, without leaking credentials. |
+| `database-query-timeout-recovery` | One query timeout and recovery | An exclusive posts-table lock makes a query exceed PostgreSQL's 2-second `statement_timeout`; HTTP stays up, returns a safe 500 for that query, and resumes successful CRUD after lock release. |
+| `database-tcp-stall-recovery` | One TCP reply stall and recovery | A loopback proxy withholds a database reply on an established connection; requests hit the 2-second pool-acquire timeout, HTTP stays up, and CRUD succeeds after replies resume. |
 
 `smoke` uses 200/40/90/4/12/16/90/20 operations for
 hello/connection-churn/validation/oversized/body-limit-boundary/aborted-upload/JWT/posts.
@@ -33,7 +35,11 @@ transport errors, or a failed startup. `database-failure` expects startup to
 fail and checks that its test credential is redacted. `database-connect-timeout`
 uses a local simulated PostgreSQL socket, not a real database, and requires the
 connection to be accepted before the timeout. Neither case needs
-`BENCH_DATABASE_URL`. The suite does not impose
+`BENCH_DATABASE_URL`. The two recovery cases require a real, isolated
+`BENCH_DATABASE_URL` and the posts schema. The query-timeout case also requires
+`psql` on `PATH` and holds an exclusive table lock for about 2 seconds. The TCP
+case tests pool acquisition while an existing connection's reply is stalled;
+it does not claim a separate socket-read timeout. The suite does not impose
 arbitrary throughput thresholds. A run against `posts` writes and deletes rows,
 so use an isolated PostgreSQL database.
 The `oversized` case opens a new connection per request because the body-limit
@@ -74,6 +80,10 @@ python3 benchmark/run.py --profile extended --output /tmp/mads-extended.json
 python3 benchmark/run.py --case oversized-reuse --output /tmp/mads-reuse.json
 python3 benchmark/run.py --case database-connect-timeout \
   --output /tmp/mads-database-timeout.json
+python3 benchmark/run.py --case database-query-timeout-recovery \
+  --output /tmp/mads-query-recovery.json
+python3 benchmark/run.py --case database-tcp-stall-recovery \
+  --output /tmp/mads-tcp-recovery.json
 python3 benchmark/run.py --profile stress \
   --case connection-churn --case body-limit-boundary --case aborted-upload \
   --output /tmp/mads-edges.json

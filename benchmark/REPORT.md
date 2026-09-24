@@ -33,8 +33,31 @@ connection and deliberately withheld its handshake response. With a configured
 the MADS persistence connection diagnostic. The HTTP listener did not bind,
 the test credential did not appear in the startup log, and the benchmark
 reported zero unexpected errors. This is distinct from `database-failure`,
-which uses a closed port and can fail immediately. Neither case tests query
-timeouts or database outages during active requests.
+which uses a closed port and can fail immediately. Neither startup-only case
+tests faults during active requests; the separate recovery cases below do.
+
+## 0.9.1 database recovery follow-up — 2026-09-25
+
+Two additional cases ran separately against the local debug 0.9.1 `posts-crud`
+binary and a disposable PostgreSQL 16 database. Both kept the same HTTP process
+alive, served a non-database 404 during the fault, and returned HTTP 200 from
+`GET /posts` after recovery, with zero unexpected benchmark errors:
+
+| Fault | Database responses during fault | Timeout | Recovery | Unexpected errors |
+| --- | --- | ---: | --- | ---: |
+| PostgreSQL statement timeout under a table lock | One HTTP 500 (`internal`) | 2,001.482 ms | HTTP 200 after lock release | 0 |
+| Established TCP reply stalled by a loopback proxy; pool acquire timeout | Two HTTP 500 (`internal`) | 2,002.033 and 2,002.725 ms | HTTP 200 after proxy resumes | 0 |
+
+The query case sets PostgreSQL `statement_timeout=2000` through the example's
+database URL, only for this run. In the TCP case, SQLx checks an idle connection
+with a ping before handing it to a request. The proxy withheld that ping reply;
+the configured 2-second `acquire_timeout` therefore affected the first request
+as well as the second request waiting for the one-slot pool. This explains the
+two 500 responses; they were expected fault responses, not crashes. The proxy
+accepted one application TCP connection at startup and still only one after
+recovery, so this run did not observe a new database TCP connection. This does
+not establish behavior for a socket-read stall after a query has already
+acquired its connection, or for prolonged/distributed outages.
 
 ## 0.9.0 outcome
 
