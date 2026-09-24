@@ -1,6 +1,65 @@
 # Benchmark findings — 2026-09-24
 
-## Outcome
+Hotfix follow-up (2026-09-25): the `mads-common` response for oversized JSON
+now includes `Connection: close`. With the protected-route example built against
+the local hotfix source, `oversized-reuse` returned eight 413 responses across
+four clients with zero transport errors. The 0.9.0 outcome below remains a
+historical result for the published 0.9.0 build.
+
+## 0.9.1 edge-case follow-up — 2026-09-25
+
+Three new cases ran against debug example binaries built from local MADS 0.9.1
+source on loopback HTTP/1.1. A combined HTTP smoke pass with the existing
+validation, JWT, and oversized-body cases also passed. Stress passed for each
+new case. The extended profile recorded:
+
+| Case | Clients | Attempts and checked responses | p95 | p99 | Unexpected errors |
+| --- | ---: | --- | ---: | ---: | ---: |
+| Connection churn | 64 | 5,000 fresh connections; 5,000 HTTP 200 | 20.633 ms | 26.780 ms | 0 |
+| 2 MiB body boundary | 16 | 192 uploads; 128 HTTP 422, 64 HTTP 413; 192 recovery HTTP 401 | 31.674 ms | 40.835 ms | 0 |
+| Aborted upload | 64 | 512 partial uploads closed by clients; 512 login and 512 protected GET responses, all HTTP 200 | 11.636 ms | 15.675 ms | 0 |
+
+The boundary case checks exact byte lengths of 2 MiB − 1, 2 MiB, and
+2 MiB + 1. Each 413 advertised `Connection: close`. The aborted-upload case
+checks successful login and JWT-protected reads after clients close incomplete
+request bodies; it does not expect a response on the abandoned sockets. These
+results cover the listed workloads on one host. They do not establish behavior
+under longer runs, TLS, or database faults during active requests.
+
+The new `database-connect-timeout` case ran against the same local debug 0.9.1
+source build of `posts-crud`. A loopback TCP server accepted the PostgreSQL
+connection and deliberately withheld its handshake response. With a configured
+2-second connect timeout, the application failed startup in 2.012 seconds with
+the MADS persistence connection diagnostic. The HTTP listener did not bind,
+the test credential did not appear in the startup log, and the benchmark
+reported zero unexpected errors. This is distinct from `database-failure`,
+which uses a closed port and can fail immediately. Neither startup-only case
+tests faults during active requests; the separate recovery cases below do.
+
+## 0.9.1 database recovery follow-up — 2026-09-25
+
+Two additional cases ran separately against the local debug 0.9.1 `posts-crud`
+binary and a disposable PostgreSQL 16 database. Both kept the same HTTP process
+alive, served a non-database 404 during the fault, and returned HTTP 200 from
+`GET /posts` after recovery, with zero unexpected benchmark errors:
+
+| Fault | Database responses during fault | Timeout | Recovery | Unexpected errors |
+| --- | --- | ---: | --- | ---: |
+| PostgreSQL statement timeout under a table lock | One HTTP 500 (`internal`) | 2,001.482 ms | HTTP 200 after lock release | 0 |
+| Established TCP reply stalled by a loopback proxy; pool acquire timeout | Two HTTP 500 (`internal`) | 2,002.033 and 2,002.725 ms | HTTP 200 after proxy resumes | 0 |
+
+The query case sets PostgreSQL `statement_timeout=2000` through the example's
+database URL, only for this run. In the TCP case, SQLx checks an idle connection
+with a ping before handing it to a request. The proxy withheld that ping reply;
+the configured 2-second `acquire_timeout` therefore affected the first request
+as well as the second request waiting for the one-slot pool. This explains the
+two 500 responses; they were expected fault responses, not crashes. The proxy
+accepted one application TCP connection at startup and still only one after
+recovery, so this run did not observe a new database TCP connection. This does
+not establish behavior for a socket-read stall after a query has already
+acquired its connection, or for prolonged/distributed outages.
+
+## 0.9.0 outcome
 
 The final `extended` run completed 95,064 HTTP responses across routing,
 validation, 3 MiB body-limit rejection, Passport JWT, and PostgreSQL CRUD. All

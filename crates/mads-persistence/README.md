@@ -6,7 +6,7 @@ opt-in; the crate has no default database backend.
 For PostgreSQL, depend explicitly on:
 
 ```toml
-mads-persistence = { version = "0.9.0", features = ["sea-orm-postgres"] }
+mads-persistence = { version = "0.9.1", features = ["sea-orm-postgres"] }
 ```
 
 Import `mads_persistence::sea_orm::DatabaseModule` in the application root.

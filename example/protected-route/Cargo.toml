@@ -8,5 +8,5 @@ publish = false
 [workspace]
 
 [dependencies]
-mads = { version = "=0.9.0", default-features = false, features = ["http", "jwt", "logger", "runtime-tokio"] }
+mads = { version = "=0.9.1", default-features = false, features = ["http", "jwt", "logger", "runtime-tokio"] }
 serde = { version = "1", features = ["derive"] }

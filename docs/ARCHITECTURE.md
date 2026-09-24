@@ -1,8 +1,8 @@
-# MADS.rs 0.9.0 Architecture
+# MADS.rs 0.9.1 Architecture
 
 MADS separates framework-neutral construction and configuration from Axum HTTP
 delivery, explicit native SeaORM persistence, and the Cargo-native CLI.
-Version 0.9.0 retains the validation, REST-error, typed configuration,
+Version 0.9.1 retains the validation, REST-error, typed configuration,
 compiler-diagnostic, machine-output, and minimal-scaffolding surface while
 removing the former Diesel and CLI migration integrations.
 

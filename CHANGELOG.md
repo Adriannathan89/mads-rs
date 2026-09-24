@@ -2,6 +2,16 @@
 
 All notable changes to MADS.rs are documented in this file.
 
+## [0.9.1] - 2026-09-25
+
+### Fixed
+
+- Oversized JSON requests now return `413 Payload Too Large` with
+  `Connection: close`, allowing HTTP/1.1 clients to continue safely after the
+  server closes the rejected request's connection.
+- Passport documentation examples now compile with both the default feature
+  set and the `jwt` feature enabled.
+
 ## [0.9.0] - 2026-09-24
 
 ### Compatibility
@@ -197,6 +207,7 @@ First public beta of the MADS.rs HTTP application foundation.
 - TLS, HTTP/2 configuration, multiple listeners, and declarative middleware are application-owned.
 - Public APIs may change in later `0.6.0-beta.*` releases based on adopter feedback.
 
+[0.9.1]: https://github.com/Adriannathan89/mads/releases/tag/v0.9.1
 [0.9.0]: https://github.com/Adriannathan89/mads/releases/tag/v0.9.0
 [0.8.0]: https://github.com/Adriannathan89/mads/releases/tag/v0.8.0
 [0.6.0-beta.1]: https://github.com/Adriannathan89/mads/releases/tag/v0.6.0-beta.1

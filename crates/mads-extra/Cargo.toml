@@ -10,7 +10,7 @@ readme = "README.md"
 description = "Extension boundary for optional MADS.rs framework capabilities"
 
 [dependencies]
-mads-core = { path = "../mads-core", version = "=0.9.0" }
+mads-core = { path = "../mads-core", version = "=0.9.1" }
 
 [lints]
 workspace = true

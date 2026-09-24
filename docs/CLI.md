@@ -1,6 +1,6 @@
 # MADS CLI
 
-MADS v0.9.0 provides Cargo-native execution, inspection, a minimal-project
+MADS v0.9.1 provides Cargo-native execution, inspection, a minimal-project
 generator, and a versioned JSON result
 for finite MADS-owned commands. Human-readable output remains the default.
 

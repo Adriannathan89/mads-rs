@@ -23,13 +23,13 @@ sea-orm-postgres = [
 ]
 
 [dependencies]
-mads-core = { path = "../mads-core", version = "=0.9.0" }
+mads-core = { path = "../mads-core", version = "=0.9.1" }
 sea-orm = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio.workspace = true
 sea-orm = { workspace = true, features = ["mock", "runtime-tokio-rustls"] }
-mads = { path = "../mads", version = "=0.9.0", default-features = false, features = ["http", "runtime-tokio"] }
+mads = { path = "../mads", version = "=0.9.1", default-features = false, features = ["http", "runtime-tokio"] }
 
 [lints]
 workspace = true

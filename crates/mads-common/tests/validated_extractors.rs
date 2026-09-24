@@ -21,7 +21,7 @@ use mads_common::{
         extract::{DefaultBodyLimit, State},
         http::{
             Request, StatusCode,
-            header::{CONTENT_TYPE, HeaderValue},
+            header::{CONNECTION, CONTENT_TYPE, HeaderValue},
         },
         response::Response,
         routing::{get, post},
@@ -690,6 +690,10 @@ async fn json_configured_body_limit_overflow_is_a_safe_payload_too_large() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    assert_eq!(
+        response.headers().get(CONNECTION),
+        Some(&HeaderValue::from_static("close"))
+    );
     assert_eq!(
         response_json(response).await,
         json!({"error":{"code":"payload_too_large","message":"request body is too large"}})
