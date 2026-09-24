@@ -56,6 +56,7 @@ limits.
 For runnable MADS 0.9 walkthroughs, see the [three example projects](example/):
 Hello World, PostgreSQL posts CRUD, and a JWT-protected route with validation
 and logging.
+For repeatable HTTP load and failure checks, see the [benchmark suite](benchmark/).
 
 ## Standard application
 

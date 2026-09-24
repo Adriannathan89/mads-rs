@@ -1,0 +1,37 @@
+{
+  "binary_profile": "release",
+  "cases": [
+    {
+      "case": "oversized-reuse",
+      "concurrency": 4,
+      "duration_seconds": 0.011,
+      "error_count": 8,
+      "error_examples": [
+        "413 response closed the connection without Connection: close",
+        "oversized connection reuse: transport failure: BrokenPipeError: [Errno 32] Broken pipe",
+        "413 response closed the connection without Connection: close",
+        "oversized connection reuse: transport failure: BrokenPipeError: [Errno 32] Broken pipe",
+        "413 response closed the connection without Connection: close",
+        "oversized connection reuse: transport failure: BrokenPipeError: [Errno 32] Broken pipe",
+        "413 response closed the connection without Connection: close",
+        "oversized connection reuse: transport failure: BrokenPipeError: [Errno 32] Broken pipe"
+      ],
+      "http_responses": 4,
+      "operations": 8,
+      "p50_ms": 6.979,
+      "p95_ms": 7.201,
+      "p99_ms": 7.201,
+      "passed": false,
+      "responses_per_second": 376.8,
+      "server_log": "/tmp/mads-benchmark-g897bue2.log",
+      "status_counts": {"413": 4}
+    }
+  ],
+  "git_head": "81af438b67e150568e0312a39e117745c4aa1be9",
+  "logical_cpus": 12,
+  "passed": false,
+  "platform": "Linux-7.0.0-30-generic-x86_64-with-glibc2.39",
+  "profile": "smoke",
+  "python": "3.12.3",
+  "timestamp_utc": "2026-09-24T14:13:59.797181+00:00"
+}
