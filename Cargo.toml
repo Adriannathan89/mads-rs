@@ -29,7 +29,7 @@ cookie = { version = "=0.18.1", default-features = false, features = ["percent-e
 dotenvy = "=0.15.7"
 http-body = "1"
 inventory = "0.3"
-jsonwebtoken = { version = "=10.3.0", default-features = false, features = ["rust_crypto", "use_pem"] }
+jsonwebtoken = { version = "=10.3.0", default-features = false, features = ["aws_lc_rs", "use_pem"] }
 notify = "=8.2.0"
 proc-macro-crate = "3"
 proc-macro2 = "1"

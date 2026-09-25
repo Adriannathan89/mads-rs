@@ -44,6 +44,7 @@
 mod auto_configuration;
 mod claims;
 mod config;
+mod crypto;
 mod error;
 mod keyring;
 mod service;

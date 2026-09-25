@@ -1,0 +1,12 @@
+[package]
+name = "mads-jwt-dual-backend-test"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+mads-common = { path = "../../crates/mads-common", default-features = false, features = ["jwt"] }
+jsonwebtoken = { version = "=10.3.0", default-features = false, features = ["rust_crypto"] }
+serde_json = "1"
