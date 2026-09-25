@@ -9,6 +9,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::de::{DeserializeOwned, Deserializer, MapAccess, SeqAccess, Visitor};
 use serde_json::{Map, Number, Value};
 
+use super::crypto;
 use super::keyring::KeyRing;
 use super::{
     JwtAlgorithm, JwtClaims, JwtError, JwtErrorKind, JwtHeader, JwtResult, JwtSignOptions,
@@ -105,7 +106,7 @@ impl JwtService {
         let mut header = jsonwebtoken::Header::new(algorithm.as_jsonwebtoken());
         header.typ = Some(options.kind().header_type().to_owned());
         header.kid = key_id.map(str::to_owned);
-        jsonwebtoken::encode(&header, &claims, key).map_err(map_signing_error)
+        crypto::encode(&header, &claims, key).map_err(map_signing_error)
     }
 
     /// Decodes a JWT header without verifying its signature.
@@ -345,7 +346,7 @@ fn verify_signature(
     let (message, signature) = token
         .rsplit_once('.')
         .ok_or_else(|| JwtError::new(JwtErrorKind::MalformedToken))?;
-    let valid = jsonwebtoken::crypto::verify(
+    let valid = crypto::verify(
         signature,
         message.as_bytes(),
         key,

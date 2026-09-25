@@ -416,10 +416,9 @@ fn validate_asymmetric_material(
         let private_bytes = private_material.read()?;
         let encoding_key = encoding_key(algorithm, &private_bytes)?;
         let message = b"mads-passport-key-validation";
-        let signature =
-            jsonwebtoken::crypto::sign(message, &encoding_key, algorithm.as_jsonwebtoken())
-                .map_err(invalid_key_material_with_source)?;
-        let matches = jsonwebtoken::crypto::verify(
+        let signature = super::crypto::sign(message, &encoding_key, algorithm.as_jsonwebtoken())
+            .map_err(invalid_key_material_with_source)?;
+        let matches = super::crypto::verify(
             &signature,
             message,
             &decoding_key,
@@ -471,7 +470,7 @@ fn validate_decoding_key(
     algorithm: JwtAlgorithm,
     key: &jsonwebtoken::DecodingKey,
 ) -> JwtResult<()> {
-    jsonwebtoken::crypto::verify(
+    super::crypto::verify(
         "",
         b"mads-passport-key-validation",
         key,

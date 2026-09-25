@@ -73,18 +73,18 @@ the protected-route example. It does not print the database URL or token.
 ## Run
 
 ```sh
-python3 -m unittest discover -s benchmark -p 'test_*.py'
-python3 benchmark/run.py --profile smoke --output /tmp/mads-smoke.json
-python3 benchmark/run.py --profile stress --output /tmp/mads-stress.json
-python3 benchmark/run.py --profile extended --output /tmp/mads-extended.json
-python3 benchmark/run.py --case oversized-reuse --output /tmp/mads-reuse.json
-python3 benchmark/run.py --case database-connect-timeout \
+python3 -m unittest discover -s benchmark/tool -p 'test_*.py'
+python3 benchmark/tool/run.py --profile smoke --output /tmp/mads-smoke.json
+python3 benchmark/tool/run.py --profile stress --output /tmp/mads-stress.json
+python3 benchmark/tool/run.py --profile extended --output /tmp/mads-extended.json
+python3 benchmark/tool/run.py --case oversized-reuse --output /tmp/mads-reuse.json
+python3 benchmark/tool/run.py --case database-connect-timeout \
   --output /tmp/mads-database-timeout.json
-python3 benchmark/run.py --case database-query-timeout-recovery \
+python3 benchmark/tool/run.py --case database-query-timeout-recovery \
   --output /tmp/mads-query-recovery.json
-python3 benchmark/run.py --case database-tcp-stall-recovery \
+python3 benchmark/tool/run.py --case database-tcp-stall-recovery \
   --output /tmp/mads-tcp-recovery.json
-python3 benchmark/run.py --profile stress \
+python3 benchmark/tool/run.py --profile stress \
   --case connection-churn --case body-limit-boundary --case aborted-upload \
   --output /tmp/mads-edges.json
 ```
@@ -92,7 +92,7 @@ python3 benchmark/run.py --profile stress \
 To skip PostgreSQL, select only HTTP cases:
 
 ```sh
-python3 benchmark/run.py --profile stress \
+python3 benchmark/tool/run.py --profile stress \
   --case hello --case connection-churn --case validation --case oversized \
   --case oversized-reuse --case body-limit-boundary --case aborted-upload \
   --case jwt --case database-failure --case database-connect-timeout
@@ -110,3 +110,74 @@ MADS routing, application code, and optional PostgreSQL. They are useful for
 reproducible regression checks and failure discovery, but are not an isolated
 measurement of framework overhead or a guarantee for every deployment.
 See [the measured run and findings](REPORT.md).
+
+## MADS vs native Axum vs Go Fiber v2
+
+The separate [comparison report](COMPARISON.md) measures the three workloads
+from `example/`: Hello World (`GET /`), PostgreSQL posts CRUD (five HTTP
+requests per transaction), and login plus JWT-protected profile reads with
+input validation and logger output. The native Axum and Fiber counterparts
+live in `benchmark/targets/`. The old MADS-only stress and fault runner remains
+in `benchmark/tool/run.py`; all Python benchmark tools and their tests now live
+in `benchmark/tool/`.
+
+Build release binaries from the repository root:
+
+```sh
+python3 benchmark/tool/build_mads.py
+cargo build --release --locked --manifest-path benchmark/targets/axum/Cargo.toml
+cd benchmark/targets/fiber && mkdir -p bin && go build -o bin/mads-bench-fiber . && cd ../../..
+```
+
+`build_mads.py` copies each MADS example to a temporary directory and patches
+its `mads`/`mads-persistence` dependencies to this checkout for the build. It
+does not edit the examples or their lockfiles. The reproducible local-source
+lockfiles are stored in `benchmark/targets/mads/locks/`; on a warm cache,
+`build_mads.py --offline` avoids network access. This is necessary because the
+current published-package lockfile of the examples has a registry checksum
+mismatch for `mads-common-macros 0.9.1`. Results from this command measure
+**local MADS 0.9.1 source**, not the published crate archive.
+
+For CRUD, provision three isolated PostgreSQL databases, apply the same
+`example/posts-crud/migrations/001_create_posts.sql` to each, and set:
+
+```sh
+export BENCH_MADS_DATABASE_URL='postgres://USER:PASSWORD@127.0.0.1:5432/mads_bench_mads?sslmode=disable'
+export BENCH_AXUM_DATABASE_URL='postgres://USER:PASSWORD@127.0.0.1:5432/mads_bench_axum?sslmode=disable'
+export BENCH_FIBER_DATABASE_URL='postgres://USER:PASSWORD@127.0.0.1:5432/mads_bench_fiber?sslmode=disable'
+```
+
+The runner does not query PostgreSQL version metadata separately. Set
+`BENCH_POSTGRES_VERSION` (for example, `16.15`) to include the known server
+version in the raw result; otherwise it is recorded as `not captured`.
+
+The runner does not create or drop databases. Only use disposable databases:
+the CRUD workload writes and deletes rows. The same schema is required in
+each database. The example's default ports 3000, 3001, and 3002 must be free.
+
+```sh
+python3 -m unittest discover -s benchmark/tool -p 'test_*.py'
+python3 benchmark/tool/compare.py --profile smoke --runs 1 --output /tmp/mads-compare-smoke.json
+python3 benchmark/tool/compare.py --profile stress --runs 5 --output /tmp/mads-compare-stress.json
+```
+
+Use `--framework mads|axum|fiber` and `--scenario hello|posts|auth` to run a
+subset. Each target is started one at a time. Contract checks and a warmup
+must pass before measured runs begin; an error makes the report fail rather
+than silently excluding the run. The JSON contains every run plus median
+responses/second and median p95 latency. Authentication performance covers
+one valid login and one valid protected read per operation. Invalid input,
+missing posts, and unsupported content types are checked by status and shared
+error code; detailed validation/not-found error bodies are not normalized
+across frameworks. Missing/malformed JWT checks also require the MADS Passport
+Bearer challenge and unauthorized JSON envelope, including case-insensitive
+Bearer schemes. A 3 MiB body-limit probe
+is recorded separately because Fiber v2 can close the connection before this
+Python client receives an HTTP response; its outcome does not invalidate
+the valid-request throughput run.
+
+These results include Python client overhead, different database access
+libraries (SeaORM, SQLx, and Go `database/sql`), JWT libraries, and logger
+costs. They are end-to-end application comparisons, not isolated router
+overhead; do not extrapolate them to TLS, HTTP/2, distributed deployments, or
+other hardware.

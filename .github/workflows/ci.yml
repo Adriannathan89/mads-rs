@@ -63,6 +63,26 @@ jobs:
           cargo test -p mads-cli --test inspection_cli a_binary_without_standard_run_is_killed_and_diagnosed -- --test-threads=1
           cargo test -p mads-cli --test dev_cli real_dev_loop -- --test-threads=1
 
+  jwt-platform:
+    name: JWT platform (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    env:
+      AWS_LC_SYS_PREBUILT_NASM: '1'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Check JWT-only feature
+        run: cargo check -p mads-common --no-default-features --features jwt --locked
+      - name: Test JWT algorithms and key rotation
+        run: cargo test -p mads-common --no-default-features --features jwt --test jwt_algorithms --test jwt_keyring --test jwt_rotation --test jwt_service --locked
+      - name: Test consumer with both crypto backends enabled
+        run: cargo run --manifest-path tests/jwt-dual-backend/Cargo.toml
+
   msrv:
     name: Rust 1.94.0
     runs-on: ubuntu-latest

@@ -28,7 +28,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from faults import PostgresTableLock, StallablePostgresProxy
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DEMO_USERNAME = "demo"
 DEMO_PASSWORD = "correct-horse-battery-staple"
 DEMO_SECRET = "benchmark-only-signing-key-change-me-2026"
