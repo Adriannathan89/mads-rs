@@ -2,6 +2,18 @@
 
 All notable changes to MADS.rs are documented in this file.
 
+## [Unreleased]
+
+### Security
+
+- Update the workspace lockfile to `time 0.3.47`, resolving the
+  `RUSTSEC-2026-0009` dependency advisory.
+- Switch `jsonwebtoken` from RustCrypto to its `aws_lc_rs` backend and
+  explicitly pin MADS JWT signing, verification, and key validation to
+  AWS-LC. This removes the RustCrypto `rsa` crate from the dependency graph
+  and makes MADS JWT operations independent of the process-wide provider
+  selection.
+
 ## [0.9.1] - 2026-09-25
 
 ### Fixed
