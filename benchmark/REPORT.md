@@ -94,7 +94,7 @@ records status counts and p50/p95/p99.
 
 ## Observed issue: HTTP connection reuse after 413
 
-Reproduction: run `python3 benchmark/run.py --case oversized-reuse` with the
+Reproduction: run `python3 benchmark/tool/run.py --case oversized-reuse` with the
 release protected-route example built. Four clients each send two 3 MiB POSTs
 on one persistent HTTP/1.1 connection. Each first request receives the
 expected JSON 413, but the response omits `Connection: close`. Each second
